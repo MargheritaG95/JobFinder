@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="JobFinder — AI-powered job search operating system" />
+  <title>JobFinder</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">◆</div>
+        <div>
+          <div class="brand-name">JobFinder</div>
+          <div class="brand-subtitle">AI Job Search OS</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="opportunities">Opportunità</button>
+        <button class="nav-item" data-view="pipeline">Pipeline</button>
+        <button class="nav-item" data-view="applications">Applications</button>
+        <button class="nav-item" data-view="companies">Aziende target</button>
+        <button class="nav-item" data-view="followups">Follow-up</button>
+        <button class="nav-item" data-view="feedback">AI Feedback</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="auth-status" class="auth-status">Demo mode</div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <h1 id="page-title">Dashboard</h1>
+          <p id="page-subtitle">Trova il tuo prossimo ruolo. Più velocemente.</p>
+        </div>
+
+        <div class="auth-box">
+          <input id="email-input" type="email" placeholder="La tua email" />
+          <button id="login-btn" class="btn btn-primary">Magic link</button>
+          <button id="logout-btn" class="btn btn-secondary hidden">Logout</button>
+        </div>
+      </header>
+
+      <div id="notice" class="notice hidden"></div>
+
+      <section id="view-dashboard" class="view active-view">
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">OPPORTUNITÀ ATTIVE</div>
+            <div id="metric-active" class="metric-value">0</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">FIT ≥ 8</div>
+            <div id="metric-high-fit" class="metric-value">0</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">CANDIDATURE</div>
+            <div id="metric-applications" class="metric-value">0</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">FOLLOW-UP</div>
+            <div id="metric-followups" class="metric-value">0</div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div>
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Top opportunità</h2>
+                  <p>Ordinate per fit score</p>
+                </div>
+                <button class="btn btn-secondary small" data-jump="opportunities">Vedi tutte</button>
+              </div>
+              <div id="dashboard-jobs"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Pipeline</h2>
+                  <p>Stato delle opportunità</p>
+                </div>
+                <button class="btn btn-secondary small" data-jump="pipeline">Apri pipeline</button>
+              </div>
+              <div id="dashboard-pipeline" class="pipeline-mini"></div>
+            </section>
+          </div>
+
+          <div>
+            <section class="panel">
+              <span class="pill">BETA</span>
+              <h2>Application Copilot</h2>
+              <p class="muted">
+                Prepara CV, cover letter, risposte ricorrenti e messaggi LinkedIn.
+              </p>
+              <div id="copilot-readiness"></div>
+              <button class="btn btn-primary full" data-jump="applications">Apri Application Copilot</button>
+            </section>
+
+            <section class="panel">
+              <h2>Prossime azioni</h2>
+              <div id="next-actions"></div>
+            </section>
+
+            <section class="panel">
+              <h2>AI learning</h2>
+              <div id="feedback-summary"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-opportunities" class="view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Opportunità</h2>
+              <p>Solo ruoli con fit rilevante</p>
+            </div>
+            <div class="filters">
+              <select id="fit-filter">
+                <option value="0">Tutti i fit</option>
+                <option value="7">Fit ≥ 7</option>
+                <option value="8">Fit ≥ 8</option>
+                <option value="9">Fit ≥ 9</option>
+              </select>
+              <select id="status-filter">
+                <option value="">Tutti gli status</option>
+                <option value="NEW">NEW</option>
+                <option value="REVIEW">REVIEW</option>
+                <option value="APPLY">APPLY</option>
+                <option value="APPLIED">APPLIED</option>
+                <option value="CONTACTED">CONTACTED</option>
+                <option value="INTERVIEW">INTERVIEW</option>
+                <option value="OFFER">OFFER</option>
+                <option value="CLOSED">CLOSED</option>
+              </select>
+            </div>
+          </div>
+          <div id="opportunities-list"></div>
+        </section>
+      </section>
+
+      <section id="view-pipeline" class="view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Pipeline</h2>
+              <p>NEW → REVIEW → APPLY → APPLIED → CONTACTED → INTERVIEW → OFFER</p>
+            </div>
+          </div>
+          <div id="pipeline-board" class="pipeline-board"></div>
+        </section>
+      </section>
+
+      <section id="view-applications" class="view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Application Copilot</h2>
+              <p>Pacchetti candidatura e avanzamento</p>
+            </div>
+          </div>
+          <div id="applications-list"></div>
+        </section>
+      </section>
+
+      <section id="view-companies" class="view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Aziende target</h2>
+              <p>Tier A / B / C</p>
+            </div>
+          </div>
+          <div id="companies-list"></div>
+        </section>
+      </section>
+
+      <section id="view-followups" class="view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Follow-up</h2>
+              <p>Azioni da non dimenticare</p>
+            </div>
+          </div>
+          <div id="followups-list"></div>
+        </section>
+      </section>
+
+      <section id="view-feedback" class="view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>AI Feedback</h2>
+              <p>JobFinder impara dai tuoi LIKE, PASS e SAVE</p>
+            </div>
+          </div>
+          <div id="feedback-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

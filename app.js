@@ -7,6 +7,7 @@ let applications = [];
 let feedback = [];
 let followups = [];
 let companies = [];
+let searchPreferences = null;
 
 const demoJobs = [
   {
@@ -118,7 +119,8 @@ function setView(name) {
     applications: ["Applications", "Prepara e traccia ogni candidatura."],
     companies: ["Aziende target", "Monitora le aziende che contano davvero."],
     followups: ["Follow-up", "Le prossime azioni, sempre visibili."],
-    feedback: ["AI Feedback", "JobFinder impara dalle tue decisioni."]
+    feedback: ["AI Feedback", "JobFinder impara dalle tue decisioni."],
+    preferences: ["Preferenze ricerca", "Controlla filtri, tag e apprendimento AI."]
   };
 
   el("page-title").textContent = meta[name][0];
@@ -324,6 +326,59 @@ function renderFeedback() {
     : `<div class="empty">Nessun feedback salvato.</div>`;
 }
 
+function tagsFromInput(id) {
+  return el(id).value.split(",").map(v => v.trim()).filter(Boolean);
+}
+
+function renderPreferences() {
+  const defaults = {
+    role_tags: [], industry_tags: [], location_tags: [], work_mode_tags: [],
+    min_fit: 7, ai_learning_enabled: true, learned_preferences: {}
+  };
+  const p = searchPreferences || defaults;
+  el("pref-roles").value = (p.role_tags || []).join(", ");
+  el("pref-industries").value = (p.industry_tags || []).join(", ");
+  el("pref-locations").value = (p.location_tags || []).join(", ");
+  el("pref-work-modes").value = (p.work_mode_tags || []).join(", ");
+  el("pref-min-fit").value = p.min_fit ?? 7;
+  el("pref-ai-learning").checked = p.ai_learning_enabled !== false;
+  el("save-preferences-btn").disabled = !currentUser;
+  el("preferences-login-note").classList.toggle("hidden", !!currentUser);
+
+  const learned = p.learned_preferences || {};
+  const entries = Object.entries(learned);
+  el("learned-tags").innerHTML = entries.length
+    ? entries.sort((a,b) => Math.abs(Number(b[1])) - Math.abs(Number(a[1]))).map(([tag, score]) => {
+        const n = Number(score) || 0;
+        const arrow = n > 0 ? "↑" : n < 0 ? "↓" : "•";
+        return `<span class="learned-tag ${n < 0 ? "negative" : "positive"}">${arrow} ${esc(tag)}</span>`;
+      }).join("")
+    : `<div class="empty">Ancora nessun pattern appreso. I segnali AI resteranno separati dai tuoi filtri manuali.</div>`;
+}
+
+async function savePreferences() {
+  if (!currentUser) { notify("Accedi per salvare le preferenze."); return; }
+  const minFit = Math.max(0, Math.min(10, Number(el("pref-min-fit").value || 7)));
+  const payload = {
+    user_id: currentUser.id,
+    role_tags: tagsFromInput("pref-roles"),
+    industry_tags: tagsFromInput("pref-industries"),
+    location_tags: tagsFromInput("pref-locations"),
+    work_mode_tags: tagsFromInput("pref-work-modes"),
+    min_fit: minFit,
+    ai_learning_enabled: el("pref-ai-learning").checked,
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await sb.from("search_preferences")
+    .upsert(payload, { onConflict: "user_id" })
+    .select()
+    .single();
+  if (error) { notify(error.message); return; }
+  searchPreferences = data;
+  renderPreferences();
+  notify("Preferenze salvate.");
+}
+
 function renderAll() {
   renderDashboard();
   renderOpportunities();
@@ -332,6 +387,7 @@ function renderAll() {
   renderCompanies();
   renderFollowups();
   renderFeedback();
+  renderPreferences();
 }
 
 async function loadData() {
@@ -341,16 +397,18 @@ async function loadData() {
     feedback = [];
     followups = [];
     companies = demoCompanies;
+    searchPreferences = null;
     renderAll();
     return;
   }
 
-  const [jobsRes, appsRes, feedbackRes, followupsRes, companiesRes] = await Promise.all([
+  const [jobsRes, appsRes, feedbackRes, followupsRes, companiesRes, prefsRes] = await Promise.all([
     sb.from("jobs").select("*").order("fit_score", { ascending: false }),
     sb.from("applications").select("*").order("created_at", { ascending: false }),
     sb.from("feedback").select("*").order("created_at", { ascending: false }),
     sb.from("followups").select("*").order("due_at", { ascending: true }),
-    sb.from("companies").select("*").order("tier", { ascending: true })
+    sb.from("companies").select("*").order("tier", { ascending: true }),
+    sb.from("search_preferences").select("*").maybeSingle()
   ]);
 
   if (jobsRes.error) console.error(jobsRes.error);
@@ -358,12 +416,14 @@ async function loadData() {
   if (feedbackRes.error) console.error(feedbackRes.error);
   if (followupsRes.error) console.error(followupsRes.error);
   if (companiesRes.error) console.error(companiesRes.error);
+  if (prefsRes.error) console.error(prefsRes.error);
 
   jobs = jobsRes.data || [];
   applications = appsRes.data || [];
   feedback = feedbackRes.data || [];
   followups = followupsRes.data || [];
   companies = companiesRes.data || [];
+  searchPreferences = prefsRes.data || null;
 
   renderAll();
 }
@@ -445,7 +505,7 @@ async function sendMagicLink() {
   });
 
   if (error) notify(error.message);
-  else notify("Magic link inviato. Controlla la tua email.");
+  else notify("Link di accesso inviato ✓ Apri la tua email e clicca il link: tornerai qui già connessa.");
 }
 
 async function logout() {
@@ -454,12 +514,16 @@ async function logout() {
 
 function syncAuthUI() {
   const logged = !!currentUser;
-  el("email-input").classList.toggle("hidden", logged);
-  el("login-btn").classList.toggle("hidden", logged);
-  el("logout-btn").classList.toggle("hidden", !logged);
-  el("auth-status").textContent = logged
-    ? `Connesso · ${currentUser.email || "utente"}`
-    : "Demo mode";
+  el("auth-box").querySelector(".magic-login").classList.toggle("hidden", logged);
+  el("logged-user").classList.toggle("hidden", !logged);
+  el("sidebar-logout-btn").classList.toggle("hidden", !logged);
+  el("auth-dot").classList.toggle("hidden", logged);
+  el("auth-label").classList.toggle("hidden", logged);
+  el("auth-label").textContent = "Modalità demo";
+  el("auth-email").textContent = logged
+    ? (currentUser.email || "Sessione attiva")
+    : "Accedi per usare i tuoi dati reali";
+  el("logged-email").textContent = currentUser?.email || "Sessione attiva";
 }
 
 async function init() {
@@ -475,6 +539,11 @@ async function init() {
   el("status-filter").addEventListener("change", renderOpportunities);
   el("login-btn").addEventListener("click", sendMagicLink);
   el("logout-btn").addEventListener("click", logout);
+  el("sidebar-logout-btn").addEventListener("click", logout);
+  el("save-preferences-btn").addEventListener("click", savePreferences);
+  el("email-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") sendMagicLink();
+  });
 
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user || null;

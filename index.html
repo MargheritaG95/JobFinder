@@ -27,10 +27,15 @@
         <button class="nav-item" data-view="companies">Aziende target</button>
         <button class="nav-item" data-view="followups">Follow-up</button>
         <button class="nav-item" data-view="feedback">AI Feedback</button>
+        <button class="nav-item" data-view="preferences">Preferenze ricerca</button>
       </nav>
 
       <div class="sidebar-footer">
-        <div id="auth-status" class="auth-status">Demo mode</div>
+        <div id="auth-status" class="auth-status auth-card">
+          <div class="auth-status-row"><span id="auth-dot" class="status-dot demo"></span><strong id="auth-label">Modalità demo</strong></div>
+          <div id="auth-email" class="auth-email">Accedi per usare i tuoi dati reali</div>
+          <button id="sidebar-logout-btn" class="sidebar-logout hidden">Esci</button>
+        </div>
       </div>
     </aside>
 
@@ -41,10 +46,21 @@
           <p id="page-subtitle">Trova il tuo prossimo ruolo. Più velocemente.</p>
         </div>
 
-        <div class="auth-box">
-          <input id="email-input" type="email" placeholder="La tua email" />
-          <button id="login-btn" class="btn btn-primary">Magic link</button>
-          <button id="logout-btn" class="btn btn-secondary hidden">Logout</button>
+        <div id="auth-box" class="auth-box">
+          <div class="magic-login">
+            <div class="magic-login-copy">
+              <strong>Accedi a JobFinder</strong>
+              <span>Nessuna password: riceverai un link sicuro via email.</span>
+            </div>
+            <div class="magic-login-form">
+              <input id="email-input" type="email" placeholder="La tua email" autocomplete="email" />
+              <button id="login-btn" class="btn btn-primary">Login</button>
+            </div>
+          </div>
+          <div id="logged-user" class="logged-user hidden">
+            <span id="logged-email" class="logged-email"></span>
+            <button id="logout-btn" class="btn btn-secondary">Logout</button>
+          </div>
         </div>
       </header>
 
@@ -195,6 +211,60 @@
             </div>
           </div>
           <div id="followups-list"></div>
+        </section>
+      </section>
+
+
+      <section id="view-preferences" class="view">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Preferenze di ricerca</h2>
+              <p>I tuoi filtri sono personali e separati per ogni account.</p>
+            </div>
+            <button id="save-preferences-btn" class="btn btn-primary">Salva preferenze</button>
+          </div>
+
+          <div id="preferences-login-note" class="notice hidden">Accedi per salvare preferenze personali.</div>
+
+          <div class="preferences-grid">
+            <label class="field-group">
+              <span>Ruoli target</span>
+              <input id="pref-roles" type="text" placeholder="es. Strategy, Customer Experience, AI Product" />
+              <small>Separali con una virgola.</small>
+            </label>
+            <label class="field-group">
+              <span>Industrie</span>
+              <input id="pref-industries" type="text" placeholder="es. Automotive, Motorsport, AI/Tech" />
+              <small>Puoi aggiungere o rimuovere industrie quando vuoi.</small>
+            </label>
+            <label class="field-group">
+              <span>Località</span>
+              <input id="pref-locations" type="text" placeholder="es. Milano, Remote Italy, Europa" />
+            </label>
+            <label class="field-group">
+              <span>Modalità di lavoro</span>
+              <input id="pref-work-modes" type="text" placeholder="es. Hybrid, Remote, On-site" />
+            </label>
+            <label class="field-group">
+              <span>Fit minimo</span>
+              <input id="pref-min-fit" type="number" min="0" max="10" step="0.1" value="7" />
+            </label>
+            <label class="toggle-field">
+              <input id="pref-ai-learning" type="checkbox" checked />
+              <span><strong>AI learning attivo</strong><small>JobFinder usa LIKE, PASS, SAVE e candidature per affinare i suggerimenti.</small></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Tag appresi dall'AI</h2>
+              <p>Questi tag non modificano i tuoi filtri senza il tuo consenso.</p>
+            </div>
+          </div>
+          <div id="learned-tags" class="learned-tags"></div>
         </section>
       </section>
 

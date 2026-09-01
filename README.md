@@ -103,6 +103,10 @@ Le card opportunità e il Copilot espongono inoltre due azioni condivise:
 
 Dopo “Ho applicato” viene proposto, senza crearlo automaticamente, un follow-up collegato all’application.
 
+La pagina **Le mie Application** funziona come registro operativo: unisce i record `applications` ai job già marcati `APPLIED`, segnala eventuali record mancanti e mostra candidature senza follow-up. Per ogni candidatura permette inoltre di copiare un kit con Why Fit, gap, angle e messaggio recruiter e di avviare ricerche mirate per contatti già salvati, LinkedIn e fonti pubbliche.
+
+Il frontend non effettua scraping né compila automaticamente form su domini esterni: GitHub Pages non può superare CORS, login e protezioni dei siti terzi in modo affidabile. Il kit copiabile riduce il lavoro manuale senza esporre chiavi AI o dati sensibili.
+
 ## Stati pipeline
 
 ```text
@@ -120,9 +124,9 @@ Il pulsante **Avanza** aggiorna la colonna `jobs.status` su Supabase. Lo stato d
 Pubblica questa cartella dalla root del branch scelto. Il file `.nojekyll` evita elaborazioni Jekyll. Gli asset usano query string di versione:
 
 ```html
-styles.css?v=20260901.3
-app.js?v=20260901.3
-config.js?v=20260901.3
+styles.css?v=20260901.4
+app.js?v=20260901.4
+config.js?v=20260901.4
 ```
 
 Quando distribuisci una nuova release, incrementa lo stesso valore in `index.html` per invalidare la cache del browser e di GitHub Pages.

@@ -1,291 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="JobFinder — AI-powered job search operating system" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>JobFinder</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
 </head>
 <body>
-  <div id="app" class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">◆</div>
-        <div>
-          <div class="brand-name">JobFinder</div>
-          <div class="brand-subtitle">AI Job Search OS</div>
-        </div>
-      </div>
+  <main class="shell">
+    <section class="card" id="auth-card">
+      <div class="brand">JobFinder</div>
+      <h1>Accedi</h1>
+      <p class="subtitle">Solo email e password. Nessun magic link, nessun Google login.</p>
 
-      <nav class="nav">
-        <button class="nav-item active" data-view="dashboard">Dashboard</button>
-        <button class="nav-item" data-view="opportunities">Opportunità</button>
-        <button class="nav-item" data-view="pipeline">Pipeline</button>
-        <button class="nav-item" data-view="applications">Applications</button>
-        <button class="nav-item" data-view="companies">Aziende target</button>
-        <button class="nav-item" data-view="followups">Follow-up</button>
-        <button class="nav-item" data-view="feedback">AI Feedback</button>
-        <button class="nav-item" data-view="preferences">Preferenze ricerca</button>
-      </nav>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="nome@email.com" />
 
-      <div class="sidebar-footer">
-        <div id="auth-status" class="auth-status auth-card">
-          <div class="auth-status-row"><span id="auth-dot" class="status-dot demo"></span><strong id="auth-label">Modalità demo</strong></div>
-          <div id="auth-email" class="auth-email">Accedi per usare i tuoi dati reali</div>
-          <button id="sidebar-logout-btn" class="sidebar-logout hidden">Esci</button>
-        </div>
-      </div>
-    </aside>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" minlength="8" placeholder="Minimo 8 caratteri" />
 
-    <main class="main-content">
-      <header class="topbar">
-        <div>
-          <h1 id="page-title">Dashboard</h1>
-          <p id="page-subtitle">Trova il tuo prossimo ruolo. Più velocemente.</p>
-        </div>
+      <button id="login-btn" class="primary">Accedi</button>
+      <button id="signup-btn" class="secondary">Crea account</button>
 
-        <div id="auth-box" class="auth-box">
-          <div class="magic-login">
-            <div class="magic-login-copy">
-              <strong>Accedi a JobFinder</strong>
-              <span>Usa email e password. Nessun link necessario per gli accessi successivi.</span>
-            </div>
-            <div class="magic-login-form password-login-form">
-              <input id="email-input" type="email" placeholder="Email" autocomplete="email" />
-              <input id="password-input" type="password" placeholder="Password" autocomplete="current-password" minlength="8" />
-              <button id="login-btn" class="btn btn-primary" type="button">Accedi</button>
-              <button id="signup-btn" class="btn btn-secondary" type="button">Crea account</button>
-              <button id="reset-password-btn" class="auth-link-btn" type="button">Imposta / reimposta password</button>
-            </div>
-          </div>
-          <div id="logged-user" class="logged-user hidden">
-            <span id="logged-email" class="logged-email"></span>
-            <button id="logout-btn" class="btn btn-secondary">Logout</button>
-          </div>
-        </div>
-      </header>
+      <p id="message" class="message"></p>
+    </section>
 
-      <div id="notice" class="notice hidden"></div>
+    <section class="card hidden" id="dashboard-card">
+      <div class="brand">JobFinder</div>
+      <h1>Dashboard</h1>
+      <p id="welcome" class="subtitle"></p>
+      <p class="ok">Login Supabase riuscito.</p>
+      <button id="logout-btn" class="secondary">Esci</button>
+    </section>
+  </main>
 
-      <section id="view-dashboard" class="view active-view">
-        <div class="metric-grid">
-          <div class="metric-card">
-            <div class="metric-label">OPPORTUNITÀ ATTIVE</div>
-            <div id="metric-active" class="metric-value">0</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">FIT ≥ 8</div>
-            <div id="metric-high-fit" class="metric-value">0</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">CANDIDATURE</div>
-            <div id="metric-applications" class="metric-value">0</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">FOLLOW-UP</div>
-            <div id="metric-followups" class="metric-value">0</div>
-          </div>
-        </div>
-
-        <div class="dashboard-grid">
-          <div>
-            <section class="panel">
-              <div class="panel-head">
-                <div>
-                  <h2>Top opportunità</h2>
-                  <p>Ordinate per fit score</p>
-                </div>
-                <button class="btn btn-secondary small" data-jump="opportunities">Vedi tutte</button>
-              </div>
-              <div id="dashboard-jobs"></div>
-            </section>
-
-            <section class="panel">
-              <div class="panel-head">
-                <div>
-                  <h2>Pipeline</h2>
-                  <p>Stato delle opportunità</p>
-                </div>
-                <button class="btn btn-secondary small" data-jump="pipeline">Apri pipeline</button>
-              </div>
-              <div id="dashboard-pipeline" class="pipeline-mini"></div>
-            </section>
-          </div>
-
-          <div>
-            <section class="panel">
-              <span class="pill">BETA</span>
-              <h2>Application Copilot</h2>
-              <p class="muted">
-                Prepara CV, cover letter, risposte ricorrenti e messaggi LinkedIn.
-              </p>
-              <div id="copilot-readiness"></div>
-              <button class="btn btn-primary full" data-jump="applications">Apri Application Copilot</button>
-            </section>
-
-            <section class="panel">
-              <h2>Prossime azioni</h2>
-              <div id="next-actions"></div>
-            </section>
-
-            <section class="panel">
-              <h2>AI learning</h2>
-              <div id="feedback-summary"></div>
-            </section>
-          </div>
-        </div>
-      </section>
-
-      <section id="view-opportunities" class="view">
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Opportunità</h2>
-              <p>Solo ruoli con fit rilevante</p>
-            </div>
-            <div class="filters">
-              <select id="fit-filter">
-                <option value="0">Tutti i fit</option>
-                <option value="7">Fit ≥ 7</option>
-                <option value="8">Fit ≥ 8</option>
-                <option value="9">Fit ≥ 9</option>
-              </select>
-              <select id="status-filter">
-                <option value="">Tutti gli status</option>
-                <option value="NEW">NEW</option>
-                <option value="REVIEW">REVIEW</option>
-                <option value="APPLY">APPLY</option>
-                <option value="APPLIED">APPLIED</option>
-                <option value="CONTACTED">CONTACTED</option>
-                <option value="INTERVIEW">INTERVIEW</option>
-                <option value="OFFER">OFFER</option>
-                <option value="CLOSED">CLOSED</option>
-              </select>
-            </div>
-          </div>
-          <div id="opportunities-list"></div>
-        </section>
-      </section>
-
-      <section id="view-pipeline" class="view">
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Pipeline</h2>
-              <p>NEW → REVIEW → APPLY → APPLIED → CONTACTED → INTERVIEW → OFFER</p>
-            </div>
-          </div>
-          <div id="pipeline-board" class="pipeline-board"></div>
-        </section>
-      </section>
-
-      <section id="view-applications" class="view">
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Application Copilot</h2>
-              <p>Pacchetti candidatura e avanzamento</p>
-            </div>
-          </div>
-          <div id="applications-list"></div>
-        </section>
-      </section>
-
-      <section id="view-companies" class="view">
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Aziende target</h2>
-              <p>Tier A / B / C</p>
-            </div>
-          </div>
-          <div id="companies-list"></div>
-        </section>
-      </section>
-
-      <section id="view-followups" class="view">
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Follow-up</h2>
-              <p>Azioni da non dimenticare</p>
-            </div>
-          </div>
-          <div id="followups-list"></div>
-        </section>
-      </section>
-
-
-      <section id="view-preferences" class="view">
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Preferenze di ricerca</h2>
-              <p>I tuoi filtri sono personali e separati per ogni account.</p>
-            </div>
-            <button id="save-preferences-btn" class="btn btn-primary">Salva preferenze</button>
-          </div>
-
-          <div id="preferences-login-note" class="notice hidden">Accedi per salvare preferenze personali.</div>
-
-          <div class="preferences-grid">
-            <label class="field-group">
-              <span>Ruoli target</span>
-              <input id="pref-roles" type="text" placeholder="es. Strategy, Customer Experience, AI Product" />
-              <small>Separali con una virgola.</small>
-            </label>
-            <label class="field-group">
-              <span>Industrie</span>
-              <input id="pref-industries" type="text" placeholder="es. Automotive, Motorsport, AI/Tech" />
-              <small>Puoi aggiungere o rimuovere industrie quando vuoi.</small>
-            </label>
-            <label class="field-group">
-              <span>Località</span>
-              <input id="pref-locations" type="text" placeholder="es. Milano, Remote Italy, Europa" />
-            </label>
-            <label class="field-group">
-              <span>Modalità di lavoro</span>
-              <input id="pref-work-modes" type="text" placeholder="es. Hybrid, Remote, On-site" />
-            </label>
-            <label class="field-group">
-              <span>Fit minimo</span>
-              <input id="pref-min-fit" type="number" min="0" max="10" step="0.1" value="7" />
-            </label>
-            <label class="toggle-field">
-              <input id="pref-ai-learning" type="checkbox" checked />
-              <span><strong>AI learning attivo</strong><small>JobFinder usa LIKE, PASS, SAVE e candidature per affinare i suggerimenti.</small></span>
-            </label>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>Tag appresi dall'AI</h2>
-              <p>Questi tag non modificano i tuoi filtri senza il tuo consenso.</p>
-            </div>
-          </div>
-          <div id="learned-tags" class="learned-tags"></div>
-        </section>
-      </section>
-
-      <section id="view-feedback" class="view">
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>AI Feedback</h2>
-              <p>JobFinder impara dai tuoi LIKE, PASS e SAVE</p>
-            </div>
-          </div>
-          <div id="feedback-list"></div>
-        </section>
-      </section>
-    </main>
-  </div>
-
-  <script src="./config.js"></script>
-  <script src="./app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

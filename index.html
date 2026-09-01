@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260901.5" />
+    <link rel="stylesheet" href="styles.css?v=20260901.6" />
   </head>
   <body>
     <noscript>
@@ -195,6 +195,9 @@
           <div class="nav-label">Workspace</div>
           <button id="navPreferences" class="nav-item" type="button" data-route="preferences">
             <svg class="icon" aria-hidden="true"><use href="#icon-sliders"></use></svg><span>Preferenze</span>
+          </button>
+          <button id="navTemplates" class="nav-item" type="button" data-route="templates">
+            <svg class="icon" aria-hidden="true"><use href="#icon-copy"></use></svg><span>Templates</span><span id="navTemplateCount" class="nav-count">0</span>
           </button>
           <button id="navResources" class="nav-item" type="button" data-route="resources">
             <svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg><span>Risorse</span>
@@ -487,6 +490,24 @@
             <div id="resourcesList" class="resource-grid"></div>
           </section>
 
+          <section id="page-templates" class="page" data-page="templates">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">WRITE ONCE, REUSE OFTEN</p>
+                <h1>Templates</h1>
+                <p>Messaggi, risposte e cover letter da copiare e adattare in pochi secondi.</p>
+              </div>
+              <button class="button button--primary" type="button" data-action="new-template">
+                <svg class="icon"><use href="#icon-plus"></use></svg>Nuovo template
+              </button>
+            </div>
+            <div class="notice notice--info">
+              <strong>La tua libreria personale</strong>
+              <span>Usa variabili come [Nome], [Azienda] e [Ruolo] per ricordarti cosa personalizzare prima dell’invio.</span>
+            </div>
+            <div id="templatesList" class="resource-grid template-grid"></div>
+          </section>
+
           <section id="page-analytics" class="page" data-page="analytics">
             <div class="page-hero">
               <div>
@@ -648,8 +669,8 @@
       <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260901.5" defer></script>
+    <script src="config.js?v=20260901.6" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260901.5" defer></script>
+    <script src="app.js?v=20260901.6" defer></script>
   </body>
 </html>

@@ -98,7 +98,7 @@ Il Copilot parte dai dati già presenti in `jobs`/`applications`; quando mancano
 
 Le card opportunità e il Copilot espongono inoltre due azioni condivise:
 
-- **Applica più tardi** salva il job, lo porta da `NEW`/`REVIEW` ad `APPLY` e crea una sola application non inviata con stato `DRAFT`;
+- **Applica più tardi** salva il job, lo porta da `NEW`/`REVIEW` ad `APPLY` e crea una sola application non inviata;
 - **Ho applicato** aggiorna la stessa application a `APPLIED`, imposta progresso e preparazione come completati e conserva la prima data `applied_at`.
 
 Dopo “Ho applicato” viene proposto, senza crearlo automaticamente, un follow-up collegato all’application.
@@ -119,6 +119,10 @@ La pagina **Opportunità** include **Importa annuncio**. Inserendo URL, ruolo, a
 - conserva la cover letter nel campo configurato come `applications.notes` e la include nel kit copiabile.
 
 Questa è un’importazione assistita, non uno scraper LinkedIn. Gli alert LinkedIn possono essere usati come fonte incollando il testo ricevuto; l’acquisizione automatica dalle email richiede un backend OAuth Gmail. Il ranking attuale è deterministico e spiegabile: una generazione AI completa richiederà una funzione server protetta, perché una chiave privata non deve essere pubblicata in GitHub Pages.
+
+## Templates riutilizzabili
+
+La sezione **Templates** nella barra laterale usa la tabella `answer_bank` già configurata. Permette di creare, modificare, copiare ed eliminare testi personali suddivisi in categorie: messaggi recruiter, cover letter, domande application, follow-up e ringraziamenti. Variabili visibili come `[Nome]`, `[Azienda]` e `[Ruolo]` aiutano a personalizzare il testo prima dell’invio.
 
 ## Stati pipeline
 

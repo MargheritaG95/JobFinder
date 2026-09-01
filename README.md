@@ -1,23 +1,29 @@
-# JobFinder COMPLETE
+# JobFinder UI FIXED
 
-Questa build mantiene il login Supabase email/password e aggiunge la dashboard JobFinder.
+Questa versione corregge l'interfaccia e rende cliccabili le funzioni principali.
 
-## Come pubblicarla su GitHub Pages
-1. Apri il repository `MargheritaG95/JobFinder`.
-2. Sostituisci i file `index.html`, `app.js`, `styles.css`, `config.js` con quelli contenuti qui.
-3. Mantieni `.nojekyll` nella root.
-4. Attendi circa 1-2 minuti e apri:
-   https://margheritag95.github.io/JobFinder/
+## Include
+- Login Supabase email/password invariato
+- Dashboard moderna in stile JobFinder
+- Opportunità filtrabili
+- Application Copilot con pulsante "Applica ora"
+- Pipeline con avanzamento stato
+- Le mie Application
+- Aziende Target
+- Follow-up
+- Feedback
+- Preferenze
+- Risorse
+- Analytics
+- Lettura automatica delle tabelle Supabase quando contengono dati
+- Fallback demo se `jobs` è vuota
 
-## Cosa include
-- Login Supabase email/password
-- Reset password
-- Dashboard
-- Opportunità
-- Pipeline
-- Aziende target
-- Preferenze modificabili
-- Dati demo iniziali
-- Salvataggio preferenze nel browser
+## Pubblicazione
+Sostituisci nella root del repository:
+- index.html
+- styles.css
+- app.js
+- config.js
+- .nojekyll
 
-Nota: questa build non riattiva Google login.
+Poi attendi GitHub Pages e ricarica con Ctrl/Cmd + Shift + R.

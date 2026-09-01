@@ -98,7 +98,7 @@ Il Copilot parte dai dati già presenti in `jobs`/`applications`; quando mancano
 
 Le card opportunità e il Copilot espongono inoltre due azioni condivise:
 
-- **Applica più tardi** salva il job, lo porta da `NEW`/`REVIEW` ad `APPLY` e crea una sola application non inviata;
+- **Applica più tardi** salva il job, lo porta da `NEW`/`REVIEW` ad `APPLY` e crea una sola application non inviata con stato `DRAFT`;
 - **Ho applicato** aggiorna la stessa application a `APPLIED`, imposta progresso e preparazione come completati e conserva la prima data `applied_at`.
 
 Dopo “Ho applicato” viene proposto, senza crearlo automaticamente, un follow-up collegato all’application.

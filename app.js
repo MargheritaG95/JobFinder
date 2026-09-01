@@ -308,6 +308,8 @@
     if (lower.includes("rate limit")) return "Troppe richieste. Attendi qualche minuto e riprova.";
     if (lower.includes("jwt") || lower.includes("token") && lower.includes("expired")) return "La sessione è scaduta. Accedi di nuovo.";
     if (lower.includes("row-level security") || lower.includes("violates row-level security")) return `Supabase ha bloccato ${context}: verifica le policy RLS per l’utente autenticato.`;
+    if (error?.code === "42501" || lower.includes("permission denied for table")) return `Supabase non consente ${context}: abilita SELECT, INSERT e UPDATE per il ruolo authenticated sulla tabella indicata, oltre alle policy RLS.`;
+    if (error?.code === "PGRST116" || lower.includes("0 rows")) return `Supabase non ha restituito la riga modificata: controlla che la policy SELECT consenta all’utente di rileggere il proprio record.`;
     if (lower.includes("column") && (lower.includes("not found") || lower.includes("schema cache") || lower.includes("does not exist"))) {
       return `Lo schema Supabase non coincide con config.js (${raw}). Aggiorna la mappatura della colonna indicata.`;
     }
@@ -839,7 +841,7 @@
     const jobs = [...state.data.jobs];
     const applications = [...state.data.applications];
     const highFit = jobs.filter((job) => jobFit(job) >= 8 && jobStatus(job) !== "CLOSED");
-    const activeApplications = applications.filter((application) => !["CLOSED", "REJECTED", "WITHDRAWN"].includes(normalizeStatus(valueOf(application, "applications", "status", "DRAFT"), "DRAFT")));
+    const activeApplications = applicationRegisterEntries().filter((entry) => !["CLOSED", "REJECTED", "WITHDRAWN"].includes(entry.status));
     const interviewIds = new Set();
     const offerIds = new Set();
     jobs.forEach((job) => {
@@ -987,7 +989,7 @@
           ${feedbackButtons(job.id)}
           <div class="opportunity-actions">
             <button class="icon-button" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}" aria-label="Apri annuncio" title="Apri annuncio">${icon("external")}</button>
-            ${jobStatus(job) !== "CLOSED" ? `<button class="button button--secondary" type="button" data-action="advance-job" data-id="${escapeAttribute(job.id)}">Avanza ${icon("chevron-right")}</button>` : ""}
+            ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
             <button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>
             ${applicationActionButtons(job)}
             ${saveButton(job)}
@@ -1012,15 +1014,19 @@
   }
 
   function renderKanbanCard(job, statusIndex) {
-    const canAdvance = statusIndex < PIPELINE_STATES.length - 1;
+    const status = PIPELINE_STATES[statusIndex];
+    const application = getApplicationForJob(job.id);
+    const nextAction = ["APPLIED", "CONTACTED", "INTERVIEW"].includes(status)
+      ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>`
+      : `<button class="button button--secondary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Prepara candidatura</button>`;
     return `
       <article class="kanban-card">
         <div class="kanban-card__top"><span class="company-logo">${escapeHtml(initials(companyNameForJob(job)))}</span><span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></div>
         <h3>${escapeHtml(jobTitle(job))}</h3>
         <p>${escapeHtml(companyNameForJob(job))} · ${escapeHtml(valueOf(job, "jobs", "location", "—"))}</p>
         <div class="kanban-card__footer">
-          <button class="text-button" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Copilot</button>
-          ${canAdvance ? `<button class="button button--secondary" type="button" data-action="advance-job" data-id="${escapeAttribute(job.id)}">Avanza ${icon("chevron-right")}</button>` : `<span class="badge">CHIUSA</span>`}
+          ${status === "CLOSED" ? `<span class="badge">CHIUSA</span>` : nextAction}
+          ${application && status === "APPLIED" ? `<button class="text-button" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}">Follow-up</button>` : ""}
         </div>
       </article>
     `;
@@ -1034,46 +1040,77 @@
   }
 
   function renderApplications() {
-    const applications = [...state.data.applications].sort((a, b) => {
-      const dateA = new Date(valueOf(a, "applications", "appliedAt", a.created_at || 0)).getTime() || 0;
-      const dateB = new Date(valueOf(b, "applications", "appliedAt", b.created_at || 0)).getTime() || 0;
+    const entries = applicationRegisterEntries().sort((a, b) => {
+      const dateA = new Date(valueOf(a.application, "applications", "appliedAt", a.application?.created_at || 0)).getTime() || 0;
+      const dateB = new Date(valueOf(b.application, "applications", "appliedAt", b.application?.created_at || 0)).getTime() || 0;
       return dateB - dateA;
     });
-    $("applicationHeroCount").textContent = String(applications.length);
-    if (!applications.length) {
-      $("applicationsList").innerHTML = emptyState("Nessuna application", "Usa “Applica ora” su un’opportunità e poi “Prepara application” per creare la prima candidatura.", { route: "opportunities", label: "Trova opportunità", icon: "search" });
+    const sent = entries.filter((entry) => ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER"].includes(entry.status)).length;
+    const missing = entries.filter((entry) => entry.missingRecord).length;
+    const withoutFollowup = entries.filter((entry) => entry.status === "APPLIED" && !followupForEntry(entry)).length;
+    const applicationsError = state.errors.applications;
+    const errorNotice = applicationsError ? `<div class="notice notice--warning application-data-warning"><strong>Tabella applications non disponibile</strong><span>${escapeHtml(humanizeError(applicationsError, "la lettura delle candidature"))}</span></div>` : "";
+    $("applicationHeroCount").textContent = String(entries.length);
+    $("applicationSummary").innerHTML = `
+      <article class="mini-kpi"><span>Inviate</span><strong>${sent}</strong><small>registrate</small></article>
+      <article class="mini-kpi"><span>Da seguire</span><strong>${withoutFollowup}</strong><small>senza follow-up</small></article>
+      <article class="mini-kpi ${missing ? "mini-kpi--warning" : ""}"><span>Da completare</span><strong>${missing}</strong><small>record Supabase</small></article>`;
+    if (!entries.length) {
+      $("applicationsList").innerHTML = `${errorNotice}${emptyState("Nessuna candidatura registrata", "Quando premi “Ho applicato”, la candidatura comparirà qui con data, materiali e prossima azione.", { route: "opportunities", label: "Apri opportunità", icon: "search" })}`;
       return;
     }
     $("applicationsList").innerHTML = `
+      ${errorNotice}
+      ${missing ? `<div class="notice notice--warning application-data-warning"><strong>${missing} ${missing === 1 ? "candidatura richiede" : "candidature richiedono"} attenzione</strong><span>Il job è registrato come APPLIED, ma Supabase non ha creato il record application. Usa “Registra ora”; se fallisce, controlla grant e policy RLS della tabella applications.</span></div>` : ""}
       <table class="data-table">
-        <thead><tr><th>Azienda / ruolo</th><th>Fit</th><th>Status</th><th>CV utilizzato</th><th>Progresso</th><th>Data candidatura</th><th>Note</th><th></th></tr></thead>
-        <tbody>${applications.map(renderApplicationRow).join("")}</tbody>
+        <thead><tr><th>Azienda / ruolo</th><th>Status</th><th>Data invio</th><th>Materiali</th><th>Prossima azione</th><th></th></tr></thead>
+        <tbody>${entries.map(renderApplicationRow).join("")}</tbody>
       </table>
     `;
   }
 
-  function renderApplicationRow(application) {
-    const job = getJobById(valueOf(application, "applications", "jobId", ""));
-    const company = companyNameForApplication(application);
+  function applicationRegisterEntries() {
+    const entries = state.data.applications.map((application) => {
+      const job = getJobById(valueOf(application, "applications", "jobId", ""));
+      return { application, job, missingRecord: false, status: normalizeStatus(valueOf(application, "applications", "status", job ? jobStatus(job) : "DRAFT"), "DRAFT") };
+    });
+    const represented = new Set(entries.map((entry) => String(entry.job?.id || "")).filter(Boolean));
+    state.data.jobs
+      .filter((job) => ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER"].includes(jobStatus(job)) && !represented.has(String(job.id)))
+      .forEach((job) => entries.push({ application: null, job, missingRecord: true, status: jobStatus(job) }));
+    return entries;
+  }
+
+  function followupForEntry(entry) {
+    return state.data.followups.find((followup) => {
+      const applicationId = valueOf(followup, "followups", "applicationId", "");
+      const jobId = valueOf(followup, "followups", "jobId", "");
+      return (entry.application && String(applicationId) === String(entry.application.id)) || (entry.job && String(jobId) === String(entry.job.id));
+    }) || null;
+  }
+
+  function renderApplicationRow(entry) {
+    const { application, job, missingRecord } = entry;
+    const company = application ? companyNameForApplication(application) : companyNameForJob(job);
     const title = job ? jobTitle(job) : "Ruolo non disponibile";
-    const fit = job ? jobFit(job) : 0;
-    const progress = applicationProgress(application);
-    const status = normalizeStatus(valueOf(application, "applications", "status", valueOf(application, "applications", "preparationStatus", "DRAFT")), "DRAFT");
-    const notes = valueOf(application, "applications", "notes", "");
+    const status = entry.status;
+    const followup = followupForEntry(entry);
+    const appliedAt = valueOf(application, "applications", "appliedAt", "");
+    const materialState = missingRecord ? "Record incompleto" : valueOf(application, "applications", "cvUsed", "CV non indicato");
+    const nextAction = followup
+      ? `${Boolean(valueOf(followup, "followups", "completed", false)) ? "Completato" : formatDate(valueOf(followup, "followups", "dueDate", ""), { short: true })}`
+      : status === "APPLIED" ? "Imposta follow-up" : status === "INTERVIEW" ? "Prepara colloquio" : "Aggiorna stato";
     return `
-      <tr>
+      <tr class="${missingRecord ? "application-row--warning" : ""}">
         <td><div class="table-primary"><span class="company-logo">${escapeHtml(initials(company))}</span><span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(company)}</small></span></div></td>
-        <td><strong>${fit ? `${fit.toFixed(1)}/10` : "—"}</strong></td>
         <td>${statusBadge(status)}</td>
-        <td>${escapeHtml(valueOf(application, "applications", "cvUsed", "Non selezionato"))}</td>
-        <td><div class="progress-block"><span class="progress-track"><i style="width:${progress}%"></i></span><span>${progress}%</span></div></td>
-        <td>${escapeHtml(formatDate(valueOf(application, "applications", "appliedAt", ""), { short: true }))}</td>
-        <td title="${escapeAttribute(notes)}">${escapeHtml(notes ? `${notes.slice(0, 34)}${notes.length > 34 ? "…" : ""}` : "—")}</td>
+        <td>${escapeHtml(appliedAt ? formatDate(appliedAt, { short: true }) : missingRecord ? "Da recuperare" : "Non indicata")}</td>
+        <td><span class="${missingRecord ? "text-warning" : ""}">${escapeHtml(materialState)}</span></td>
+        <td><strong>${escapeHtml(nextAction)}</strong></td>
         <td><div class="row-actions">
-          ${job ? `<button class="button button--secondary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Copilot</button>` : ""}
-          <button class="icon-button" type="button" data-action="application-status" data-id="${escapeAttribute(application.id)}" aria-label="Aggiorna stato" title="Aggiorna stato">${icon("columns")}</button>
-          <button class="icon-button" type="button" data-action="application-note" data-id="${escapeAttribute(application.id)}" aria-label="Aggiungi nota" title="Aggiungi nota">${icon("edit")}</button>
-          <button class="icon-button" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}" aria-label="Crea follow-up" title="Crea follow-up">${icon("clock")}</button>
+          ${missingRecord ? `<button class="button button--warning" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">Registra ora</button>` : ""}
+          ${job ? `<button class="button button--secondary" type="button" data-action="copy-application-kit" data-id="${escapeAttribute(job.id)}">Copia kit</button><button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
+          ${application ? `<button class="icon-button" type="button" data-action="application-status" data-id="${escapeAttribute(application.id)}" aria-label="Aggiorna stato" title="Aggiorna stato">${icon("columns")}</button><button class="icon-button" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}" aria-label="Crea follow-up" title="Crea follow-up">${icon("clock")}</button>` : ""}
         </div></td>
       </tr>
     `;
@@ -1554,11 +1591,14 @@
         case "open-url":
           openExternalUrl(trigger.dataset.url);
           break;
+        case "find-contacts":
+          openContactResearch(id || state.selectedJobId);
+          break;
+        case "copy-application-kit":
+          await copyApplicationKit(id || state.selectedJobId);
+          break;
         case "feedback":
           await saveFeedback(id, trigger.dataset.feedback, trigger);
-          break;
-        case "advance-job":
-          await advanceJob(id, trigger);
           break;
         case "clear-filters":
           clearOpportunityFilters();
@@ -1666,6 +1706,65 @@
     }
   }
 
+  function contactResearchLinks(job) {
+    const company = companyNameForJob(job);
+    const role = jobTitle(job);
+    const peopleQuery = encodeURIComponent(`${company} recruiter talent acquisition ${role}`);
+    const linkedinQuery = encodeURIComponent(`${company} recruiter`);
+    return [
+      ["Cerca recruiter su LinkedIn", `https://www.linkedin.com/search/results/people/?keywords=${linkedinQuery}`],
+      ["Cerca contatti pubblici", `https://www.google.com/search?q=${peopleQuery}`],
+      ["Cerca profili LinkedIn indicizzati", `https://www.google.com/search?q=${encodeURIComponent(`site:linkedin.com/in ${company} talent acquisition recruiter`)}`]
+    ];
+  }
+
+  function openContactResearch(jobId) {
+    const job = getJobById(jobId);
+    if (!job) return;
+    const companyId = valueOf(job, "jobs", "companyId", "");
+    const knownContacts = companyId ? state.data.contacts.filter((contact) => String(valueOf(contact, "contacts", "companyId", "")) === String(companyId)) : [];
+    openDialog({
+      eyebrow: "CONTACT RESEARCH",
+      title: `Chi contattare in ${companyNameForJob(job)}`,
+      body: `
+        <p class="dialog-copy">JobFinder prepara ricerche mirate e raccoglie i contatti già salvati. Non inventa nomi e non effettua scraping dei profili.</p>
+        ${knownContacts.length ? `<div class="contact-results"><strong>Contatti già nel database</strong>${knownContacts.map((contact) => `<div class="contact-result"><span><b>${escapeHtml(valueOf(contact, "contacts", "name", "Contatto"))}</b><small>${escapeHtml(valueOf(contact, "contacts", "role", "Ruolo non indicato"))}</small></span><span>${escapeHtml(valueOf(contact, "contacts", "email", ""))}</span></div>`).join("")}</div>` : `<div class="notice notice--info"><strong>Nessun contatto salvato</strong><span>Usa una ricerca mirata e aggiungi poi il contatto alla tabella contacts.</span></div>`}
+        <div class="research-actions">${contactResearchLinks(job).map(([label, url]) => `<button class="button button--secondary" type="button" data-action="open-url" data-url="${escapeAttribute(url)}">${icon("external")}${escapeHtml(label)}</button>`).join("")}</div>
+        <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Chiudi</button><button class="button button--primary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Prepara messaggio recruiter</button></div>`
+    });
+  }
+
+  function applicationKitText(job) {
+    const application = getApplicationForJob(job.id);
+    const suggestions = suggestedCopilotContent(job);
+    return [
+      `RUOLO: ${jobTitle(job)}`,
+      `AZIENDA: ${companyNameForJob(job)}`,
+      `ANNUNCIO: ${valueOf(job, "jobs", "url", "") || "Non disponibile"}`,
+      "",
+      `WHY YOU FIT\n${valueOf(application, "applications", "whyFit", suggestions.why)}`,
+      "",
+      `GAP DA GESTIRE\n${valueOf(application, "applications", "gaps", suggestions.gaps)}`,
+      "",
+      `ANGLE\n${valueOf(application, "applications", "angle", suggestions.angle)}`,
+      "",
+      `MESSAGGIO RECRUITER\n${valueOf(application, "applications", "recruiterNote", suggestions.note)}`,
+      "",
+      `CV: ${valueOf(application, "applications", "cvUsed", valueOf(job, "jobs", "recommendedCv", "Da scegliere"))}`
+    ].join("\n");
+  }
+
+  async function copyApplicationKit(jobId) {
+    const job = getJobById(jobId);
+    if (!job) return;
+    try {
+      await navigator.clipboard.writeText(applicationKitText(job));
+      showToast("Kit candidatura copiato: puoi incollarlo nel form dell’azienda o nei tuoi appunti.", "success", "Application kit pronto");
+    } catch (_error) {
+      openDialog({ eyebrow: "APPLICATION KIT", title: `${jobTitle(job)} · ${companyNameForJob(job)}`, body: `<textarea class="kit-preview" rows="18" readonly>${escapeHtml(applicationKitText(job))}</textarea><div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Chiudi</button></div>` });
+    }
+  }
+
   function applicationDraftPayload(job, application = null) {
     const payload = {};
     const currentStatus = normalizeStatus(valueOf(application, "applications", "status", "APPLY"), "APPLY");
@@ -1738,9 +1837,17 @@
     setBusy(button, true, "Registrazione…");
     let savedApplication = null;
     try {
-      savedApplication = existingApplication
-        ? await updateRecord("applications", existingApplication.id, appliedApplicationPayload(job, existingApplication))
-        : await insertRecord("applications", appliedApplicationPayload(job, null));
+      try {
+        savedApplication = existingApplication
+          ? await updateRecord("applications", existingApplication.id, appliedApplicationPayload(job, existingApplication))
+          : await insertRecord("applications", appliedApplicationPayload(job, null));
+      } catch (applicationError) {
+        if (existingApplication) throw applicationError;
+        await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: "APPLIED" });
+        renderAll();
+        showToast(`Il job è registrato come APPLIED, ma il record application non è stato creato: ${humanizeError(applicationError, "la creazione dell’application")}`, "warning", "Candidatura da completare");
+        return;
+      }
       try {
         await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: "APPLIED" });
       } catch (jobError) {
@@ -1789,31 +1896,6 @@
       showToast(`${normalized} registrato. Le preferenze manuali non sono state modificate.`, "success", "Feedback salvato");
     } catch (error) {
       showToast(humanizeError(error, "il feedback"), "error", "Feedback non salvato");
-    } finally {
-      setBusy(button, false);
-    }
-  }
-
-  async function advanceJob(jobId, button) {
-    const job = getJobById(jobId);
-    if (!job) return;
-    const current = jobStatus(job);
-    const currentIndex = PIPELINE_STATES.indexOf(current);
-    if (currentIndex < 0 || currentIndex >= PIPELINE_STATES.length - 1) {
-      showToast("Questa opportunità è già nello stato finale.", "warning", "Pipeline");
-      return;
-    }
-    const next = PIPELINE_STATES[currentIndex + 1];
-    setBusy(button, true, "Salvo…");
-    try {
-      await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: next });
-      renderDashboard();
-      renderPipeline();
-      renderOpportunities({ preserveFilters: true });
-      renderAnalytics();
-      showToast(`${jobTitle(job)} è passata da ${current} a ${next}.`, "success", "Pipeline aggiornata");
-    } catch (error) {
-      showToast(humanizeError(error, "l’avanzamento della pipeline"), "error", "Pipeline non aggiornata");
     } finally {
       setBusy(button, false);
     }

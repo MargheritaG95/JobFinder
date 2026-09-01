@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260901.3" />
+    <link rel="stylesheet" href="styles.css?v=20260901.4" />
   </head>
   <body>
     <noscript>
@@ -373,6 +373,7 @@
               </div>
               <div class="hero-stat"><strong id="applicationHeroCount">0</strong><span>candidature</span></div>
             </div>
+            <div id="applicationSummary" class="mini-kpi-row"></div>
             <div id="applicationsList" class="table-card"></div>
           </section>
 
@@ -573,6 +574,9 @@
                   <button id="copilotMarkAppliedButton" class="button button--success" type="button" data-action="mark-applied">
                     <svg class="icon"><use href="#icon-check"></use></svg>Ho applicato
                   </button>
+                  <button id="copilotCopyKitButton" class="button button--secondary" type="button" data-action="copy-application-kit">
+                    <svg class="icon"><use href="#icon-copy"></use></svg>Copia kit
+                  </button>
                   <button id="prepareApplicationButton" class="button button--primary" type="submit">
                     <svg class="icon"><use href="#icon-sparkles"></use></svg>Prepara application
                   </button>
@@ -632,10 +636,11 @@
       <symbol id="icon-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2"/></symbol>
       <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
       <symbol id="icon-edit" viewBox="0 0 24 24"><path d="m4 16-1 5 5-1L19 9l-4-4zM13 7l4 4"/></symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260901.3" defer></script>
+    <script src="config.js?v=20260901.4" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260901.3" defer></script>
+    <script src="app.js?v=20260901.4" defer></script>
   </body>
 </html>

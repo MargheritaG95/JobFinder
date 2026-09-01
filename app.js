@@ -63,6 +63,7 @@
     route: "dashboard",
     selectedJobId: null,
     selectedApplicationId: null,
+    pendingJobActions: new Set(),
     demo: false,
     loadingData: false,
     sessionInitializing: false,
@@ -794,6 +795,19 @@
     return `<button class="icon-button save-button ${saved ? "is-saved" : ""}" type="button" data-action="toggle-save" data-id="${escapeAttribute(job.id)}" aria-label="${saved ? "Rimuovi dai salvati" : "Salva opportunità"}" aria-pressed="${saved}">${icon("heart")}</button>`;
   }
 
+  function applicationActionButtons(job, options = {}) {
+    const saved = Boolean(valueOf(job, "jobs", "saved", false));
+    const compact = Boolean(options.compact);
+    return `
+      <button class="button button--secondary" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">
+        ${compact ? "" : icon("clock")}<span>${saved ? "Salvata per dopo" : "Applica più tardi"}</span>
+      </button>
+      <button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">
+        ${compact ? "" : icon("check")}<span>Ho applicato</span>
+      </button>
+    `;
+  }
+
   function renderAll() {
     renderDashboard();
     renderOpportunities();
@@ -876,6 +890,7 @@
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
         <div class="opportunity-actions">
           <button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}"><span>Applica ora</span>${icon("arrow-right")}</button>
+          ${applicationActionButtons(job, { compact: true })}
           ${saveButton(job)}
         </div>
       </article>
@@ -974,6 +989,7 @@
             <button class="icon-button" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}" aria-label="Apri annuncio" title="Apri annuncio">${icon("external")}</button>
             ${jobStatus(job) !== "CLOSED" ? `<button class="button button--secondary" type="button" data-action="advance-job" data-id="${escapeAttribute(job.id)}">Avanza ${icon("chevron-right")}</button>` : ""}
             <button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>
+            ${applicationActionButtons(job)}
             ${saveButton(job)}
           </div>
         </div>
@@ -1298,6 +1314,7 @@
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : "Nuova application";
     saveState.classList.toggle("status-pill--neutral", !application);
     $("prepareApplicationButton").innerHTML = application ? `${icon("check")}Aggiorna application` : `${icon("sparkles")}Prepara application`;
+    $("copilotSaveForLaterButton").innerHTML = `${icon("clock")}${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}`;
   }
 
   function bindStaticEvents() {
@@ -1525,6 +1542,12 @@
         case "toggle-save":
           await toggleSavedJob(id, trigger);
           break;
+        case "save-for-later":
+          await saveForLater(id || state.selectedJobId, trigger);
+          break;
+        case "mark-applied":
+          await markAsApplied(id || state.selectedJobId, trigger);
+          break;
         case "open-job":
           openJob(id || state.selectedJobId);
           break;
@@ -1641,6 +1664,110 @@
     } finally {
       setBusy(button, false);
     }
+  }
+
+  function applicationDraftPayload(job, application = null) {
+    const payload = {};
+    const currentStatus = normalizeStatus(valueOf(application, "applications", "status", "APPLY"), "APPLY");
+    const currentPreparation = String(valueOf(application, "applications", "preparationStatus", "draft") || "draft").toLowerCase();
+    setMapped(payload, "applications", "jobId", job.id);
+    setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
+    setMapped(payload, "applications", "status", ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"].includes(currentStatus) ? currentStatus : "APPLY");
+    setMapped(payload, "applications", "preparationStatus", ["in_progress", "ready", "submitted"].includes(currentPreparation) ? currentPreparation : "draft");
+    if (currentPreparation !== "submitted") {
+      const progress = application ? Math.min(applicationProgress(application), 85) : 20;
+      setMapped(payload, "applications", "progress", progress);
+      setMapped(payload, "applications", "appliedAt", null);
+    }
+    return payload;
+  }
+
+  function recordPatch(entity, record, keys) {
+    return Object.fromEntries(keys.map((key) => [fieldName(entity, key), valueOf(record, entity, key, null)]));
+  }
+
+  async function saveForLater(jobId, button) {
+    const job = getJobById(jobId);
+    if (!job || !ensureWritable()) return;
+    const actionKey = String(job.id);
+    if (state.pendingJobActions.has(actionKey)) return;
+    state.pendingJobActions.add(actionKey);
+    const application = getApplicationForJob(job.id);
+    const previousJob = recordPatch("jobs", job, ["saved", "status"]);
+    const jobPatch = { [fieldName("jobs", "saved")]: true };
+    if (["NEW", "REVIEW"].includes(jobStatus(job))) jobPatch[fieldName("jobs", "status")] = "APPLY";
+    setBusy(button, true, "Salvataggio…");
+    let jobUpdated = false;
+    try {
+      await updateRecord("jobs", job.id, jobPatch);
+      jobUpdated = true;
+      if (application) await updateRecord("applications", application.id, applicationDraftPayload(job, application));
+      else await insertRecord("applications", applicationDraftPayload(job));
+      renderAll();
+      showToast("Salvata per applicare più tardi", "success", "Opportunità salvata");
+    } catch (error) {
+      if (jobUpdated) {
+        try { await updateRecord("jobs", job.id, previousJob); } catch (_rollbackError) { await loadAllData({ quiet: true }); }
+      }
+      throw error;
+    } finally {
+      state.pendingJobActions.delete(actionKey);
+      setBusy(button, false);
+    }
+  }
+
+  function appliedApplicationPayload(job, application) {
+    const payload = {};
+    setMapped(payload, "applications", "jobId", job.id);
+    setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
+    setMapped(payload, "applications", "status", "APPLIED");
+    setMapped(payload, "applications", "progress", 100);
+    setMapped(payload, "applications", "preparationStatus", "submitted");
+    if (!valueOf(application, "applications", "appliedAt", "")) setMapped(payload, "applications", "appliedAt", new Date().toISOString());
+    return payload;
+  }
+
+  async function markAsApplied(jobId, button) {
+    const job = getJobById(jobId);
+    if (!job || !ensureWritable()) return;
+    const actionKey = String(job.id);
+    if (state.pendingJobActions.has(actionKey)) return;
+    state.pendingJobActions.add(actionKey);
+    const existingApplication = getApplicationForJob(job.id);
+    const previousApplication = existingApplication ? recordPatch("applications", existingApplication, ["status", "progress", "appliedAt", "preparationStatus"]) : null;
+    setBusy(button, true, "Registrazione…");
+    let savedApplication = null;
+    try {
+      savedApplication = existingApplication
+        ? await updateRecord("applications", existingApplication.id, appliedApplicationPayload(job, existingApplication))
+        : await insertRecord("applications", appliedApplicationPayload(job, null));
+      try {
+        await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: "APPLIED" });
+      } catch (jobError) {
+        try {
+          if (existingApplication) await updateRecord("applications", existingApplication.id, previousApplication);
+          else if (savedApplication) await deleteRecord("applications", savedApplication.id);
+        } catch (_rollbackError) {
+          await loadAllData({ quiet: true });
+        }
+        throw jobError;
+      }
+      renderAll();
+      showToast("Candidatura registrata come inviata", "success", "Application aggiornata");
+      openFollowupPrompt(savedApplication);
+    } finally {
+      state.pendingJobActions.delete(actionKey);
+      setBusy(button, false);
+    }
+  }
+
+  function openFollowupPrompt(application) {
+    openDialog({
+      eyebrow: "PROSSIMO PASSO",
+      title: "Vuoi impostare un follow-up?",
+      body: `<p class="dialog-copy">Puoi pianificare un promemoria senza creare nulla automaticamente.</p>
+        <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Non ora</button><button class="button button--primary" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}">${icon("clock")}Crea follow-up</button></div>`
+    });
   }
 
   async function saveFeedback(jobId, feedbackValue, button) {

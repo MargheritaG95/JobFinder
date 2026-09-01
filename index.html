@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260901.2" />
+    <link rel="stylesheet" href="styles.css?v=20260901.3" />
   </head>
   <body>
     <noscript>
@@ -567,6 +567,12 @@
                 </div>
                 <div class="form-actions">
                   <button id="copilotOpenJobSecondaryButton" class="button button--secondary" type="button" data-action="open-job">Apri annuncio</button>
+                  <button id="copilotSaveForLaterButton" class="button button--secondary" type="button" data-action="save-for-later">
+                    <svg class="icon"><use href="#icon-clock"></use></svg>Applica più tardi
+                  </button>
+                  <button id="copilotMarkAppliedButton" class="button button--success" type="button" data-action="mark-applied">
+                    <svg class="icon"><use href="#icon-check"></use></svg>Ho applicato
+                  </button>
                   <button id="prepareApplicationButton" class="button button--primary" type="submit">
                     <svg class="icon"><use href="#icon-sparkles"></use></svg>Prepara application
                   </button>
@@ -628,8 +634,8 @@
       <symbol id="icon-edit" viewBox="0 0 24 24"><path d="m4 16-1 5 5-1L19 9l-4-4zM13 7l4 4"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260901.2" defer></script>
+    <script src="config.js?v=20260901.3" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260901.2" defer></script>
+    <script src="app.js?v=20260901.3" defer></script>
   </body>
 </html>

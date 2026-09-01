@@ -5,8 +5,8 @@
  * Never place a service_role key in a browser application.
  */
 window.JOBFINDER_CONFIG = {
-  supabaseUrl: "https://YOUR_PROJECT_REF.supabase.co",
-  supabasePublishableKey: "YOUR_SUPABASE_PUBLISHABLE_KEY",
+  supabaseUrl: "https://moyabdwxlbkfqmtjuwwa.supabase.co",
+  supabasePublishableKey: "sb_publishable_kzopFoXWx_DBRo8giCgGDg_ITMsOsbV",
 
   /* Optional absolute GitHub Pages URL, e.g. https://username.github.io/jobfinder/
      Leave empty to use the current page URL for OAuth and password recovery. */

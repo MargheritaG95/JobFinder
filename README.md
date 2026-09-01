@@ -113,9 +113,9 @@ Il pulsante **Avanza** aggiorna la colonna `jobs.status` su Supabase. Lo stato d
 Pubblica questa cartella dalla root del branch scelto. Il file `.nojekyll` evita elaborazioni Jekyll. Gli asset usano query string di versione:
 
 ```html
-styles.css?v=20260901.1
-app.js?v=20260901.1
-config.js?v=20260901.1
+styles.css?v=20260901.2
+app.js?v=20260901.2
+config.js?v=20260901.2
 ```
 
 Quando distribuisci una nuova release, incrementa lo stesso valore in `index.html` per invalidare la cache del browser e di GitHub Pages.

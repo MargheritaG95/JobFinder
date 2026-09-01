@@ -535,6 +535,17 @@ textarea::placeholder {
   background: #f9fafc;
 }
 
+.button--success {
+  border-color: #b9e3d4;
+  color: #197253;
+  background: var(--green-soft);
+}
+
+.button--success:hover:not(:disabled) {
+  border-color: #8ed0b8;
+  background: #e4f7f0;
+}
+
 .button--ghost {
   border-color: transparent;
   color: var(--muted);

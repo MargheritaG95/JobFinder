@@ -96,6 +96,13 @@ Un errore di tabella, colonna o policy non blocca l’intera app: la sorgente in
 
 Il Copilot parte dai dati già presenti in `jobs`/`applications`; quando mancano, genera una prima bozza strutturata usando ruolo, azienda e preferenze dell’utente. “Prepara application” crea o aggiorna il record Supabase e porta il job nello stato coerente. Non invia candidature esterne: la submission finale resta intenzionalmente sotto il controllo dell’utente.
 
+Le card opportunità e il Copilot espongono inoltre due azioni condivise:
+
+- **Applica più tardi** salva il job, lo porta da `NEW`/`REVIEW` ad `APPLY` e crea una sola application non inviata;
+- **Ho applicato** aggiorna la stessa application a `APPLIED`, imposta progresso e preparazione come completati e conserva la prima data `applied_at`.
+
+Dopo “Ho applicato” viene proposto, senza crearlo automaticamente, un follow-up collegato all’application.
+
 ## Stati pipeline
 
 ```text
@@ -113,9 +120,9 @@ Il pulsante **Avanza** aggiorna la colonna `jobs.status` su Supabase. Lo stato d
 Pubblica questa cartella dalla root del branch scelto. Il file `.nojekyll` evita elaborazioni Jekyll. Gli asset usano query string di versione:
 
 ```html
-styles.css?v=20260901.2
-app.js?v=20260901.2
-config.js?v=20260901.2
+styles.css?v=20260901.3
+app.js?v=20260901.3
+config.js?v=20260901.3
 ```
 
 Quando distribuisci una nuova release, incrementa lo stesso valore in `index.html` per invalidare la cache del browser e di GitHub Pages.

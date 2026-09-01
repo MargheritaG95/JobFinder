@@ -1,5 +1,6 @@
 const cfg = window.JOBFINDER_CONFIG;
 const sb = supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey);
+const APP_URL = "https://jobfinder-blush.vercel.app";
 
 let currentUser = null;
 let jobs = [];
@@ -492,7 +493,7 @@ async function prepareApplication(jobId) {
   setView("applications");
 }
 
-const MAGIC_LINK_COOLDOWN_MS = 60000;
+const MAGIC_LINK_COOLDOWN_MS = 10 * 60 * 1000;
 let magicLinkTimer = null;
 
 function getMagicLinkCooldownRemaining() {
@@ -545,7 +546,7 @@ async function sendMagicLink() {
 
   const { error } = await sb.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.origin }
+    options: { emailRedirectTo: APP_URL }
   });
 
   if (error) {
@@ -564,6 +565,31 @@ async function sendMagicLink() {
   notify("Email inviata ✓ Controlla la posta. Il pulsante resta temporaneamente bloccato per evitare richieste duplicate.");
 }
 
+
+async function syncGoogleProviderAvailability() {
+  const button = el("google-login-btn");
+  if (!button) return;
+
+  try {
+    const response = await fetch(`${cfg.supabaseUrl}/auth/v1/settings`, {
+      headers: { apikey: cfg.supabasePublishableKey }
+    });
+    const settings = await response.json();
+    const enabled = !!settings?.external?.google;
+    button.disabled = !enabled;
+    button.classList.toggle("google-disabled", !enabled);
+    button.title = enabled
+      ? "Accedi con Google"
+      : "Google Login sarà disponibile appena il provider viene attivato in Supabase";
+    if (!enabled) {
+      button.innerHTML = '<span class="google-g">G</span> Google login in attivazione';
+    }
+  } catch (_error) {
+    button.disabled = true;
+    button.title = "Impossibile verificare al momento il provider Google";
+  }
+}
+
 async function signInWithGoogle() {
   const button = el("google-login-btn");
   button.disabled = true;
@@ -572,7 +598,7 @@ async function signInWithGoogle() {
 
   const { error } = await sb.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: window.location.origin }
+    options: { redirectTo: APP_URL }
   });
 
   if (error) {
@@ -617,6 +643,7 @@ async function init() {
   el("login-btn").addEventListener("click", sendMagicLink);
   el("google-login-btn").addEventListener("click", signInWithGoogle);
   updateMagicLinkCooldownUI();
+  await syncGoogleProviderAvailability();
   if (getMagicLinkCooldownRemaining() > 0 && !magicLinkTimer) {
     magicLinkTimer = setInterval(updateMagicLinkCooldownUI, 1000);
   }

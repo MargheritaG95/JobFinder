@@ -513,3 +513,5 @@ button { cursor: pointer; }
 .login-cooldown { width:100%; font-size:10px; color:var(--muted); line-height:1.35; }
 .magic-login-form button:disabled { opacity:.6; cursor:not-allowed; }
 @media (max-width: 900px) { .auth-divider { width:100%; justify-content:center; } .auth-divider::before, .auth-divider::after { flex:1; } .btn-google { width:100%; } }
+
+.btn-google.google-disabled { opacity: .6; cursor: not-allowed; }

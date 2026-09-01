@@ -1174,6 +1174,8 @@ textarea::placeholder {
 }
 
 .company-logo {
+  position: relative;
+  overflow: hidden;
   display: grid;
   width: 43px;
   height: 43px;
@@ -1187,6 +1189,37 @@ textarea::placeholder {
   font-weight: 800;
   letter-spacing: -0.02em;
 }
+
+.company-logo img {
+  position: absolute;
+  z-index: 1;
+  inset: 5px;
+  width: calc(100% - 10px);
+  height: calc(100% - 10px);
+  border-radius: 7px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.company-logo > span { z-index: 0; }
+
+.badge--linkedin { border-color: #b9daf0; color: #0a66c2; background: #edf7fd; }
+
+.applied-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 8px 13px;
+  border: 1px solid #9fd9c4;
+  border-radius: 9px;
+  color: #117252;
+  background: #eaf8f2;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.applied-state .icon { width: 15px; height: 15px; }
 
 .company-logo--large {
   width: 60px;

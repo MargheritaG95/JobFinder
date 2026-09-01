@@ -805,7 +805,45 @@
   function statusBadge(status) {
     const normalized = normalizeStatus(status);
     const className = normalized === "OFFER" ? "badge--fit" : normalized === "INTERVIEW" ? "badge--warning" : normalized === "CLOSED" ? "badge--danger" : normalized === "APPLY" || normalized === "APPLIED" ? "badge--violet" : "badge--blue";
-    return `<span class="badge ${className}">${escapeHtml(normalized)}</span>`;
+    const labels = { APPLIED: "APPLICATO", APPLY: "DA CANDIDARSI", DRAFT: "BOZZA", CONTACTED: "CONTATTATO", INTERVIEW: "COLLOQUIO", OFFER: "OFFERTA", CLOSED: "CHIUSO" };
+    return `<span class="badge ${className}">${escapeHtml(labels[normalized] || normalized)}</span>`;
+  }
+
+  function isEasyApply(job) {
+    return /easy\s*apply/i.test(String(valueOf(job, "jobs", "source", "")));
+  }
+
+  function easyApplyBadge(job) {
+    return isEasyApply(job) ? `<span class="badge badge--linkedin">in Easy Apply</span>` : "";
+  }
+
+  function hasAppliedToJob(job) {
+    const application = getApplicationForJob(job.id);
+    const applicationStatus = normalizeStatus(valueOf(application, "applications", "status", ""), "");
+    return ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER"].includes(jobStatus(job))
+      || ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"].includes(applicationStatus)
+      || Boolean(valueOf(application, "applications", "appliedAt", ""));
+  }
+
+  function companyLogoContent(job) {
+    const companyName = companyNameForJob(job);
+    const company = getCompanyById(valueOf(job, "jobs", "companyId", ""));
+    const candidateUrl = safeExternalUrl(valueOf(company, "companies", "website", "")) || safeExternalUrl(valueOf(job, "jobs", "url", ""));
+    let logo = "";
+    if (candidateUrl) {
+      try {
+        const domain = new URL(candidateUrl).hostname;
+        const logoUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
+        logo = `<img src="${escapeAttribute(logoUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'" />`;
+      } catch (_error) {
+        // Keep initials-only fallback.
+      }
+    }
+    return `${logo}<span>${escapeHtml(initials(companyName))}</span>`;
+  }
+
+  function appliedStateMarkup() {
+    return `<span class="applied-state">${icon("check")}Applicato</span>`;
   }
 
   function priorityBadge(priority) {
@@ -927,17 +965,17 @@
     const location = valueOf(job, "jobs", "location", "Location non indicata");
     return `
       <article class="top-opportunity">
-        <div class="company-logo">${escapeHtml(initials(company))}</div>
+        <div class="company-logo">${companyLogoContent(job)}</div>
         <div class="opportunity-copy">
           <h3>${escapeHtml(jobTitle(job))}</h3>
           <p>${escapeHtml(company)} · ${escapeHtml(location)}</p>
-          <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}</div>
+          <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${easyApplyBadge(job)}</div>
         </div>
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
-        <div class="opportunity-actions">
+        <div class="opportunity-actions">${hasAppliedToJob(job) ? appliedStateMarkup() : `
           <button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}"><span>Applica ora</span>${icon("arrow-right")}</button>
           ${applicationActionButtons(job, { compact: true })}
-          ${saveButton(job)}
+          ${saveButton(job)}`}
         </div>
       </article>
     `;
@@ -1017,11 +1055,11 @@
     return `
       <article class="opportunity-card">
         <div class="opportunity-card__top">
-          <div class="company-logo">${escapeHtml(initials(company))}</div>
+          <div class="company-logo">${companyLogoContent(job)}</div>
           <div class="opportunity-copy">
             <h3>${escapeHtml(jobTitle(job))}</h3>
             <p>${escapeHtml(company)}</p>
-            <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityBadge(jobPriority(job))}</div>
+            <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityBadge(jobPriority(job))}${easyApplyBadge(job)}</div>
           </div>
           <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
         </div>
@@ -1034,9 +1072,7 @@
           <div class="opportunity-actions">
             <button class="icon-button" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}" aria-label="Apri annuncio" title="Apri annuncio">${icon("external")}</button>
             ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
-            <button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>
-            ${applicationActionButtons(job)}
-            ${saveButton(job)}
+            ${hasAppliedToJob(job) ? appliedStateMarkup() : `<button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>${applicationActionButtons(job)}${saveButton(job)}`}
           </div>
         </div>
       </article>
@@ -1378,7 +1414,7 @@
     const application = getApplicationForJob(job.id);
     const suggestions = suggestedCopilotContent(job);
     const company = companyNameForJob(job);
-    $("copilotCompanyLogo").textContent = initials(company);
+    $("copilotCompanyLogo").innerHTML = companyLogoContent(job);
     $("copilotRole").textContent = jobTitle(job);
     $("copilotCompany").textContent = company;
     $("copilotFitScore").textContent = jobFit(job).toFixed(1);
@@ -1883,7 +1919,7 @@
           </div>
           <div class="form-grid form-grid--two">
             <label class="field"><span>Località / modalità</span><input name="location" placeholder="Milano · Hybrid" /></label>
-            <label class="field"><span>Fonte</span><select name="source"><option>Career site</option><option>LinkedIn alert</option><option>Lever</option><option>Greenhouse</option><option>Altro</option></select></label>
+            <label class="field"><span>Fonte</span><select name="source"><option>Career site</option><option>LinkedIn alert</option><option>LinkedIn Easy Apply</option><option>Lever</option><option>Greenhouse</option><option>Altro</option></select></label>
           </div>
           <label class="field"><span>Testo dell’annuncio</span><textarea name="description" rows="12" required placeholder="Incolla responsabilità, requisiti e informazioni sulla posizione…"></textarea></label>
           <div class="notice notice--info"><strong>Ranking trasparente</strong><span>Il punteggio usa ruolo, settore, località e modalità di lavoro salvati in Preferenze. Potrai correggerlo dal database senza perdere i contenuti generati.</span></div>
@@ -2439,8 +2475,9 @@
     const title = String(values.get("title") || "").trim();
     const company = String(values.get("company") || "").trim();
     const location = String(values.get("location") || "").trim();
-    const source = String(values.get("source") || "Career site").trim();
+    let source = String(values.get("source") || "Career site").trim();
     const description = String(values.get("description") || "").trim();
+    if (/easy\s*apply/i.test(description) && /linkedin/i.test(`${source} ${url}`)) source = "LinkedIn Easy Apply";
     const duplicate = state.data.jobs.find((job) => {
       const existingUrl = safeExternalUrl(valueOf(job, "jobs", "url", ""));
       return existingUrl === url || (

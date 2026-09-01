@@ -1,29 +1,24 @@
-# JobFinder UI FIXED
+# JobFinder CLICKABLE FIXED
 
-Questa versione corregge l'interfaccia e rende cliccabili le funzioni principali.
+Questa build è stata rifatta con una sola gestione centralizzata dei click, per evitare listener mancanti.
 
-## Include
-- Login Supabase email/password invariato
-- Dashboard moderna in stile JobFinder
-- Opportunità filtrabili
-- Application Copilot con pulsante "Applica ora"
-- Pipeline con avanzamento stato
-- Le mie Application
+IMPORTANTE:
+- usa versioni cache-busting: styles.css?v=20260901-3 e app.js?v=20260901-3
+- quindi GitHub Pages non dovrebbe continuare a servire il vecchio JS
+- i pulsanti principali hanno `data-action` o `data-page` e vengono gestiti da un unico listener globale
+
+Cliccabili:
+- sidebar
+- Applica ora
+- Salva opportunità
+- Avanza pipeline
+- Nuova application
 - Aziende Target
-- Follow-up
+- Nuovo follow-up
 - Feedback
 - Preferenze
-- Risorse
-- Analytics
-- Lettura automatica delle tabelle Supabase quando contengono dati
-- Fallback demo se `jobs` è vuota
+- Logout
 
-## Pubblicazione
-Sostituisci nella root del repository:
-- index.html
-- styles.css
-- app.js
-- config.js
-- .nojekyll
-
-Poi attendi GitHub Pages e ricarica con Ctrl/Cmd + Shift + R.
+Test automatico eseguito:
+- sintassi JavaScript con `node --check`
+- presenza degli action handler principali

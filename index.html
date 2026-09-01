@@ -1,91 +1,58 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>JobFinder</title>
-  <meta name="theme-color" content="#6f35d0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JobFinder</title>
+<link rel="stylesheet" href="styles.css?v=20260901-3">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js?v=20260901-3"></script>
 </head>
 <body>
-  <main id="auth-shell" class="auth-shell">
-    <section class="auth-card" id="auth-card">
-      <div class="auth-brand"><span class="brand-mark">▣</span><div><strong>JobFinder</strong><small>Find your next role. Faster.</small></div></div>
-      <h1>Accedi</h1>
-      <p class="muted">Usa il tuo account JobFinder.</p>
-      <label>Email</label>
-      <input id="email" type="email" autocomplete="email" placeholder="nome@email.com">
-      <label>Password</label>
-      <input id="password" type="password" autocomplete="current-password" minlength="8" placeholder="••••••••">
-      <button id="login-btn" class="btn btn-primary btn-wide">Accedi</button>
-      <div class="auth-links">
-        <button id="forgot-btn" class="link-btn">Password dimenticata?</button>
-        <button id="signup-btn" class="link-btn">Crea account</button>
-      </div>
-      <div id="message" class="message hidden"></div>
-    </section>
-
-    <section class="auth-card hidden" id="reset-card">
-      <div class="auth-brand"><span class="brand-mark">▣</span><div><strong>JobFinder</strong><small>Find your next role. Faster.</small></div></div>
-      <h1>Nuova password</h1>
-      <p class="muted">Scegli la nuova password per il tuo account.</p>
-      <label>Nuova password</label>
-      <input id="new-password" type="password" minlength="8" placeholder="Minimo 8 caratteri">
-      <button id="save-password-btn" class="btn btn-primary btn-wide">Salva password</button>
-      <div id="reset-message" class="message hidden"></div>
-    </section>
-  </main>
-
-  <main id="app" class="app hidden">
-    <aside class="sidebar">
-      <div class="sidebar-brand">
-        <div class="brand-mark lg">▣</div>
-        <div><strong>JobFinder</strong><small>Find your next role. Faster.</small></div>
-      </div>
-      <nav id="sidebar-nav">
-        <button class="nav-item active" data-page="dashboard"><span>⌂</span>Dashboard</button>
-        <button class="nav-item" data-page="opportunities"><span>◎</span>Opportunità</button>
-        <button class="nav-item" data-page="pipeline"><span>▥</span>Pipeline</button>
-        <button class="nav-item" data-page="applications"><span>▤</span>Le mie Application</button>
-        <button class="nav-item" data-page="companies"><span>▦</span>Aziende Target</button>
-        <button class="nav-item" data-page="followups"><span>♧</span>Follow-up</button>
-        <button class="nav-item" data-page="feedback"><span>♡</span>Feedback</button>
-        <button class="nav-item" data-page="preferences"><span>⚙</span>Preferenze</button>
-        <button class="nav-item" data-page="resources"><span>▧</span>Risorse</button>
-        <button class="nav-item" data-page="analytics"><span>⌁</span>Analytics</button>
-      </nav>
-      <div class="fit-card">
-        <strong>Fit medio</strong>
-        <div class="ring"><span id="avg-fit">—</span></div>
-        <p>Continua così 🚀</p>
-      </div>
-    </aside>
-
-    <section class="main">
-      <header class="topbar">
-        <div>
-          <h1 id="greeting">Bentornato!</h1>
-          <p id="page-subtitle">Ecco il tuo overview di oggi</p>
-        </div>
-        <div class="top-actions"><span id="user-email"></span><button id="logout-btn" class="btn btn-ghost">↪ Esci</button></div>
-      </header>
-      <div id="content" class="content"></div>
-    </section>
-  </main>
-
-  <div id="modal-backdrop" class="modal-backdrop hidden">
-    <section class="modal">
-      <button id="modal-close" class="modal-close">×</button>
-      <div id="modal-content"></div>
-    </section>
+<section id="auth" class="auth-wrap">
+  <div class="auth-card">
+    <h1>JobFinder</h1><p>Find your next role. Faster.</p>
+    <input id="email" type="email" placeholder="Email" autocomplete="email">
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="login" class="primary">Accedi</button>
+    <button id="forgot" class="link">Password dimenticata?</button>
+    <div id="auth-msg"></div>
   </div>
+</section>
 
-  <div id="toast" class="toast hidden"></div>
-  <script src="app.js"></script>
+<section id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">▣</div><div><b>JobFinder</b><small>Find your next role. Faster.</small></div></div>
+    <nav id="nav">
+      <button data-page="dashboard" class="nav active">⌂ Dashboard</button>
+      <button data-page="opportunities" class="nav">◎ Opportunità</button>
+      <button data-page="pipeline" class="nav">▥ Pipeline</button>
+      <button data-page="applications" class="nav">▤ Le mie Application</button>
+      <button data-page="companies" class="nav">▦ Aziende Target</button>
+      <button data-page="followups" class="nav">♧ Follow-up</button>
+      <button data-page="feedback" class="nav">♡ Feedback</button>
+      <button data-page="preferences" class="nav">⚙ Preferenze</button>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><h1 id="title">Bentornata 👋</h1><p id="subtitle">Ecco il tuo overview di oggi</p></div>
+      <div class="user"><span id="user-email"></span><button id="logout" class="ghost">Esci</button></div>
+    </header>
+    <div id="content" class="content"></div>
+  </main>
+</section>
+
+<div id="modal" class="modal-wrap hidden">
+  <div class="modal">
+    <button id="close-modal" class="close">×</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js?v=20260901-3"></script>
 </body>
 </html>

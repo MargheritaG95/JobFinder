@@ -1875,11 +1875,11 @@
 
   function applicationDraftPayload(job, application = null) {
     const payload = {};
-    const currentStatus = normalizeStatus(valueOf(application, "applications", "status", "APPLY"), "APPLY");
+    const currentStatus = normalizeStatus(valueOf(application, "applications", "status", "DRAFT"), "DRAFT");
     const currentPreparation = String(valueOf(application, "applications", "preparationStatus", "draft") || "draft").toLowerCase();
     setMapped(payload, "applications", "jobId", job.id);
     setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
-    setMapped(payload, "applications", "status", ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"].includes(currentStatus) ? currentStatus : "APPLY");
+    setMapped(payload, "applications", "status", ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"].includes(currentStatus) ? currentStatus : "DRAFT");
     setMapped(payload, "applications", "preparationStatus", ["in_progress", "ready", "submitted"].includes(currentPreparation) ? currentPreparation : "draft");
     if (currentPreparation !== "submitted") {
       const progress = application ? Math.min(applicationProgress(application), 85) : 20;
@@ -2023,7 +2023,11 @@
     const payload = {};
     setMapped(payload, "applications", "jobId", job.id);
     setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
-    setMapped(payload, "applications", "status", preparationStatus === "submitted" ? "APPLIED" : application ? valueOf(application, "applications", "status", "APPLY") : "APPLY");
+    const currentApplicationStatus = normalizeStatus(valueOf(application, "applications", "status", "DRAFT"), "DRAFT");
+    const preservedStatus = ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"].includes(currentApplicationStatus)
+      ? currentApplicationStatus
+      : "DRAFT";
+    setMapped(payload, "applications", "status", preparationStatus === "submitted" ? "APPLIED" : preservedStatus);
     setMapped(payload, "applications", "cvUsed", $("copilotCv").value || null);
     setMapped(payload, "applications", "progress", progress);
     setMapped(payload, "applications", "whyFit", $("copilotWhyFit").value.trim());
@@ -2215,8 +2219,8 @@
 
   function openApplicationStatusForm(application) {
     if (!application) return;
-    const current = normalizeStatus(valueOf(application, "applications", "status", "APPLY"), "APPLY");
-    const choices = ["DRAFT", ...PIPELINE_STATES.slice(2)];
+    const current = normalizeStatus(valueOf(application, "applications", "status", "DRAFT"), "DRAFT");
+    const choices = ["DRAFT", "APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"];
     openDialog({
       eyebrow: "AGGIORNA APPLICATION",
       title: "Cambia stato",
@@ -2472,8 +2476,8 @@
     const application = getApplicationById(form.dataset.recordId);
     if (!application) throw new Error("Application non più disponibile.");
     const values = new FormData(form);
-    const status = normalizeStatus(values.get("status"), "APPLY");
-    const progressByStatus = { DRAFT: 20, APPLY: 55, APPLIED: 100, CONTACTED: 100, INTERVIEW: 100, OFFER: 100, CLOSED: 100 };
+    const status = normalizeStatus(values.get("status"), "DRAFT");
+    const progressByStatus = { DRAFT: 20, APPLIED: 100, CONTACTED: 100, INTERVIEW: 100, OFFER: 100, CLOSED: 100 };
     const payload = { [fieldName("applications", "status")]: status };
     if (progressByStatus[status] !== undefined) payload[fieldName("applications", "progress")] = progressByStatus[status];
     if (status === "APPLIED" && !valueOf(application, "applications", "appliedAt", "")) payload[fieldName("applications", "appliedAt")] = new Date().toISOString();

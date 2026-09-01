@@ -492,20 +492,97 @@ async function prepareApplication(jobId) {
   setView("applications");
 }
 
+const MAGIC_LINK_COOLDOWN_MS = 60000;
+let magicLinkTimer = null;
+
+function getMagicLinkCooldownRemaining() {
+  const until = Number(localStorage.getItem("jobfinder_magic_link_cooldown_until") || 0);
+  return Math.max(0, until - Date.now());
+}
+
+function updateMagicLinkCooldownUI() {
+  const button = el("login-btn");
+  const label = el("login-cooldown");
+  if (!button || !label) return;
+
+  const remaining = getMagicLinkCooldownRemaining();
+  if (remaining <= 0) {
+    button.disabled = false;
+    button.textContent = "Login";
+    label.classList.add("hidden");
+    if (magicLinkTimer) clearInterval(magicLinkTimer);
+    magicLinkTimer = null;
+    return;
+  }
+
+  const seconds = Math.ceil(remaining / 1000);
+  button.disabled = true;
+  button.textContent = `Riprova tra ${seconds}s`;
+  label.textContent = "Email già richiesta. Controlla la posta prima di richiederne un'altra.";
+  label.classList.remove("hidden");
+}
+
+function startMagicLinkCooldown() {
+  localStorage.setItem("jobfinder_magic_link_cooldown_until", String(Date.now() + MAGIC_LINK_COOLDOWN_MS));
+  updateMagicLinkCooldownUI();
+  if (!magicLinkTimer) magicLinkTimer = setInterval(updateMagicLinkCooldownUI, 1000);
+}
+
 async function sendMagicLink() {
+  if (getMagicLinkCooldownRemaining() > 0) {
+    updateMagicLinkCooldownUI();
+    return;
+  }
+
   const email = el("email-input").value.trim();
   if (!email) {
     notify("Inserisci la tua email.");
     return;
   }
 
+  el("login-btn").disabled = true;
+  el("login-btn").textContent = "Invio…";
+
   const { error } = await sb.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: window.location.origin }
   });
 
-  if (error) notify(error.message);
-  else notify("Link di accesso inviato ✓ Apri la tua email e clicca il link: tornerai qui già connessa.");
+  if (error) {
+    if (error.status === 429 || /rate limit/i.test(error.message || "")) {
+      startMagicLinkCooldown();
+      notify("Troppe richieste email in poco tempo. Attendi e usa l'ultima email ricevuta, oppure accedi con Google.");
+    } else {
+      el("login-btn").disabled = false;
+      el("login-btn").textContent = "Login";
+      notify(error.message);
+    }
+    return;
+  }
+
+  startMagicLinkCooldown();
+  notify("Email inviata ✓ Controlla la posta. Il pulsante resta temporaneamente bloccato per evitare richieste duplicate.");
+}
+
+async function signInWithGoogle() {
+  const button = el("google-login-btn");
+  button.disabled = true;
+  const original = button.innerHTML;
+  button.textContent = "Apertura Google…";
+
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin }
+  });
+
+  if (error) {
+    button.disabled = false;
+    button.innerHTML = original;
+    const msg = /provider.*not.*enabled|unsupported provider/i.test(error.message || "")
+      ? "Login Google non ancora attivo su Supabase. Abilita il provider Google nelle impostazioni Auth."
+      : error.message;
+    notify(msg);
+  }
 }
 
 async function logout() {
@@ -538,6 +615,11 @@ async function init() {
   el("fit-filter").addEventListener("change", renderOpportunities);
   el("status-filter").addEventListener("change", renderOpportunities);
   el("login-btn").addEventListener("click", sendMagicLink);
+  el("google-login-btn").addEventListener("click", signInWithGoogle);
+  updateMagicLinkCooldownUI();
+  if (getMagicLinkCooldownRemaining() > 0 && !magicLinkTimer) {
+    magicLinkTimer = setInterval(updateMagicLinkCooldownUI, 1000);
+  }
   el("logout-btn").addEventListener("click", logout);
   el("sidebar-logout-btn").addEventListener("click", logout);
   el("save-preferences-btn").addEventListener("click", savePreferences);

@@ -126,6 +126,8 @@ La sezione **Templates** nella barra laterale usa la tabella `answer_bank` già 
 
 Application Copilot integra direttamente la libreria: scegli un template e il campo di destinazione, quindi JobFinder sostituisce `[Nome]`, `[Azienda]`, `[Ruolo]`, `[Location]`, `[Fit Score]` e `[Competenze]`. Il testo compilato può essere inserito in messaggio recruiter, cover letter, Why Fit o angle, oppure copiato negli appunti.
 
+Le card della dashboard mostrano il logo ricavato dal dominio dell’azienda o dell’annuncio, con iniziali come fallback. Dopo la registrazione tramite **Ho applicato**, le azioni della card vengono sostituite da un unico stato **Applicato**. Gli annunci importati come `LinkedIn Easy Apply`, o il cui testo contiene quel segnale, mostrano inoltre il badge **Easy Apply**.
+
 ## Stati pipeline
 
 ```text
@@ -143,9 +145,9 @@ Il pulsante **Avanza** aggiorna la colonna `jobs.status` su Supabase. Lo stato d
 Pubblica questa cartella dalla root del branch scelto. Il file `.nojekyll` evita elaborazioni Jekyll. Gli asset usano query string di versione:
 
 ```html
-styles.css?v=20260901.7
-app.js?v=20260901.7
-config.js?v=20260901.7
+styles.css?v=20260901.8
+app.js?v=20260901.8
+config.js?v=20260901.8
 ```
 
 Quando distribuisci una nuova release, incrementa lo stesso valore in `index.html` per invalidare la cache del browser e di GitHub Pages.

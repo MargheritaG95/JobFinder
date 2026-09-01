@@ -1,58 +1,635 @@
 <!doctype html>
 <html lang="it">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>JobFinder</title>
-<link rel="stylesheet" href="styles.css?v=20260901-3">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=20260901-3"></script>
-</head>
-<body>
-<section id="auth" class="auth-wrap">
-  <div class="auth-card">
-    <h1>JobFinder</h1><p>Find your next role. Faster.</p>
-    <input id="email" type="email" placeholder="Email" autocomplete="email">
-    <input id="password" type="password" placeholder="Password" autocomplete="current-password">
-    <button id="login" class="primary">Accedi</button>
-    <button id="forgot" class="link">Password dimenticata?</button>
-    <div id="auth-msg"></div>
-  </div>
-</section>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f4f7fb" />
+    <meta
+      name="description"
+      content="JobFinder: dashboard personale per gestire opportunità, candidature e follow-up."
+    />
+    <title>JobFinder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=20260901.1" />
+  </head>
+  <body>
+    <noscript>
+      <div class="noscript">JobFinder richiede JavaScript per funzionare.</div>
+    </noscript>
 
-<section id="app" class="app hidden">
-  <aside class="sidebar">
-    <div class="brand"><div class="logo">▣</div><div><b>JobFinder</b><small>Find your next role. Faster.</small></div></div>
-    <nav id="nav">
-      <button data-page="dashboard" class="nav active">⌂ Dashboard</button>
-      <button data-page="opportunities" class="nav">◎ Opportunità</button>
-      <button data-page="pipeline" class="nav">▥ Pipeline</button>
-      <button data-page="applications" class="nav">▤ Le mie Application</button>
-      <button data-page="companies" class="nav">▦ Aziende Target</button>
-      <button data-page="followups" class="nav">♧ Follow-up</button>
-      <button data-page="feedback" class="nav">♡ Feedback</button>
-      <button data-page="preferences" class="nav">⚙ Preferenze</button>
-    </nav>
-  </aside>
+    <div id="appLoading" class="app-loading" role="status" aria-live="polite">
+      <div class="brand-mark brand-mark--large" aria-hidden="true">JF</div>
+      <div class="spinner"></div>
+      <p>Caricamento di JobFinder…</p>
+    </div>
 
-  <main class="main">
-    <header class="topbar">
-      <div><h1 id="title">Bentornata 👋</h1><p id="subtitle">Ecco il tuo overview di oggi</p></div>
-      <div class="user"><span id="user-email"></span><button id="logout" class="ghost">Esci</button></div>
-    </header>
-    <div id="content" class="content"></div>
-  </main>
-</section>
+    <section id="authView" class="auth-view is-hidden" aria-labelledby="authTitle">
+      <div class="auth-visual" aria-hidden="true">
+        <div class="auth-visual__content">
+          <div class="brand brand--light">
+            <span class="brand-mark">JF</span>
+            <span>JobFinder</span>
+          </div>
+          <p class="eyebrow eyebrow--light">La tua ricerca, sotto controllo</p>
+          <h1>Dal prossimo job<br />alla prossima svolta.</h1>
+          <p>
+            Organizza opportunità, candidature, follow-up e colloqui in un unico spazio personale.
+          </p>
+          <div class="auth-proof">
+            <span>Opportunità</span><i></i><span>Application</span><i></i><span>Offer</span>
+          </div>
+        </div>
+        <div class="auth-orb auth-orb--one"></div>
+        <div class="auth-orb auth-orb--two"></div>
+      </div>
 
-<div id="modal" class="modal-wrap hidden">
-  <div class="modal">
-    <button id="close-modal" class="close">×</button>
-    <div id="modal-body"></div>
-  </div>
-</div>
+      <div class="auth-panel">
+        <div class="auth-card">
+          <div class="brand auth-brand">
+            <span class="brand-mark">JF</span>
+            <span>JobFinder</span>
+          </div>
 
-<div id="toast" class="toast hidden"></div>
+          <div id="configWarning" class="notice notice--warning is-hidden" role="alert">
+            <strong>Collega Supabase</strong>
+            <span>Inserisci URL e publishable key in <code>config.js</code> per accedere.</span>
+          </div>
 
-<script src="app.js?v=20260901-3"></script>
-</body>
+          <div id="loginPanel">
+            <div class="auth-heading">
+              <p class="eyebrow">Bentornata</p>
+              <h2 id="authTitle">Accedi al tuo workspace</h2>
+              <p>Continua a costruire la tua prossima opportunità.</p>
+            </div>
+
+            <form id="loginForm" class="form-stack" novalidate>
+              <label class="field">
+                <span>Email</span>
+                <span class="input-shell">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-mail"></use></svg>
+                  <input id="loginEmail" name="email" type="email" autocomplete="email" required placeholder="nome@email.com" />
+                </span>
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <span class="input-shell">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+                  <input id="loginPassword" name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="La tua password" />
+                  <button id="toggleLoginPassword" class="icon-button icon-button--inside" type="button" aria-label="Mostra password">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg>
+                  </button>
+                </span>
+              </label>
+              <div class="form-row form-row--between">
+                <label class="check-control">
+                  <input id="rememberSession" type="checkbox" checked disabled />
+                  <span>Sessione persistente</span>
+                </label>
+                <button id="showRecoveryButton" class="text-button" type="button">Password dimenticata?</button>
+              </div>
+              <button id="loginButton" class="button button--primary button--wide" type="submit">
+                <span>Accedi</span>
+                <svg class="icon" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
+              </button>
+            </form>
+
+            <div class="auth-divider"><span>oppure</span></div>
+            <button id="googleLoginButton" class="button button--google button--wide" type="button">
+              <svg class="google-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.6h3.3c1.9-1.8 2.9-4.4 2.9-7.5Z" />
+                <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.3l-3.3-2.6c-.9.6-2.1 1-3.4 1a5.9 5.9 0 0 1-5.5-4.1H3.1v2.7A10 10 0 0 0 12 22Z" />
+                <path fill="#FBBC05" d="M6.5 14a6 6 0 0 1 0-3.9V7.4H3.1a10 10 0 0 0 0 9.3L6.5 14Z" />
+                <path fill="#EA4335" d="M12 6a5.4 5.4 0 0 1 3.8 1.5l2.9-2.9A9.7 9.7 0 0 0 12 2a10 10 0 0 0-8.9 5.5l3.4 2.7A5.9 5.9 0 0 1 12 6Z" />
+              </svg>
+              Continua con Google
+            </button>
+            <p id="authStatus" class="form-status" role="status" aria-live="polite"></p>
+          </div>
+
+          <div id="recoveryPanel" class="is-hidden">
+            <button id="backToLoginButton" class="back-link" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>
+              Torna al login
+            </button>
+            <div class="auth-heading">
+              <p class="eyebrow">Recupero password</p>
+              <h2>Ricevi il link di reset</h2>
+              <p>Ti invieremo un link sicuro all’indirizzo del tuo account.</p>
+            </div>
+            <form id="recoveryForm" class="form-stack" novalidate>
+              <label class="field">
+                <span>Email</span>
+                <span class="input-shell">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-mail"></use></svg>
+                  <input id="recoveryEmail" name="email" type="email" autocomplete="email" required placeholder="nome@email.com" />
+                </span>
+              </label>
+              <button id="recoveryButton" class="button button--primary button--wide" type="submit">Invia link di recupero</button>
+            </form>
+            <p id="recoveryStatus" class="form-status" role="status" aria-live="polite"></p>
+          </div>
+
+          <div id="updatePasswordPanel" class="is-hidden">
+            <div class="auth-heading">
+              <p class="eyebrow">Nuova password</p>
+              <h2>Aggiorna la password</h2>
+              <p>Scegli una password di almeno 8 caratteri.</p>
+            </div>
+            <form id="updatePasswordForm" class="form-stack" novalidate>
+              <label class="field">
+                <span>Nuova password</span>
+                <span class="input-shell">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+                  <input id="newPassword" name="password" type="password" autocomplete="new-password" required minlength="8" />
+                </span>
+              </label>
+              <button id="updatePasswordButton" class="button button--primary button--wide" type="submit">Salva nuova password</button>
+            </form>
+            <p id="updatePasswordStatus" class="form-status" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="appView" class="app-shell is-hidden">
+      <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Chiudi menu"></button>
+      <aside id="sidebar" class="sidebar" aria-label="Navigazione principale">
+        <div class="sidebar__top">
+          <div class="brand">
+            <span class="brand-mark">JF</span>
+            <span>JobFinder</span>
+          </div>
+          <button id="closeSidebarButton" class="icon-button sidebar-close" type="button" aria-label="Chiudi menu">
+            <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </div>
+
+        <nav id="mainNavigation" class="nav-list">
+          <button id="navDashboard" class="nav-item is-active" type="button" data-route="dashboard">
+            <svg class="icon" aria-hidden="true"><use href="#icon-dashboard"></use></svg><span>Dashboard</span>
+          </button>
+          <button id="navOpportunities" class="nav-item" type="button" data-route="opportunities">
+            <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg><span>Opportunità</span><span id="navOpportunityCount" class="nav-count">0</span>
+          </button>
+          <button id="navPipeline" class="nav-item" type="button" data-route="pipeline">
+            <svg class="icon" aria-hidden="true"><use href="#icon-columns"></use></svg><span>Pipeline</span>
+          </button>
+          <button id="navApplications" class="nav-item" type="button" data-route="applications">
+            <svg class="icon" aria-hidden="true"><use href="#icon-file"></use></svg><span>Le mie Application</span>
+          </button>
+          <button id="navCompanies" class="nav-item" type="button" data-route="companies">
+            <svg class="icon" aria-hidden="true"><use href="#icon-building"></use></svg><span>Aziende Target</span>
+          </button>
+          <button id="navFollowups" class="nav-item" type="button" data-route="followups">
+            <svg class="icon" aria-hidden="true"><use href="#icon-clock"></use></svg><span>Follow-up</span><span id="navFollowupCount" class="nav-count nav-count--warning">0</span>
+          </button>
+          <button id="navFeedback" class="nav-item" type="button" data-route="feedback">
+            <svg class="icon" aria-hidden="true"><use href="#icon-message"></use></svg><span>Feedback</span>
+          </button>
+          <div class="nav-label">Workspace</div>
+          <button id="navPreferences" class="nav-item" type="button" data-route="preferences">
+            <svg class="icon" aria-hidden="true"><use href="#icon-sliders"></use></svg><span>Preferenze</span>
+          </button>
+          <button id="navResources" class="nav-item" type="button" data-route="resources">
+            <svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg><span>Risorse</span>
+          </button>
+          <button id="navAnalytics" class="nav-item" type="button" data-route="analytics">
+            <svg class="icon" aria-hidden="true"><use href="#icon-chart"></use></svg><span>Analytics</span>
+          </button>
+        </nav>
+
+        <div class="sidebar__bottom">
+          <div class="sidebar-user">
+            <span id="sidebarAvatar" class="avatar">U</span>
+            <span class="sidebar-user__copy">
+              <strong id="sidebarUserName">Il tuo account</strong>
+              <small id="sidebarUserEmail">—</small>
+            </span>
+            <span class="online-dot" title="Sessione attiva"></span>
+          </div>
+          <button id="logoutButton" class="logout-button" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#icon-logout"></use></svg>
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="topbar__left">
+            <button id="mobileMenuButton" class="icon-button mobile-menu" type="button" aria-label="Apri menu">
+              <svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
+            </button>
+            <div>
+              <span class="topbar-label">JOBFINDER /</span>
+              <strong id="currentPageLabel">DASHBOARD</strong>
+            </div>
+          </div>
+          <div class="topbar__right">
+            <span id="dataHealthBadge" class="status-pill"><i></i><span>Dati sincronizzati</span></span>
+            <button id="globalRefreshButton" class="icon-button" type="button" data-action="refresh" aria-label="Aggiorna dati" title="Aggiorna dati">
+              <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>
+            </button>
+            <span id="topbarAvatar" class="avatar avatar--small">U</span>
+          </div>
+        </header>
+
+        <div id="dataAlert" class="data-alert is-hidden" role="alert"></div>
+
+        <div class="page-container">
+          <section id="page-dashboard" class="page is-active" data-page="dashboard">
+            <div class="page-hero page-hero--dashboard">
+              <div>
+                <p class="eyebrow">IL TUO JOB SEARCH HQ</p>
+                <h1>Bentornata, <span id="greetingName">ci siamo</span> 👋</h1>
+                <p>Ecco il tuo overview di oggi.</p>
+              </div>
+              <div class="hero-actions">
+                <span id="lastSyncLabel" class="last-sync">Aggiornato ora</span>
+                <button id="dashboardRefreshButton" class="button button--secondary" type="button" data-action="refresh">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>Aggiorna
+                </button>
+              </div>
+            </div>
+
+            <div id="demoModeBanner" class="notice notice--info is-hidden">
+              <strong>Modalità demo</strong>
+              <span>I dati mostrati sono dimostrativi e non vengono scritti su Supabase.</span>
+            </div>
+
+            <div class="kpi-grid">
+              <article class="kpi-card kpi-card--blue">
+                <span class="kpi-icon"><svg class="icon"><use href="#icon-sparkles"></use></svg></span>
+                <span class="kpi-label">OPPORTUNITÀ ALTO FIT</span>
+                <strong id="kpiHighFit">0</strong>
+                <small id="kpiHighFitMeta">Fit ≥ 8/10</small>
+              </article>
+              <article class="kpi-card kpi-card--violet">
+                <span class="kpi-icon"><svg class="icon"><use href="#icon-file"></use></svg></span>
+                <span class="kpi-label">APPLICATION IN CORSO</span>
+                <strong id="kpiApplications">0</strong>
+                <small id="kpiApplicationsMeta">Preparazione e invio</small>
+              </article>
+              <article class="kpi-card kpi-card--amber">
+                <span class="kpi-icon"><svg class="icon"><use href="#icon-calendar"></use></svg></span>
+                <span class="kpi-label">COLLOQUI</span>
+                <strong id="kpiInterviews">0</strong>
+                <small id="kpiInterviewsMeta">In pipeline</small>
+              </article>
+              <article class="kpi-card kpi-card--green">
+                <span class="kpi-icon"><svg class="icon"><use href="#icon-award"></use></svg></span>
+                <span class="kpi-label">OFFERTE</span>
+                <strong id="kpiOffers">0</strong>
+                <small id="kpiOffersMeta">Ricevute</small>
+              </article>
+              <article class="kpi-card kpi-card--rose">
+                <span class="kpi-icon"><svg class="icon"><use href="#icon-building"></use></svg></span>
+                <span class="kpi-label">AZIENDE TARGET</span>
+                <strong id="kpiCompanies">0</strong>
+                <small id="kpiCompaniesMeta">Tier A, B e C</small>
+              </article>
+            </div>
+
+            <div class="dashboard-grid">
+              <section class="panel dashboard-grid__main">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">MATCHING</p>
+                    <h2>Top opportunità per te</h2>
+                  </div>
+                  <button class="text-button" type="button" data-route="opportunities">Vedi tutte <svg class="icon"><use href="#icon-arrow-right"></use></svg></button>
+                </div>
+                <div id="topOpportunities" class="opportunity-stack"></div>
+              </section>
+
+              <aside class="panel dashboard-grid__side">
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">NEXT ACTION</p>
+                    <h2>Da non perdere</h2>
+                  </div>
+                </div>
+                <div id="attentionList" class="attention-list"></div>
+              </aside>
+            </div>
+          </section>
+
+          <section id="page-opportunities" class="page" data-page="opportunities">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">DISCOVER &amp; PRIORITIZE</p>
+                <h1>Opportunità</h1>
+                <p>Valuta, salva e porta nel Copilot le posizioni più promettenti.</p>
+              </div>
+              <div class="hero-stat"><strong id="opportunityHeroCount">0</strong><span>opportunità</span></div>
+            </div>
+
+            <section class="filter-bar" aria-label="Filtri opportunità">
+              <label class="compact-field">
+                <span>Fit minimo</span>
+                <select id="opportunityFitFilter">
+                  <option value="0">Tutti</option>
+                  <option value="7" selected>7.0+</option>
+                  <option value="8">8.0+</option>
+                  <option value="9">9.0+</option>
+                </select>
+              </label>
+              <label class="compact-field"><span>Status</span><select id="opportunityStatusFilter"><option value="">Tutti</option></select></label>
+              <label class="compact-field"><span>Priorità</span><select id="opportunityPriorityFilter"><option value="">Tutte</option></select></label>
+              <label class="compact-field"><span>Azienda</span><select id="opportunityCompanyFilter"><option value="">Tutte</option></select></label>
+              <label class="compact-field"><span>Location</span><select id="opportunityLocationFilter"><option value="">Tutte</option></select></label>
+              <button id="clearOpportunityFiltersButton" class="button button--ghost" type="button">Azzera filtri</button>
+            </section>
+            <div class="result-line"><strong id="opportunityResultCount">0 risultati</strong><span>Ordinati per Fit Score decrescente</span></div>
+            <div id="opportunitiesList" class="opportunities-grid"></div>
+          </section>
+
+          <section id="page-pipeline" class="page" data-page="pipeline">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">FROM DISCOVERY TO OFFER</p>
+                <h1>Pipeline</h1>
+                <p>Fai avanzare ogni opportunità: ogni cambio viene salvato su Supabase.</p>
+              </div>
+              <button id="pipelineRefreshButton" class="button button--secondary" type="button" data-action="refresh">
+                <svg class="icon"><use href="#icon-refresh"></use></svg>Aggiorna
+              </button>
+            </div>
+            <div id="pipelineBoard" class="kanban-board" aria-label="Pipeline opportunità"></div>
+          </section>
+
+          <section id="page-applications" class="page" data-page="applications">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">APPLICATION COMMAND CENTER</p>
+                <h1>Le mie Application</h1>
+                <p>Preparazione, invio e follow-up di tutte le tue candidature.</p>
+              </div>
+              <div class="hero-stat"><strong id="applicationHeroCount">0</strong><span>candidature</span></div>
+            </div>
+            <div id="applicationsList" class="table-card"></div>
+          </section>
+
+          <section id="page-companies" class="page" data-page="companies">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">TARGET ACCOUNT LIST</p>
+                <h1>Aziende Target</h1>
+                <p>Monitora le aziende su cui vuoi concentrare la ricerca.</p>
+              </div>
+              <button id="addCompanyButton" class="button button--primary" type="button" data-action="add-company">
+                <svg class="icon"><use href="#icon-plus"></use></svg>Aggiungi azienda
+              </button>
+            </div>
+            <div id="companiesList" class="company-grid"></div>
+          </section>
+
+          <section id="page-followups" class="page" data-page="followups">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">STAY TOP OF MIND</p>
+                <h1>Follow-up</h1>
+                <p>Azioni, contatti e scadenze senza perdere il filo.</p>
+              </div>
+              <button id="newFollowupButton" class="button button--primary" type="button" data-action="new-followup">
+                <svg class="icon"><use href="#icon-plus"></use></svg>Nuovo follow-up
+              </button>
+            </div>
+            <div id="followupSummary" class="mini-kpi-row"></div>
+            <div id="followupsList" class="followup-list"></div>
+          </section>
+
+          <section id="page-feedback" class="page" data-page="feedback">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">TEACH YOUR SYSTEM</p>
+                <h1>Feedback</h1>
+                <p>Registra LIKE, DISLIKE o PASS senza modificare le preferenze manuali.</p>
+              </div>
+            </div>
+            <div id="feedbackSummary" class="mini-kpi-row"></div>
+            <div id="feedbackList" class="feedback-grid"></div>
+          </section>
+
+          <section id="page-preferences" class="page" data-page="preferences">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">YOUR SEARCH, YOUR RULES</p>
+                <h1>Preferenze</h1>
+                <p>Questi criteri guidano priorità e lettura delle opportunità.</p>
+              </div>
+            </div>
+            <form id="preferencesForm" class="preferences-card" novalidate>
+              <div id="preferencesSourceNotice" class="notice notice--info is-hidden"></div>
+              <div class="form-grid form-grid--two">
+                <label class="field">
+                  <span>Ruoli target</span>
+                  <small>Uno per riga oppure separati da virgola.</small>
+                  <textarea id="preferenceRoles" rows="7" placeholder="Customer Experience&#10;AI Product"></textarea>
+                </label>
+                <label class="field">
+                  <span>Settori target</span>
+                  <small>Uno per riga oppure separati da virgola.</small>
+                  <textarea id="preferenceSectors" rows="7" placeholder="Tech&#10;AI&#10;Automotive"></textarea>
+                </label>
+                <label class="field">
+                  <span>Località</span>
+                  <small>Uno per riga oppure separati da virgola.</small>
+                  <textarea id="preferenceLocations" rows="5" placeholder="Milano&#10;Remote Italy&#10;EU"></textarea>
+                </label>
+                <label class="field">
+                  <span>Modalità di lavoro</span>
+                  <small>Es. Remote, Hybrid, On-site.</small>
+                  <textarea id="preferenceWorkModes" rows="5" placeholder="Remote&#10;Hybrid"></textarea>
+                </label>
+              </div>
+              <div class="preference-settings">
+                <label class="field range-field">
+                  <span>Fit Score minimo: <strong id="preferenceMinFitOutput">7.0</strong></span>
+                  <input id="preferenceMinFit" type="range" min="0" max="10" step="0.5" value="7" />
+                  <span class="range-scale"><small>0</small><small>10</small></span>
+                </label>
+                <label class="switch-control">
+                  <span><strong>AI learning enabled</strong><small>Consenti al sistema di usare il feedback per il ranking, senza cambiare i campi manuali.</small></span>
+                  <input id="preferenceAiLearning" type="checkbox" />
+                  <i aria-hidden="true"></i>
+                </label>
+              </div>
+              <div class="form-actions">
+                <span id="preferencesUpdatedAt" class="muted"></span>
+                <button id="savePreferencesButton" class="button button--primary" type="submit">
+                  <svg class="icon"><use href="#icon-check"></use></svg>Salva preferenze
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section id="page-resources" class="page" data-page="resources">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">YOUR CAREER LIBRARY</p>
+                <h1>Risorse</h1>
+                <p>Risposte, messaggi e materiali riutilizzabili per le candidature.</p>
+              </div>
+            </div>
+            <div id="resourcesList" class="resource-grid"></div>
+          </section>
+
+          <section id="page-analytics" class="page" data-page="analytics">
+            <div class="page-hero">
+              <div>
+                <p class="eyebrow">MEASURE WHAT MOVES</p>
+                <h1>Analytics</h1>
+                <p>Una lettura chiara del funnel e della qualità della tua pipeline.</p>
+              </div>
+            </div>
+            <div id="analyticsKpis" class="mini-kpi-row"></div>
+            <div class="analytics-grid">
+              <section class="panel"><div class="panel-heading"><h2>Funnel candidature</h2></div><div id="funnelChart" class="funnel-chart"></div></section>
+              <section class="panel"><div class="panel-heading"><h2>Distribuzione Fit Score</h2></div><div id="fitChart" class="bar-chart"></div></section>
+            </div>
+          </section>
+
+          <section id="page-copilot" class="page" data-page="copilot">
+            <button id="copilotBackButton" class="back-link" type="button" data-route="opportunities">
+              <svg class="icon"><use href="#icon-arrow-left"></use></svg>Torna alle opportunità
+            </button>
+            <div id="copilotEmpty" class="empty-state is-hidden"></div>
+            <div id="copilotContent" class="copilot-layout">
+              <aside class="copilot-summary">
+                <span class="copilot-kicker">APPLICATION COPILOT</span>
+                <div id="copilotCompanyLogo" class="company-logo company-logo--large">JF</div>
+                <h1 id="copilotRole">Ruolo</h1>
+                <p id="copilotCompany">Azienda</p>
+                <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
+                <dl class="meta-list">
+                  <div><dt>Priorità</dt><dd id="copilotPriority">—</dd></div>
+                  <div><dt>Stato</dt><dd id="copilotStatus">—</dd></div>
+                  <div><dt>Location</dt><dd id="copilotLocation">—</dd></div>
+                </dl>
+                <button id="openJobButton" class="button button--secondary button--wide" type="button" data-action="open-job">
+                  <svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio
+                </button>
+              </aside>
+
+              <form id="copilotForm" class="copilot-form" novalidate>
+                <div class="panel-heading">
+                  <div><p class="eyebrow">PREPARAZIONE PERSONALIZZATA</p><h2>La tua application</h2></div>
+                  <span id="copilotSaveState" class="status-pill status-pill--neutral">Non salvata</span>
+                </div>
+                <label class="field field--accent field--success">
+                  <span>WHY YOU FIT</span>
+                  <textarea id="copilotWhyFit" rows="5" placeholder="I punti forti più rilevanti per questo ruolo…"></textarea>
+                </label>
+                <label class="field field--accent field--warning">
+                  <span>EVENTUALI GAP</span>
+                  <textarea id="copilotGaps" rows="4" placeholder="Gap da gestire e come compensarli…"></textarea>
+                </label>
+                <label class="field field--accent field--info">
+                  <span>YOUR ANGLE</span>
+                  <textarea id="copilotAngle" rows="5" placeholder="Il posizionamento distintivo della candidatura…"></textarea>
+                </label>
+                <div class="form-grid form-grid--two">
+                  <label class="field">
+                    <span>CV consigliato</span>
+                    <select id="copilotCv">
+                      <option value="">Seleziona una versione</option>
+                      <option>AI / Strategy</option>
+                      <option>CX / Customer Success</option>
+                      <option>Commercial / Enterprise</option>
+                      <option>Automotive</option>
+                      <option>Business Analytics / Transformation</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Stato preparazione</span>
+                    <select id="copilotPreparationStatus">
+                      <option value="draft">Bozza</option>
+                      <option value="in_progress">In preparazione</option>
+                      <option value="ready">Pronta per l’invio</option>
+                      <option value="submitted">Candidatura inviata</option>
+                    </select>
+                  </label>
+                </div>
+                <label class="field">
+                  <span>Note / messaggio recruiter</span>
+                  <textarea id="copilotRecruiterNote" rows="6" placeholder="Messaggio personalizzato, riferimenti e prossimi passi…"></textarea>
+                </label>
+                <div class="submission-note">
+                  <svg class="icon"><use href="#icon-shield"></use></svg>
+                  <span><strong>L’invio resta sotto il tuo controllo.</strong> JobFinder prepara e salva i materiali, ma non invia automaticamente la candidatura.</span>
+                </div>
+                <div class="form-actions">
+                  <button id="copilotOpenJobSecondaryButton" class="button button--secondary" type="button" data-action="open-job">Apri annuncio</button>
+                  <button id="prepareApplicationButton" class="button button--primary" type="submit">
+                    <svg class="icon"><use href="#icon-sparkles"></use></svg>Prepara application
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="appDialog" class="app-dialog" aria-labelledby="dialogTitle">
+      <div class="dialog-header">
+        <div><p id="dialogEyebrow" class="eyebrow"></p><h2 id="dialogTitle">Dettagli</h2></div>
+        <button id="closeDialogButton" class="icon-button" type="button" aria-label="Chiudi finestra">
+          <svg class="icon"><use href="#icon-close"></use></svg>
+        </button>
+      </div>
+      <div id="dialogBody" class="dialog-body"></div>
+    </dialog>
+
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+    <svg class="svg-sprite" aria-hidden="true">
+      <symbol id="icon-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+      <symbol id="icon-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="16" rx="2"/><rect x="14" y="4" width="7" height="16" rx="2"/></symbol>
+      <symbol id="icon-file" viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></symbol>
+      <symbol id="icon-building" viewBox="0 0 24 24"><path d="M4 22V4l10-2v20M14 8h6v14M8 7h2M8 11h2M8 15h2M8 19h2M17 12h1M17 16h1M2 22h20"/></symbol>
+      <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+      <symbol id="icon-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></symbol>
+      <symbol id="icon-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="13" cy="18" r="2"/></symbol>
+      <symbol id="icon-book" viewBox="0 0 24 24"><path d="M4 19a3 3 0 0 1 3-3h13V3H7a3 3 0 0 0-3 3z"/><path d="M4 19a2 2 0 0 0 2 2h14v-5"/></symbol>
+      <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+      <symbol id="icon-logout" viewBox="0 0 24 24"><path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M14 8l4 4-4 4M8 12h10"/></symbol>
+      <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+      <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+      <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.5-2l2.4 5M17.9 15a7 7 0 0 1-11.5 2L4 12"/></symbol>
+      <symbol id="icon-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></symbol>
+      <symbol id="icon-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5"/></symbol>
+      <symbol id="icon-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
+      <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+      <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
+      <symbol id="icon-sparkles" viewBox="0 0 24 24"><path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2zM19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8zM5 14l.7 1.8 1.8.7-1.8.7L5 19l-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
+      <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></symbol>
+      <symbol id="icon-award" viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="m8.5 12-1 9 4.5-3 4.5 3-1-9"/></symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+      <symbol id="icon-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></symbol>
+      <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 10 4.6-2 8-5 8-10V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
+      <symbol id="icon-heart" viewBox="0 0 24 24"><path d="M20.8 5.8a5.5 5.5 0 0 0-7.8 0L12 6.9l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.4a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+      <symbol id="icon-thumbs-up" viewBox="0 0 24 24"><path d="M7 10v11H3V10zM7 19c3 2 8 2 10 1l3-7a2 2 0 0 0-2-3h-4l1-4c0-2-2-3-3-1l-5 6"/></symbol>
+      <symbol id="icon-thumbs-down" viewBox="0 0 24 24"><path d="M7 14V3H3v11zM7 5c3-2 8-2 10-1l3 7a2 2 0 0 1-2 3h-4l1 4c0 2-2 3-3 1l-5-6"/></symbol>
+      <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+      <symbol id="icon-chevron-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+      <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 3 2 21h20z"/><path d="M12 9v5M12 18h.01"/></symbol>
+      <symbol id="icon-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2"/></symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
+      <symbol id="icon-edit" viewBox="0 0 24 24"><path d="m4 16-1 5 5-1L19 9l-4-4zM13 7l4 4"/></symbol>
+    </svg>
+
+    <script src="config.js?v=20260901.1" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
+    <script src="app.js?v=20260901.1" defer></script>
+  </body>
 </html>

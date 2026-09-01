@@ -1392,11 +1392,85 @@
     $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", "draft");
     $("copilotRecruiterNote").value = valueOf(application, "applications", "recruiterNote", suggestions.note);
     $("copilotCoverLetter").value = valueOf(application, "applications", "notes", suggestedCoverLetter(job));
+    renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : "Nuova application";
     saveState.classList.toggle("status-pill--neutral", !application);
     $("prepareApplicationButton").innerHTML = application ? `${icon("check")}Aggiorna application` : `${icon("sparkles")}Prepara application`;
     $("copilotSaveForLaterButton").innerHTML = `${icon("clock")}${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}`;
+  }
+
+  function renderCopilotTemplateOptions() {
+    const select = $("copilotTemplateSelect");
+    if (!select) return;
+    const previous = select.value;
+    const templates = [...state.data.answerBank].sort((a, b) => String(valueOf(a, "answerBank", "title", "")).localeCompare(String(valueOf(b, "answerBank", "title", "")), "it"));
+    select.replaceChildren(new Option(templates.length ? "Seleziona dalla libreria" : "Nessun template disponibile", ""));
+    templates.forEach((template) => {
+      const category = valueOf(template, "answerBank", "category", "Template");
+      select.add(new Option(`${category} · ${valueOf(template, "answerBank", "title", "Senza titolo")}`, template.id));
+    });
+    if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+    select.disabled = templates.length === 0;
+  }
+
+  function filledCopilotTemplate() {
+    const job = getJobById(state.selectedJobId);
+    const templateId = $("copilotTemplateSelect")?.value;
+    const template = state.data.answerBank.find((item) => String(item.id) === String(templateId));
+    if (!job || !template) return null;
+    const preferences = currentPreferences();
+    const displayName = valueOf(state.profile, "profiles", "name", "").trim()
+      || state.user?.user_metadata?.full_name
+      || state.user?.email?.split("@")[0]
+      || "[Nome]";
+    const replacements = {
+      nome: displayName,
+      azienda: companyNameForJob(job),
+      ruolo: jobTitle(job),
+      location: valueOf(job, "jobs", "location", "[Location]"),
+      "fit score": `${jobFit(job).toFixed(1)}/10`,
+      competenze: preferences.roles.slice(0, 4).join(", ") || "[Competenze]"
+    };
+    const content = String(valueOf(template, "answerBank", "content", ""));
+    return content.replace(/\[([^\]]+)\]/g, (match, key) => replacements[String(key).trim().toLowerCase()] || match);
+  }
+
+  function copilotTemplateTarget() {
+    const targets = {
+      recruiter: "copilotRecruiterNote",
+      "cover-letter": "copilotCoverLetter",
+      "why-fit": "copilotWhyFit",
+      angle: "copilotAngle"
+    };
+    return $(targets[$("copilotTemplateTarget")?.value] || targets.recruiter);
+  }
+
+  function applyCopilotTemplate() {
+    const filled = filledCopilotTemplate();
+    const target = copilotTemplateTarget();
+    if (!filled || !target) {
+      showToast("Seleziona prima un template dalla libreria.", "warning", "Template non selezionato");
+      return;
+    }
+    target.value = filled;
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+    target.focus();
+    showToast("Template personalizzato e inserito. Controllalo prima di salvare.", "success", "Testo pronto");
+  }
+
+  async function copyFilledCopilotTemplate() {
+    const filled = filledCopilotTemplate();
+    if (!filled) {
+      showToast("Seleziona prima un template dalla libreria.", "warning", "Template non selezionato");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(filled);
+      showToast("Template personalizzato copiato negli appunti.", "success", "Testo copiato");
+    } catch (_error) {
+      openDialog({ eyebrow: "TEMPLATE COMPILATO", title: "Copia il testo", body: `<textarea class="kit-preview" rows="16" readonly>${escapeHtml(filled)}</textarea><div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Chiudi</button></div>` });
+    }
   }
 
   function bindStaticEvents() {
@@ -1641,6 +1715,12 @@
           break;
         case "copy-application-kit":
           await copyApplicationKit(id || state.selectedJobId);
+          break;
+        case "apply-copilot-template":
+          applyCopilotTemplate();
+          break;
+        case "copy-filled-template":
+          await copyFilledCopilotTemplate();
           break;
         case "feedback":
           await saveFeedback(id, trigger.dataset.feedback, trigger);

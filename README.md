@@ -124,6 +124,8 @@ Questa è un’importazione assistita, non uno scraper LinkedIn. Gli alert Linke
 
 La sezione **Templates** nella barra laterale usa la tabella `answer_bank` già configurata. Permette di creare, modificare, copiare ed eliminare testi personali suddivisi in categorie: messaggi recruiter, cover letter, domande application, follow-up e ringraziamenti. Variabili visibili come `[Nome]`, `[Azienda]` e `[Ruolo]` aiutano a personalizzare il testo prima dell’invio.
 
+Application Copilot integra direttamente la libreria: scegli un template e il campo di destinazione, quindi JobFinder sostituisce `[Nome]`, `[Azienda]`, `[Ruolo]`, `[Location]`, `[Fit Score]` e `[Competenze]`. Il testo compilato può essere inserito in messaggio recruiter, cover letter, Why Fit o angle, oppure copiato negli appunti.
+
 ## Stati pipeline
 
 ```text
@@ -141,9 +143,9 @@ Il pulsante **Avanza** aggiorna la colonna `jobs.status` su Supabase. Lo stato d
 Pubblica questa cartella dalla root del branch scelto. Il file `.nojekyll` evita elaborazioni Jekyll. Gli asset usano query string di versione:
 
 ```html
-styles.css?v=20260901.5
-app.js?v=20260901.5
-config.js?v=20260901.5
+styles.css?v=20260901.7
+app.js?v=20260901.7
+config.js?v=20260901.7
 ```
 
 Quando distribuisci una nuova release, incrementa lo stesso valore in `index.html` per invalidare la cache del browser e di GitHub Pages.

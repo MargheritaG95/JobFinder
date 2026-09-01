@@ -193,6 +193,47 @@
     return [String(value)];
   }
 
+  function normalizedTokens(value) {
+    const stopWords = new Set(["and", "con", "della", "delle", "for", "per", "the", "una", "uno", "with"]);
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split(/[^a-z0-9+#.]+/)
+      .filter((token) => token.length > 2 && !stopWords.has(token));
+  }
+
+  function analyzeOpportunity({ title, company, location, description }) {
+    const preferences = currentPreferences();
+    const searchable = normalizedTokens(`${title} ${company} ${location} ${description}`);
+    const tokenSet = new Set(searchable);
+    const matchesFor = (values) => values.filter((value) => normalizedTokens(value).some((token) => tokenSet.has(token)));
+    const roleMatches = matchesFor(preferences.roles);
+    const sectorMatches = matchesFor(preferences.sectors);
+    const locationMatches = matchesFor([...preferences.locations, ...preferences.workModes]);
+    const requirementSignals = ["experience", "esperienza", "skills", "competenze", "responsibilities", "responsabilita"]
+      .filter((token) => searchable.includes(token)).length;
+    const score = Math.min(10, Math.max(1,
+      3.5 + Math.min(3.5, roleMatches.length * 1.25) + Math.min(1.5, sectorMatches.length * 0.75) +
+      Math.min(1, locationMatches.length * 0.5) + Math.min(0.5, requirementSignals * 0.15)
+    ));
+    const strongest = [...roleMatches, ...sectorMatches].slice(0, 4);
+    const why = strongest.length
+      ? `Compatibilità rilevata con ${strongest.join(", ")}. Collega questi elementi a risultati misurabili del tuo CV e alle priorità descritte nell’annuncio.`
+      : "Compatibilità da validare: collega le responsabilità principali dell’annuncio a risultati misurabili e competenze realmente presenti nel tuo CV.";
+    const gaps = description
+      ? "Verifica i requisiti obbligatori dell’annuncio non coperti dal CV. Non dichiarare competenze mancanti: valorizza esperienze trasferibili e un piano di apprendimento concreto."
+      : "Descrizione non importata: incollala per ottenere un’analisi più affidabile di requisiti e gap.";
+    const angle = `Presenta il profilo come soluzione alle priorità di ${company || "questa azienda"}, con esempi concreti di impatto, collaborazione ed execution.`;
+    return { score: Math.round(score * 10) / 10, why, gaps, angle, matches: strongest };
+  }
+
+  function suggestedCoverLetter(job) {
+    const suggestions = suggestedCopilotContent(job);
+    const name = valueOf(state.profile, "profiles", "name", "").trim() || "[Nome e cognome]";
+    return `Gentile team di selezione di ${companyNameForJob(job)},\n\nvorrei candidarmi per la posizione di ${jobTitle(job)}. ${suggestions.why}\n\n${suggestions.angle}\n\nSarei felice di approfondire come la mia esperienza possa contribuire agli obiettivi del ruolo.\n\nCordiali saluti,\n${name}`;
+  }
+
   function fieldName(entity, key) {
     return CONFIG.schema?.columns?.[entity]?.[key] || key;
   }
@@ -1347,6 +1388,7 @@
     $("copilotCv").value = valueOf(application, "applications", "cvUsed", valueOf(job, "jobs", "recommendedCv", ""));
     $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", "draft");
     $("copilotRecruiterNote").value = valueOf(application, "applications", "recruiterNote", suggestions.note);
+    $("copilotCoverLetter").value = valueOf(application, "applications", "notes", suggestedCoverLetter(job));
     const saveState = $("copilotSaveState");
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : "Nuova application";
     saveState.classList.toggle("status-pill--neutral", !application);
@@ -1603,6 +1645,9 @@
         case "clear-filters":
           clearOpportunityFilters();
           break;
+        case "import-opportunity":
+          openOpportunityImport();
+          break;
         case "add-company":
           openCompanyForm();
           break;
@@ -1706,6 +1751,29 @@
     }
   }
 
+  function openOpportunityImport() {
+    openDialog({
+      eyebrow: "DISCOVER & PRIORITIZE",
+      title: "Importa e valuta un annuncio",
+      body: `
+        <p class="dialog-copy">Incolla il link e il testo dell’annuncio. JobFinder evita duplicati, calcola il fit sulle tue preferenze e prepara subito la candidatura. Per LinkedIn usa il testo dell’annuncio o un alert email: non viene eseguito scraping automatico.</p>
+        <form class="form-stack" data-dialog-form="opportunity-import" novalidate>
+          <label class="field"><span>URL annuncio</span><input name="url" type="url" required placeholder="https://azienda.com/jobs/…" /></label>
+          <div class="form-grid form-grid--two">
+            <label class="field"><span>Ruolo</span><input name="title" required placeholder="Customer Success Manager" /></label>
+            <label class="field"><span>Azienda</span><input name="company" required placeholder="Nome azienda" /></label>
+          </div>
+          <div class="form-grid form-grid--two">
+            <label class="field"><span>Località / modalità</span><input name="location" placeholder="Milano · Hybrid" /></label>
+            <label class="field"><span>Fonte</span><select name="source"><option>Career site</option><option>LinkedIn alert</option><option>Lever</option><option>Greenhouse</option><option>Altro</option></select></label>
+          </div>
+          <label class="field"><span>Testo dell’annuncio</span><textarea name="description" rows="12" required placeholder="Incolla responsabilità, requisiti e informazioni sulla posizione…"></textarea></label>
+          <div class="notice notice--info"><strong>Ranking trasparente</strong><span>Il punteggio usa ruolo, settore, località e modalità di lavoro salvati in Preferenze. Potrai correggerlo dal database senza perdere i contenuti generati.</span></div>
+          <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--primary" type="submit">${icon("sparkles")}Analizza e importa</button></div>
+        </form>`
+    });
+  }
+
   function contactResearchLinks(job) {
     const company = companyNameForJob(job);
     const role = jobTitle(job);
@@ -1749,6 +1817,8 @@
       `ANGLE\n${valueOf(application, "applications", "angle", suggestions.angle)}`,
       "",
       `MESSAGGIO RECRUITER\n${valueOf(application, "applications", "recruiterNote", suggestions.note)}`,
+      "",
+      `COVER LETTER\n${valueOf(application, "applications", "notes", suggestedCoverLetter(job))}`,
       "",
       `CV: ${valueOf(application, "applications", "cvUsed", valueOf(job, "jobs", "recommendedCv", "Da scegliere"))}`
     ].join("\n");
@@ -1922,6 +1992,7 @@
     setMapped(payload, "applications", "gaps", $("copilotGaps").value.trim());
     setMapped(payload, "applications", "angle", $("copilotAngle").value.trim());
     setMapped(payload, "applications", "recruiterNote", $("copilotRecruiterNote").value.trim());
+    setMapped(payload, "applications", "notes", $("copilotCoverLetter").value.trim());
     setMapped(payload, "applications", "preparationStatus", preparationStatus);
     if (preparationStatus === "submitted" && !valueOf(application, "applications", "appliedAt", "")) {
       setMapped(payload, "applications", "appliedAt", new Date().toISOString());
@@ -2160,6 +2231,9 @@
         case "company":
           await submitCompanyForm(form);
           break;
+        case "opportunity-import":
+          await submitOpportunityImport(form);
+          break;
         case "followup":
           await submitFollowupForm(form);
           break;
@@ -2186,6 +2260,50 @@
     if (!raw) return "";
     const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
     return safeExternalUrl(withProtocol) || null;
+  }
+
+  async function submitOpportunityImport(form) {
+    if (!ensureWritable()) throw new Error("Supabase non è disponibile per l’importazione.");
+    const values = new FormData(form);
+    const url = normalizedWebsite(values.get("url"));
+    if (!url) throw new Error("Inserisci un URL http/https valido.");
+    const title = String(values.get("title") || "").trim();
+    const company = String(values.get("company") || "").trim();
+    const location = String(values.get("location") || "").trim();
+    const source = String(values.get("source") || "Career site").trim();
+    const description = String(values.get("description") || "").trim();
+    const duplicate = state.data.jobs.find((job) => {
+      const existingUrl = safeExternalUrl(valueOf(job, "jobs", "url", ""));
+      return existingUrl === url || (
+        jobTitle(job).toLowerCase() === title.toLowerCase() &&
+        companyNameForJob(job).toLowerCase() === company.toLowerCase()
+      );
+    });
+    if (duplicate) {
+      closeDialog();
+      openCopilot(duplicate.id);
+      showToast("L’annuncio era già presente: ho aperto il record esistente senza creare duplicati.", "warning", "Opportunità già importata");
+      return;
+    }
+    const analysis = analyzeOpportunity({ title, company, location, description });
+    const payload = {};
+    setMapped(payload, "jobs", "title", title);
+    setMapped(payload, "jobs", "companyName", company);
+    setMapped(payload, "jobs", "location", location || null);
+    setMapped(payload, "jobs", "fitScore", analysis.score);
+    setMapped(payload, "jobs", "status", "REVIEW");
+    setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "HIGH" : analysis.score >= 6.5 ? "MEDIUM" : "LOW");
+    setMapped(payload, "jobs", "source", source);
+    setMapped(payload, "jobs", "url", url);
+    setMapped(payload, "jobs", "saved", false);
+    setMapped(payload, "jobs", "whyFit", analysis.why);
+    setMapped(payload, "jobs", "gaps", analysis.gaps);
+    setMapped(payload, "jobs", "angle", analysis.angle);
+    const created = await insertRecord("jobs", payload);
+    closeDialog();
+    renderAll();
+    openCopilot(created.id);
+    showToast(`Fit ${analysis.score.toFixed(1)}/10${analysis.matches.length ? ` · ${analysis.matches.join(", ")}` : ""}`, "success", "Annuncio importato e analizzato");
   }
 
   async function submitCompanyForm(form) {

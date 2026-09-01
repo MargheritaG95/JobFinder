@@ -2058,6 +2058,20 @@ textarea::placeholder {
 .dialog-body { padding: 22px; }
 .dialog-body .form-actions { margin-bottom: 0; }
 
+.field--cover-letter {
+  border-left-color: #735fd6;
+  background: linear-gradient(90deg, rgba(115, 95, 214, 0.07), transparent 34%);
+}
+
+.field--cover-letter textarea {
+  min-height: 230px;
+  line-height: 1.65;
+}
+
+.dialog-body form[data-dialog-form="opportunity-import"] .notice {
+  margin: 2px 0 4px;
+}
+
 .dialog-details {
   display: grid;
   gap: 11px;

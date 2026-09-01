@@ -1,29 +1,25 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>JobFinder</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
 </head>
 <body>
   <main class="shell">
-    <section class="card" id="auth-card">
+    <section class="card auth-card" id="auth-card">
       <div class="brand">JobFinder</div>
       <h1>Accedi</h1>
-      <p class="subtitle">Email + password oppure Google.</p>
-
-      <button id="google-btn" class="google">Continua con Google</button>
-
-      <div class="separator"><span>oppure</span></div>
+      <p class="subtitle">Find your next role. Faster.</p>
 
       <label for="email">Email</label>
-      <input id="email" type="email" autocomplete="email" placeholder="nome@email.com" />
+      <input id="email" type="email" autocomplete="email" placeholder="nome@email.com">
 
       <label for="password">Password</label>
-      <input id="password" type="password" autocomplete="current-password" minlength="8" placeholder="Minimo 8 caratteri" />
+      <input id="password" type="password" autocomplete="current-password" minlength="8" placeholder="Minimo 8 caratteri">
 
       <button id="login-btn" class="primary">Accedi</button>
 
@@ -33,24 +29,47 @@
       </div>
 
       <div id="message" class="message hidden"></div>
+      <button id="google-btn" class="hidden" aria-hidden="true">Google</button>
     </section>
 
-    <section class="card hidden" id="reset-card">
+    <section class="card auth-card hidden" id="reset-card">
       <div class="brand">JobFinder</div>
       <h1>Nuova password</h1>
-      <p class="subtitle">Inserisci una nuova password per il tuo account.</p>
+      <p class="subtitle">Imposta una nuova password.</p>
       <label for="new-password">Nuova password</label>
-      <input id="new-password" type="password" minlength="8" placeholder="Minimo 8 caratteri" />
+      <input id="new-password" type="password" minlength="8">
       <button id="save-password-btn" class="primary">Salva nuova password</button>
       <div id="reset-message" class="message hidden"></div>
     </section>
 
-    <section class="card hidden" id="dashboard-card">
-      <div class="brand">JobFinder</div>
-      <h1>Dashboard</h1>
-      <p id="welcome" class="subtitle"></p>
-      <p class="ok">Accesso riuscito.</p>
-      <button id="logout-btn" class="secondary">Esci</button>
+    <section class="app hidden" id="dashboard-card">
+      <aside class="sidebar">
+        <div class="logo">JobFinder</div>
+        <div class="tagline">Find your next role. Faster.</div>
+        <nav>
+          <button class="nav active" data-page="home">⌂ Dashboard</button>
+          <button class="nav" data-page="opportunities">◎ Opportunità</button>
+          <button class="nav" data-page="pipeline">▦ Pipeline</button>
+          <button class="nav" data-page="companies">◇ Aziende</button>
+          <button class="nav" data-page="preferences">⚙ Preferenze</button>
+        </nav>
+        <div class="account">
+          <span id="welcome"></span>
+          <button id="logout-btn">Esci</button>
+        </div>
+      </aside>
+
+      <div class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">JOB SEARCH OPERATING SYSTEM</p>
+            <h1 id="page-title">Dashboard</h1>
+          </div>
+          <span class="badge">Fit ≥ 7/10</span>
+        </header>
+
+        <div id="page-content"></div>
+      </div>
     </section>
   </main>
 

@@ -22,6 +22,7 @@
     followups: "FOLLOW-UP",
     feedback: "FEEDBACK",
     preferences: "PREFERENZE",
+    templates: "TEMPLATES",
     resources: "RISORSE",
     analytics: "ANALYTICS",
     copilot: "APPLICATION COPILOT"
@@ -860,6 +861,7 @@
     renderFollowups();
     renderFeedback();
     renderPreferences();
+    renderTemplates();
     renderResources();
     renderAnalytics();
     renderCopilot();
@@ -872,6 +874,7 @@
     const openFollowups = state.data.followups.filter((followup) => !Boolean(valueOf(followup, "followups", "completed", false)));
     $("navOpportunityCount").textContent = String(visibleJobs.length);
     $("navFollowupCount").textContent = String(openFollowups.length);
+    $("navTemplateCount").textContent = String(state.data.answerBank.length);
   }
 
   function updateLastSync() {
@@ -1681,6 +1684,18 @@
         case "view-resource":
           openResourceDetails(state.data.answerBank.find((item) => String(item.id) === String(id)));
           break;
+        case "new-template":
+          openTemplateForm();
+          break;
+        case "edit-template":
+          openTemplateForm(state.data.answerBank.find((item) => String(item.id) === String(id)));
+          break;
+        case "copy-template":
+          await copyTemplate(id);
+          break;
+        case "delete-template":
+          openDeleteTemplateConfirmation(id);
+          break;
         case "close-dialog":
           closeDialog();
           break;
@@ -1749,6 +1764,29 @@
     } finally {
       setBusy(button, false);
     }
+  }
+
+  function renderTemplates() {
+    const templates = [...state.data.answerBank].sort((a, b) => String(valueOf(a, "answerBank", "title", "")).localeCompare(String(valueOf(b, "answerBank", "title", "")), "it"));
+    $("templatesList").innerHTML = templates.length
+      ? templates.map((template) => {
+        const content = valueOf(template, "answerBank", "content", "");
+        return `
+          <article class="resource-card template-card">
+            <div>
+              <span class="resource-icon">${icon("copy")}</span>
+              <span class="badge badge--blue">${escapeHtml(valueOf(template, "answerBank", "category", "Messaggio"))}</span>
+              <h3>${escapeHtml(valueOf(template, "answerBank", "title", "Template"))}</h3>
+              <p>${escapeHtml(content ? `${content.slice(0, 210)}${content.length > 210 ? "…" : ""}` : "Contenuto non disponibile.")}</p>
+            </div>
+            <footer class="template-actions">
+              <button class="button button--primary" type="button" data-action="copy-template" data-id="${escapeAttribute(template.id)}">${icon("copy")}Copia</button>
+              <button class="icon-button" type="button" data-action="edit-template" data-id="${escapeAttribute(template.id)}" aria-label="Modifica template" title="Modifica">${icon("edit")}</button>
+              <button class="icon-button" type="button" data-action="delete-template" data-id="${escapeAttribute(template.id)}" aria-label="Elimina template" title="Elimina">${icon("trash")}</button>
+            </footer>
+          </article>`;
+      }).join("")
+      : emptyState("Nessun template", "Salva qui messaggi recruiter, risposte frequenti, follow-up e cover letter da riutilizzare.", { name: "new-template", label: "Crea il primo template", icon: "plus" });
   }
 
   function openOpportunityImport() {
@@ -2238,6 +2276,9 @@
         case "opportunity-import":
           await submitOpportunityImport(form);
           break;
+        case "template":
+          await submitTemplateForm(form);
+          break;
         case "followup":
           await submitFollowupForm(form);
           break;
@@ -2249,6 +2290,9 @@
           break;
         case "delete-followup":
           await submitDeleteFollowup(form);
+          break;
+        case "delete-template":
+          await submitDeleteTemplate(form);
           break;
         default:
           throw new Error(`Form non gestito: ${type}`);
@@ -2264,6 +2308,47 @@
     if (!raw) return "";
     const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
     return safeExternalUrl(withProtocol) || null;
+  }
+
+  function openTemplateForm(template = null) {
+    const isEdit = Boolean(template);
+    const categories = ["Messaggio recruiter", "Cover letter", "Domanda application", "Follow-up", "Ringraziamento", "Altro"];
+    const currentCategory = valueOf(template, "answerBank", "category", categories[0]);
+    openDialog({
+      eyebrow: isEdit ? "MODIFICA TEMPLATE" : "NUOVO TEMPLATE",
+      title: isEdit ? "Aggiorna testo riutilizzabile" : "Salva un testo riutilizzabile",
+      body: `
+        <form class="form-stack" data-dialog-form="template" data-record-id="${template ? escapeAttribute(template.id) : ""}" novalidate>
+          <label class="field"><span>Titolo *</span><input name="title" required maxlength="180" value="${escapeAttribute(valueOf(template, "answerBank", "title", ""))}" placeholder="Es. Primo messaggio al recruiter" /></label>
+          <label class="field"><span>Categoria</span><select name="category">${categories.map((category) => optionMarkup(category, category, currentCategory)).join("")}</select></label>
+          <label class="field"><span>Testo *</span><textarea name="content" rows="14" required placeholder="Ciao [Nome], ho visto la posizione [Ruolo] in [Azienda]…">${escapeHtml(valueOf(template, "answerBank", "content", ""))}</textarea></label>
+          <div class="notice notice--info"><strong>Personalizza prima di inviare</strong><span>Le parentesi quadre rendono visibili i dati da sostituire, per evitare messaggi generici o incompleti.</span></div>
+          <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--primary" type="submit">${icon("check")}${isEdit ? "Salva modifiche" : "Salva template"}</button></div>
+        </form>`
+    });
+  }
+
+  async function copyTemplate(templateId) {
+    const template = state.data.answerBank.find((item) => String(item.id) === String(templateId));
+    if (!template) return;
+    const content = valueOf(template, "answerBank", "content", "");
+    try {
+      await navigator.clipboard.writeText(content);
+      showToast("Testo copiato: personalizza le variabili prima di inviarlo.", "success", "Template copiato");
+    } catch (_error) {
+      openResourceDetails(template);
+    }
+  }
+
+  function openDeleteTemplateConfirmation(templateId) {
+    const template = state.data.answerBank.find((item) => String(item.id) === String(templateId));
+    if (!template) return;
+    openDialog({
+      eyebrow: "CONFERMA ELIMINAZIONE",
+      title: "Eliminare questo template?",
+      body: `<p class="dialog-copy">“${escapeHtml(valueOf(template, "answerBank", "title", "Template"))}” verrà eliminato dalla tua libreria.</p>
+        <form data-dialog-form="delete-template" data-record-id="${escapeAttribute(template.id)}"><div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--danger" type="submit">${icon("trash")}Elimina</button></div></form>`
+    });
   }
 
   async function submitOpportunityImport(form) {
@@ -2308,6 +2393,34 @@
     renderAll();
     openCopilot(created.id);
     showToast(`Fit ${analysis.score.toFixed(1)}/10${analysis.matches.length ? ` · ${analysis.matches.join(", ")}` : ""}`, "success", "Annuncio importato e analizzato");
+  }
+
+  async function submitTemplateForm(form) {
+    if (!ensureWritable()) throw new Error("Supabase non è disponibile per il salvataggio.");
+    const values = new FormData(form);
+    const payload = {};
+    setMapped(payload, "answerBank", "title", String(values.get("title") || "").trim());
+    setMapped(payload, "answerBank", "category", String(values.get("category") || "Messaggio recruiter").trim());
+    setMapped(payload, "answerBank", "content", String(values.get("content") || "").trim());
+    setMapped(payload, "answerBank", "updatedAt", new Date().toISOString());
+    const id = form.dataset.recordId;
+    if (id) await updateRecord("answerBank", id, payload);
+    else await insertRecord("answerBank", payload);
+    closeDialog();
+    renderTemplates();
+    renderResources();
+    updateNavigationCounts();
+    showToast(id ? "Template aggiornato." : "Template salvato nella tua libreria.", "success", "Templates");
+  }
+
+  async function submitDeleteTemplate(form) {
+    const id = form.dataset.recordId;
+    await deleteRecord("answerBank", id);
+    closeDialog();
+    renderTemplates();
+    renderResources();
+    updateNavigationCounts();
+    showToast("Template eliminato.", "success", "Templates");
   }
 
   async function submitCompanyForm(form) {

@@ -2072,6 +2072,13 @@ textarea::placeholder {
   margin: 2px 0 4px;
 }
 
+.template-grid { margin-top: 18px; }
+.template-card { min-height: 260px; }
+.template-card .badge { margin: 0 0 12px 8px; vertical-align: middle; }
+.template-card p { white-space: pre-line; }
+.template-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.template-actions .button { margin-right: auto; }
+
 .dialog-details {
   display: grid;
   gap: 11px;

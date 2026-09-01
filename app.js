@@ -493,123 +493,130 @@ async function prepareApplication(jobId) {
   setView("applications");
 }
 
-const MAGIC_LINK_COOLDOWN_MS = 10 * 60 * 1000;
-let magicLinkTimer = null;
-
-function getMagicLinkCooldownRemaining() {
-  const until = Number(localStorage.getItem("jobfinder_magic_link_cooldown_until") || 0);
-  return Math.max(0, until - Date.now());
-}
-
-function updateMagicLinkCooldownUI() {
-  const button = el("login-btn");
-  const label = el("login-cooldown");
-  if (!button || !label) return;
-
-  const remaining = getMagicLinkCooldownRemaining();
-  if (remaining <= 0) {
-    button.disabled = false;
-    button.textContent = "Login";
-    label.classList.add("hidden");
-    if (magicLinkTimer) clearInterval(magicLinkTimer);
-    magicLinkTimer = null;
-    return;
-  }
-
-  const seconds = Math.ceil(remaining / 1000);
-  button.disabled = true;
-  button.textContent = `Riprova tra ${seconds}s`;
-  label.textContent = "Email già richiesta. Controlla la posta prima di richiederne un'altra.";
-  label.classList.remove("hidden");
-}
-
-function startMagicLinkCooldown() {
-  localStorage.setItem("jobfinder_magic_link_cooldown_until", String(Date.now() + MAGIC_LINK_COOLDOWN_MS));
-  updateMagicLinkCooldownUI();
-  if (!magicLinkTimer) magicLinkTimer = setInterval(updateMagicLinkCooldownUI, 1000);
-}
-
-async function sendMagicLink() {
-  if (getMagicLinkCooldownRemaining() > 0) {
-    updateMagicLinkCooldownUI();
-    return;
-  }
-
+async function signInWithPassword() {
   const email = el("email-input").value.trim();
-  if (!email) {
-    notify("Inserisci la tua email.");
+  const password = el("password-input").value;
+
+  if (!email || !password) {
+    notify("Inserisci email e password.");
     return;
   }
 
-  el("login-btn").disabled = true;
-  el("login-btn").textContent = "Invio…";
+  const button = el("login-btn");
+  button.disabled = true;
+  button.textContent = "Accesso…";
 
-  const { error } = await sb.auth.signInWithOtp({
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+
+  button.disabled = false;
+  button.textContent = "Accedi";
+
+  if (error) {
+    const msg = /invalid login credentials/i.test(error.message || "")
+      ? "Email o password non corretti. Se usavi il vecchio Magic Link, clicca “Imposta / reimposta password” una sola volta."
+      : error.message;
+    notify(msg);
+    return;
+  }
+
+  el("password-input").value = "";
+  notify("Accesso effettuato ✓");
+}
+
+async function signUpWithPassword() {
+  const email = el("email-input").value.trim();
+  const password = el("password-input").value;
+
+  if (!email || !password) {
+    notify("Inserisci email e una password.");
+    return;
+  }
+  if (password.length < 8) {
+    notify("La password deve avere almeno 8 caratteri.");
+    return;
+  }
+
+  const button = el("signup-btn");
+  button.disabled = true;
+  button.textContent = "Creazione…";
+
+  const { data, error } = await sb.auth.signUp({
     email,
+    password,
     options: { emailRedirectTo: APP_URL }
   });
 
+  button.disabled = false;
+  button.textContent = "Crea account";
+
+  if (error) {
+    const msg = /already registered|already been registered|user already exists/i.test(error.message || "")
+      ? "Questa email esiste già. Usa “Imposta / reimposta password” per aggiungere una password al tuo account esistente."
+      : error.message;
+    notify(msg);
+    return;
+  }
+
+  el("password-input").value = "";
+  if (data?.session) {
+    notify("Account creato e accesso effettuato ✓");
+  } else {
+    notify("Account creato. Controlla l’email di conferma una sola volta; poi accederai sempre con email e password.");
+  }
+}
+
+async function resetPassword() {
+  const email = el("email-input").value.trim();
+  if (!email) {
+    notify("Inserisci prima la tua email.");
+    return;
+  }
+
+  const button = el("reset-password-btn");
+  button.disabled = true;
+  button.textContent = "Invio…";
+
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: APP_URL
+  });
+
+  button.disabled = false;
+  button.textContent = "Imposta / reimposta password";
+
   if (error) {
     if (error.status === 429 || /rate limit/i.test(error.message || "")) {
-      startMagicLinkCooldown();
-      notify("Troppe richieste email in poco tempo. Attendi e usa l'ultima email ricevuta, oppure accedi con Google.");
+      notify("Supabase sta ancora limitando le email. Attendi il reset del limite e riprova una sola volta.");
     } else {
-      el("login-btn").disabled = false;
-      el("login-btn").textContent = "Login";
       notify(error.message);
     }
     return;
   }
 
-  startMagicLinkCooldown();
-  notify("Email inviata ✓ Controlla la posta. Il pulsante resta temporaneamente bloccato per evitare richieste duplicate.");
+  notify("Email per impostare la password inviata. È necessaria solo questa volta.");
 }
 
+async function completeRecoveryFromSession() {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const type = params.get("type");
+  if (type !== "recovery") return;
 
-async function syncGoogleProviderAvailability() {
-  const button = el("google-login-btn");
-  if (!button) return;
-
-  try {
-    const response = await fetch(`${cfg.supabaseUrl}/auth/v1/settings`, {
-      headers: { apikey: cfg.supabasePublishableKey }
-    });
-    const settings = await response.json();
-    const enabled = !!settings?.external?.google;
-    button.disabled = !enabled;
-    button.classList.toggle("google-disabled", !enabled);
-    button.title = enabled
-      ? "Accedi con Google"
-      : "Google Login sarà disponibile appena il provider viene attivato in Supabase";
-    if (!enabled) {
-      button.innerHTML = '<span class="google-g">G</span> Google login in attivazione';
-    }
-  } catch (_error) {
-    button.disabled = true;
-    button.title = "Impossibile verificare al momento il provider Google";
+  const password = window.prompt("Scegli la nuova password per JobFinder (minimo 8 caratteri):");
+  if (!password) return;
+  if (password.length < 8) {
+    notify("Password non aggiornata: servono almeno 8 caratteri.");
+    return;
   }
-}
 
-async function signInWithGoogle() {
-  const button = el("google-login-btn");
-  button.disabled = true;
-  const original = button.innerHTML;
-  button.textContent = "Apertura Google…";
-
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: APP_URL }
-  });
-
+  const { error } = await sb.auth.updateUser({ password });
   if (error) {
-    button.disabled = false;
-    button.innerHTML = original;
-    const msg = /provider.*not.*enabled|unsupported provider/i.test(error.message || "")
-      ? "Login Google non ancora attivo su Supabase. Abilita il provider Google nelle impostazioni Auth."
-      : error.message;
-    notify(msg);
+    notify(error.message);
+    return;
   }
+
+  history.replaceState(null, "", window.location.pathname);
+  notify("Password impostata ✓ Da ora puoi accedere con email e password.");
 }
+
 
 async function logout() {
   await sb.auth.signOut();
@@ -640,27 +647,38 @@ async function init() {
 
   el("fit-filter").addEventListener("change", renderOpportunities);
   el("status-filter").addEventListener("change", renderOpportunities);
-  el("login-btn").addEventListener("click", sendMagicLink);
-  el("google-login-btn").addEventListener("click", signInWithGoogle);
-  updateMagicLinkCooldownUI();
-  await syncGoogleProviderAvailability();
-  if (getMagicLinkCooldownRemaining() > 0 && !magicLinkTimer) {
-    magicLinkTimer = setInterval(updateMagicLinkCooldownUI, 1000);
-  }
+  el("login-btn").addEventListener("click", signInWithPassword);
+  el("signup-btn").addEventListener("click", signUpWithPassword);
+  el("reset-password-btn").addEventListener("click", resetPassword);
   el("logout-btn").addEventListener("click", logout);
   el("sidebar-logout-btn").addEventListener("click", logout);
   el("save-preferences-btn").addEventListener("click", savePreferences);
   el("email-input").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") sendMagicLink();
+    if (event.key === "Enter") signInWithPassword();
+  });
+  el("password-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") signInWithPassword();
   });
 
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user || null;
+  await completeRecoveryFromSession();
   syncAuthUI();
   await loadData();
 
-  sb.auth.onAuthStateChange(async (_event, session) => {
+  sb.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user || null;
+
+    if (event === "PASSWORD_RECOVERY") {
+      const password = window.prompt("Scegli la nuova password per JobFinder (minimo 8 caratteri):");
+      if (password && password.length >= 8) {
+        const { error } = await sb.auth.updateUser({ password });
+        notify(error ? error.message : "Password impostata ✓ Da ora puoi accedere con email e password.");
+      } else if (password) {
+        notify("Password non aggiornata: servono almeno 8 caratteri.");
+      }
+    }
+
     syncAuthUI();
     await loadData();
   });

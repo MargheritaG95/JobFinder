@@ -515,3 +515,25 @@ button { cursor: pointer; }
 @media (max-width: 900px) { .auth-divider { width:100%; justify-content:center; } .auth-divider::before, .auth-divider::after { flex:1; } .btn-google { width:100%; } }
 
 .btn-google.google-disabled { opacity: .6; cursor: not-allowed; }
+
+/* Auth: email + password */
+.password-login-form { flex-wrap: wrap; }
+.password-login-form input { min-width: 155px; }
+.auth-link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--purple, #6d5dfc);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.auth-link-btn:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 900px) {
+  .password-login-form input,
+  .password-login-form .btn,
+  .password-login-form .auth-link-btn { width: 100%; }
+}

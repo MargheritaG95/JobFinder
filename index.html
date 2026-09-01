@@ -50,16 +50,14 @@
           <div class="magic-login">
             <div class="magic-login-copy">
               <strong>Accedi a JobFinder</strong>
-              <span>Nessuna password: riceverai un link sicuro via email.</span>
+              <span>Usa email e password. Nessun link necessario per gli accessi successivi.</span>
             </div>
-            <div class="magic-login-form">
-              <input id="email-input" type="email" placeholder="La tua email" autocomplete="email" />
-              <button id="login-btn" class="btn btn-primary">Login</button>
-              <div class="auth-divider"><span>oppure</span></div>
-              <button id="google-login-btn" class="btn btn-google" type="button" aria-label="Continua con Google">
-                <span class="google-g">G</span> Continua con Google
-              </button>
-              <div id="login-cooldown" class="login-cooldown hidden"></div>
+            <div class="magic-login-form password-login-form">
+              <input id="email-input" type="email" placeholder="Email" autocomplete="email" />
+              <input id="password-input" type="password" placeholder="Password" autocomplete="current-password" minlength="8" />
+              <button id="login-btn" class="btn btn-primary" type="button">Accedi</button>
+              <button id="signup-btn" class="btn btn-secondary" type="button">Crea account</button>
+              <button id="reset-password-btn" class="auth-link-btn" type="button">Imposta / reimposta password</button>
             </div>
           </div>
           <div id="logged-user" class="logged-user hidden">

@@ -81,3 +81,14 @@ La V2 potrà includere:
 - networking/contact suggestions
 - reminders automatici
 - analytics su response rate e interview rate
+
+
+## Accesso email + password
+
+Questa versione usa Supabase Auth con email e password:
+- **Accedi**: `signInWithPassword`.
+- **Crea account**: `signUp` con password di almeno 8 caratteri.
+- **Imposta / reimposta password**: invia una sola email di recovery; dopo l'impostazione, gli accessi successivi non richiedono email.
+- Google Login e Magic Link sono rimossi dalla UI principale.
+
+Per un account creato in precedenza solo tramite Magic Link, usare una sola volta **Imposta / reimposta password** con la stessa email. Dopo il reset, usare sempre email + password.

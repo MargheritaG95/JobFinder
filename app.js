@@ -79,6 +79,43 @@ const demoCompanies = [
 
 const pipelineStatuses = ["NEW","REVIEW","APPLY","APPLIED","CONTACTED","INTERVIEW","OFFER","CLOSED"];
 
+const DEMO_SEARCH_PREFERENCES = {
+  role_tags: [
+    "Customer Experience",
+    "Business Strategy",
+    "Sales Operations",
+    "RevOps",
+    "Customer Insights",
+    "Business Analytics",
+    "AI Strategy",
+    "AI Product",
+    "AI Project",
+    "Customer Success"
+  ],
+  industry_tags: [
+    "Tech",
+    "AI",
+    "Automotive",
+    "Motorsport",
+    "Motorcycle",
+    "Gaming"
+  ],
+  location_tags: [
+    "Milano",
+    "Remote Italy",
+    "Europe"
+  ],
+  work_mode_tags: [
+    "Hybrid",
+    "Remote",
+    "On-site"
+  ],
+  min_fit: 7,
+  ai_learning_enabled: true,
+  learned_preferences: {}
+};
+
+
 function el(id) {
   return document.getElementById(id);
 }
@@ -337,11 +374,7 @@ function tagsFromInput(id) {
 }
 
 function renderPreferences() {
-  const defaults = {
-    role_tags: [], industry_tags: [], location_tags: [], work_mode_tags: [],
-    min_fit: 7, ai_learning_enabled: true, learned_preferences: {}
-  };
-  const p = searchPreferences || defaults;
+  const p = searchPreferences || DEMO_SEARCH_PREFERENCES;
   el("pref-roles").value = (p.role_tags || []).join(", ");
   el("pref-industries").value = (p.industry_tags || []).join(", ");
   el("pref-locations").value = (p.location_tags || []).join(", ");
@@ -403,7 +436,7 @@ async function loadData() {
     feedback = [];
     followups = [];
     companies = demoCompanies;
-    searchPreferences = null;
+    searchPreferences = { ...DEMO_SEARCH_PREFERENCES };
     renderAll();
     return;
   }
@@ -429,7 +462,9 @@ async function loadData() {
   feedback = feedbackRes.data || [];
   followups = followupsRes.data || [];
   companies = companiesRes.data || [];
-  searchPreferences = prefsRes.data || null;
+  // Se l'utente non ha ancora salvato preferenze personali,
+  // mostra gli stessi valori demo come esempio, ma già modificabili.
+  searchPreferences = prefsRes.data || { ...DEMO_SEARCH_PREFERENCES };
 
   renderAll();
 }

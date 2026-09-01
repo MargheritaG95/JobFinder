@@ -1,6 +1,11 @@
 const cfg = window.JOBFINDER_CONFIG;
+const initialUrl = new URL(window.location.href);
+const initialHash = new URLSearchParams(initialUrl.hash.replace(/^#/, ""));
+const IS_RECOVERY_CALLBACK =
+  initialHash.get("type") === "recovery" ||
+  initialUrl.searchParams.get("type") === "recovery";
 const sb = supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey);
-const APP_URL = "https://jobfinder-blush.vercel.app";
+const APP_URL = "https://margheritag95.github.io/JobFinder/";
 
 let currentUser = null;
 let jobs = [];
@@ -595,28 +600,27 @@ async function resetPassword() {
   notify("Email per impostare la password inviata. È necessaria solo questa volta.");
 }
 
-async function completeRecoveryFromSession() {
-  const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const type = params.get("type");
-  if (type !== "recovery") return;
-
+async function askAndSetRecoveredPassword() {
   const password = window.prompt("Scegli la nuova password per JobFinder (minimo 8 caratteri):");
-  if (!password) return;
+  if (!password) {
+    notify("Password non modificata.");
+    return false;
+  }
   if (password.length < 8) {
     notify("Password non aggiornata: servono almeno 8 caratteri.");
-    return;
+    return false;
   }
 
   const { error } = await sb.auth.updateUser({ password });
   if (error) {
     notify(error.message);
-    return;
+    return false;
   }
 
   history.replaceState(null, "", window.location.pathname);
   notify("Password impostata ✓ Da ora puoi accedere con email e password.");
+  return true;
 }
-
 
 async function logout() {
   await sb.auth.signOut();
@@ -660,28 +664,31 @@ async function init() {
     if (event.key === "Enter") signInWithPassword();
   });
 
-  const { data: { session } } = await sb.auth.getSession();
-  currentUser = session?.user || null;
-  await completeRecoveryFromSession();
-  syncAuthUI();
-  await loadData();
+  let recoveryHandled = false;
 
   sb.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user || null;
 
-    if (event === "PASSWORD_RECOVERY") {
-      const password = window.prompt("Scegli la nuova password per JobFinder (minimo 8 caratteri):");
-      if (password && password.length >= 8) {
-        const { error } = await sb.auth.updateUser({ password });
-        notify(error ? error.message : "Password impostata ✓ Da ora puoi accedere con email e password.");
-      } else if (password) {
-        notify("Password non aggiornata: servono almeno 8 caratteri.");
-      }
+    if (event === "PASSWORD_RECOVERY" && !recoveryHandled) {
+      recoveryHandled = true;
+      setTimeout(() => askAndSetRecoveredPassword(), 0);
     }
 
     syncAuthUI();
     await loadData();
   });
+
+  const { data: { session } } = await sb.auth.getSession();
+  currentUser = session?.user || null;
+  syncAuthUI();
+  await loadData();
+
+  // Supabase may consume the recovery URL before getSession() returns.
+  // We captured the recovery flag at page load so the password prompt is not lost.
+  if (IS_RECOVERY_CALLBACK && currentUser && !recoveryHandled) {
+    recoveryHandled = true;
+    await askAndSetRecoveredPassword();
+  }
 }
 
 window.saveSignal = saveSignal;

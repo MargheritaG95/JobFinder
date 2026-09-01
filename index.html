@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260901.6" />
+    <link rel="stylesheet" href="styles.css?v=20260901.7" />
   </head>
   <body>
     <noscript>
@@ -584,6 +584,22 @@
                     </select>
                   </label>
                 </div>
+                <section class="copilot-template-tool" aria-labelledby="copilotTemplateTitle">
+                  <div>
+                    <p class="eyebrow">TEMPLATE AUTOMATION</p>
+                    <h3 id="copilotTemplateTitle">Inserisci un testo personalizzato</h3>
+                    <p>Sostituisce automaticamente [Nome], [Azienda], [Ruolo], [Location], [Fit Score] e [Competenze].</p>
+                  </div>
+                  <div class="form-grid form-grid--two">
+                    <label class="field"><span>Template</span><select id="copilotTemplateSelect"><option value="">Seleziona dalla libreria</option></select></label>
+                    <label class="field"><span>Inserisci in</span><select id="copilotTemplateTarget"><option value="recruiter">Messaggio recruiter</option><option value="cover-letter">Cover letter</option><option value="why-fit">Why you fit</option><option value="angle">Your angle</option></select></label>
+                  </div>
+                  <div class="copilot-template-actions">
+                    <button class="button button--primary" type="button" data-action="apply-copilot-template">Inserisci template</button>
+                    <button class="button button--secondary" type="button" data-action="copy-filled-template">Copia compilato</button>
+                    <button class="text-button" type="button" data-route="templates">Gestisci templates</button>
+                  </div>
+                </section>
                 <label class="field">
                   <span>Note / messaggio recruiter</span>
                   <textarea id="copilotRecruiterNote" rows="6" placeholder="Messaggio personalizzato, riferimenti e prossimi passi…"></textarea>
@@ -669,8 +685,8 @@
       <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260901.6" defer></script>
+    <script src="config.js?v=20260901.7" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260901.6" defer></script>
+    <script src="app.js?v=20260901.7" defer></script>
   </body>
 </html>

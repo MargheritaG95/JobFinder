@@ -2079,6 +2079,20 @@ textarea::placeholder {
 .template-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .template-actions .button { margin-right: auto; }
 
+.copilot-template-tool {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #dcd7fa;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(115, 95, 214, 0.09), rgba(78, 131, 217, 0.04));
+}
+
+.copilot-template-tool h3 { margin: 2px 0 5px; font-size: 0.95rem; }
+.copilot-template-tool > div > p:last-child { margin: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.55; }
+.copilot-template-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.copilot-template-actions .text-button { margin-left: auto; }
+
 .dialog-details {
   display: grid;
   gap: 11px;

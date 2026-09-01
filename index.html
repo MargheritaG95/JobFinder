@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260901.4" />
+    <link rel="stylesheet" href="styles.css?v=20260901.5" />
   </head>
   <body>
     <noscript>
@@ -327,7 +327,12 @@
                 <h1>Opportunità</h1>
                 <p>Valuta, salva e porta nel Copilot le posizioni più promettenti.</p>
               </div>
-              <div class="hero-stat"><strong id="opportunityHeroCount">0</strong><span>opportunità</span></div>
+              <div class="hero-actions">
+                <button id="importOpportunityButton" class="button button--primary" type="button" data-action="import-opportunity">
+                  <svg class="icon"><use href="#icon-plus"></use></svg>Importa annuncio
+                </button>
+                <div class="hero-stat"><strong id="opportunityHeroCount">0</strong><span>opportunità</span></div>
+              </div>
             </div>
 
             <section class="filter-bar" aria-label="Filtri opportunità">
@@ -562,6 +567,10 @@
                   <span>Note / messaggio recruiter</span>
                   <textarea id="copilotRecruiterNote" rows="6" placeholder="Messaggio personalizzato, riferimenti e prossimi passi…"></textarea>
                 </label>
+                <label class="field field--accent field--cover-letter">
+                  <span>COVER LETTER</span>
+                  <textarea id="copilotCoverLetter" rows="10" placeholder="Bozza della cover letter personalizzata…"></textarea>
+                </label>
                 <div class="submission-note">
                   <svg class="icon"><use href="#icon-shield"></use></svg>
                   <span><strong>L’invio resta sotto il tuo controllo.</strong> JobFinder prepara e salva i materiali, ma non invia automaticamente la candidatura.</span>
@@ -639,8 +648,8 @@
       <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260901.4" defer></script>
+    <script src="config.js?v=20260901.5" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260901.4" defer></script>
+    <script src="app.js?v=20260901.5" defer></script>
   </body>
 </html>

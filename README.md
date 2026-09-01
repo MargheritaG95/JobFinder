@@ -107,6 +107,19 @@ La pagina **Le mie Application** funziona come registro operativo: unisce i reco
 
 Il frontend non effettua scraping né compila automaticamente form su domini esterni: GitHub Pages non può superare CORS, login e protezioni dei siti terzi in modo affidabile. Il kit copiabile riduce il lavoro manuale senza esporre chiavi AI o dati sensibili.
 
+## Importazione e ranking delle opportunità
+
+La pagina **Opportunità** include **Importa annuncio**. Inserendo URL, ruolo, azienda e testo dell’offerta, JobFinder:
+
+- evita duplicati confrontando URL oppure coppia ruolo/azienda;
+- calcola un Fit Score trasparente usando ruoli, settori, località e modalità di lavoro salvati in `search_preferences`;
+- salva l’opportunità su Supabase nello stato `REVIEW`;
+- prepara Why Fit, gap e angle senza inventare esperienze;
+- apre subito Application Copilot con una cover letter modificabile;
+- conserva la cover letter nel campo configurato come `applications.notes` e la include nel kit copiabile.
+
+Questa è un’importazione assistita, non uno scraper LinkedIn. Gli alert LinkedIn possono essere usati come fonte incollando il testo ricevuto; l’acquisizione automatica dalle email richiede un backend OAuth Gmail. Il ranking attuale è deterministico e spiegabile: una generazione AI completa richiederà una funzione server protetta, perché una chiave privata non deve essere pubblicata in GitHub Pages.
+
 ## Stati pipeline
 
 ```text
@@ -124,9 +137,9 @@ Il pulsante **Avanza** aggiorna la colonna `jobs.status` su Supabase. Lo stato d
 Pubblica questa cartella dalla root del branch scelto. Il file `.nojekyll` evita elaborazioni Jekyll. Gli asset usano query string di versione:
 
 ```html
-styles.css?v=20260901.4
-app.js?v=20260901.4
-config.js?v=20260901.4
+styles.css?v=20260901.5
+app.js?v=20260901.5
+config.js?v=20260901.5
 ```
 
 Quando distribuisci una nuova release, incrementa lo stesso valore in `index.html` per invalidare la cache del browser e di GitHub Pages.

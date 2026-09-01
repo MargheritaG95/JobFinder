@@ -13,7 +13,11 @@
     <section class="card" id="auth-card">
       <div class="brand">JobFinder</div>
       <h1>Accedi</h1>
-      <p class="subtitle">Solo email e password. Nessun magic link, nessun Google login.</p>
+      <p class="subtitle">Email + password oppure Google.</p>
+
+      <button id="google-btn" class="google">Continua con Google</button>
+
+      <div class="separator"><span>oppure</span></div>
 
       <label for="email">Email</label>
       <input id="email" type="email" autocomplete="email" placeholder="nome@email.com" />
@@ -22,16 +26,30 @@
       <input id="password" type="password" autocomplete="current-password" minlength="8" placeholder="Minimo 8 caratteri" />
 
       <button id="login-btn" class="primary">Accedi</button>
-      <button id="signup-btn" class="secondary">Crea account</button>
 
-      <p id="message" class="message"></p>
+      <div class="row-actions">
+        <button id="forgot-btn" class="linkbtn">Password dimenticata?</button>
+        <button id="signup-btn" class="linkbtn">Crea account</button>
+      </div>
+
+      <div id="message" class="message hidden"></div>
+    </section>
+
+    <section class="card hidden" id="reset-card">
+      <div class="brand">JobFinder</div>
+      <h1>Nuova password</h1>
+      <p class="subtitle">Inserisci una nuova password per il tuo account.</p>
+      <label for="new-password">Nuova password</label>
+      <input id="new-password" type="password" minlength="8" placeholder="Minimo 8 caratteri" />
+      <button id="save-password-btn" class="primary">Salva nuova password</button>
+      <div id="reset-message" class="message hidden"></div>
     </section>
 
     <section class="card hidden" id="dashboard-card">
       <div class="brand">JobFinder</div>
       <h1>Dashboard</h1>
       <p id="welcome" class="subtitle"></p>
-      <p class="ok">Login Supabase riuscito.</p>
+      <p class="ok">Accesso riuscito.</p>
       <button id="logout-btn" class="secondary">Esci</button>
     </section>
   </main>

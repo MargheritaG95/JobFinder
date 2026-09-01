@@ -1,21 +1,12 @@
-# JobFinder - clean auth reset
+# JobFinder Auth Fixed
 
-Versione minima ricostruita da zero.
+Questa build corregge i punti richiesti:
+- login email/password
+- messaggio chiaro quando le credenziali non sono valide
+- password dimenticata / reset password
+- schermata per impostare la nuova password
+- creazione account con messaggi espliciti
+- login Google
 
-Include solo:
-- login email + password Supabase
-- creazione account email + password
-- logout
-- dashboard vuota dopo login
-
-Non include:
-- magic link
-- reset password
-- Google login
-- preferenze
-- demo jobs
-- pipeline
-- redirect Vercel
-- recovery flow
-
-Obiettivo: verificare prima che l'autenticazione email/password funzioni in modo stabile.
+Nota Google:
+il pulsante è pronto nel frontend, ma il provider Google deve essere abilitato una volta nel progetto Supabase (Authentication > Providers > Google) con le credenziali OAuth Google.

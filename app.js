@@ -46,7 +46,8 @@
     aiLearning: false,
     motivations: "Automotive: L’automotive è da sempre una mia grande passione e oggi sto cercando concretamente di trasformarla in una direzione del mio percorso professionale.\nAI: Ho completato un master in intelligenza artificiale e desidero applicare questa preparazione a progetti concreti e di valore per il business.",
     profileSkills: "",
-    profileCvText: ""
+    profileCvText: "",
+    companyValues: "TeamViewer: collaborazione, spirito di squadra, attenzione al cliente e innovazione | Mi riconosco in questi valori perché nel mio modo di lavorare metto al centro il cliente, la collaborazione tra stakeholder e il miglioramento continuo."
   };
   const DATA_ENTITIES = [
     "profiles",
@@ -809,6 +810,7 @@
       motivations: local.motivations || DEFAULT_PREFERENCES.motivations,
       profileSkills: local.profileSkills || DEFAULT_PREFERENCES.profileSkills,
       profileCvText: local.profileCvText || DEFAULT_PREFERENCES.profileCvText,
+      companyValues: local.companyValues || DEFAULT_PREFERENCES.companyValues,
       isDefault: false,
       record
     };
@@ -1419,6 +1421,7 @@
     $("preferenceMotivations").value = preferences.motivations;
     $("preferenceProfileSkills").value = preferences.profileSkills;
     $("preferenceCvText").value = preferences.profileCvText;
+    $("preferenceCompanyValues").value = preferences.companyValues;
     $("preferenceMinFit").value = String(preferences.minFit);
     $("preferenceMinFitOutput").textContent = asNumber(preferences.minFit, 7).toFixed(1);
     $("preferenceAiLearning").checked = preferences.aiLearning;
@@ -1505,7 +1508,8 @@
       : skills.length
         ? `Credo inoltre che il mio background in ${naturalList(skills)} sia coerente con le attività e le responsabilità previste dal ruolo.`
         : "Prima dell’invio, aggiungi qui una competenza o un risultato concreto pertinente al ruolo: [competenza o risultato dal CV].";
-    const note = `Buongiorno [Nome],\n\nspero non le dispiaccia se la contatto direttamente. Ho recentemente inviato la mia candidatura per la posizione di ${role} presso ${company} e desideravo presentarmi brevemente.\n\n${motivation}\n\n${competenceSentence}\n\nSe avesse modo di valutare il mio profilo, sarei felice di approfondire il contributo che potrei portare al team.\n\nLa ringrazio per il tempo dedicato e le auguro una buona giornata.\n${valueOf(state.profile, "profiles", "name", "[Nome]") || "[Nome]"}`;
+    const valuesAlignment = companyValuesAlignment(preferences, job);
+    const note = `Buongiorno [Nome],\n\nspero non le dispiaccia se la contatto direttamente. Ho recentemente inviato la mia candidatura per la posizione di ${role} presso ${company} e desideravo presentarmi brevemente.\n\n${motivation}\n\n${competenceSentence}\n\n${valuesAlignment}\n\nSe avesse modo di valutare il mio profilo, sarei felice di approfondire il contributo che potrei portare al team.\n\nLa ringrazio per il tempo dedicato e le auguro una buona giornata.\n${valueOf(state.profile, "profiles", "name", "[Nome]") || "[Nome]"}`;
     return { why, gaps, angle, note };
   }
 
@@ -1543,6 +1547,21 @@
   function naturalList(items) {
     if (items.length < 2) return items[0] || "";
     return `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`;
+  }
+
+  function companyValuesAlignment(preferences, job) {
+    const company = companyNameForJob(job);
+    const entries = String(preferences.companyValues || "").split(/\r?\n/).map((line) => {
+      const separator = line.indexOf(":");
+      if (separator < 1) return null;
+      const name = line.slice(0, separator).trim();
+      const [values, reason] = line.slice(separator + 1).split("|").map((part) => part?.trim());
+      return name && values ? { name, values, reason } : null;
+    }).filter(Boolean);
+    const match = entries.find((entry) => company.toLowerCase().includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(company.toLowerCase()));
+    if (!match) return `Prima dell’invio, completa l’allineamento con i valori di ${company}: [valori aziendali verificati e perché ti rappresentano].`;
+    if (!match.reason) return `Mi ritrovo nei valori di ${company}, in particolare ${match.values}. Prima dell’invio aggiungi una prova personale: [perché questi valori ti rappresentano].`;
+    return `Mi ritrovo inoltre nei valori di ${company}, in particolare ${match.values}. ${match.reason}`;
   }
 
   function localCopilotDraftKey(jobId) {
@@ -1608,7 +1627,8 @@
   function isLegacyRecruiterNote(note) {
     const normalized = String(note || "").trim().toLowerCase();
     return normalized.startsWith("ciao [nome], ho visto la posizione")
-      || normalized.includes("mi ha colpito l’opportunità di contribuire con un approccio che unisce strategia");
+      || normalized.includes("mi ha colpito l’opportunità di contribuire con un approccio che unisce strategia")
+      || normalized.includes("desideravo presentarmi brevemente");
   }
 
   function resolvedRecruiterNote(savedNote, suggestedNote) {
@@ -2426,7 +2446,8 @@
     const personalization = {
       motivations: $("preferenceMotivations").value.trim(),
       profileSkills: $("preferenceProfileSkills").value.trim(),
-      profileCvText: $("preferenceCvText").value.trim()
+      profileCvText: $("preferenceCvText").value.trim(),
+      companyValues: $("preferenceCompanyValues").value.trim()
     };
     try {
       saveLocalPersonalization(personalization);

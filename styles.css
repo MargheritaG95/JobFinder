@@ -1932,6 +1932,14 @@ textarea::placeholder {
   padding: 24px;
 }
 
+.personalization-settings {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.personalization-settings > .muted { margin: -7px 0 15px; font-size: 0.68rem; line-height: 1.5; }
+
 .form-grid {
   display: grid;
   gap: 18px;

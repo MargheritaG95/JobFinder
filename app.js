@@ -897,12 +897,33 @@
 
   function responsibilitySummary(job, limit = 260) {
     const description = jobDescriptionText(job);
-    if (!description) return `Ruolo ${jobTitle(job)} presso ${companyNameForJob(job)}. Apri l’annuncio per consultare responsabilità e requisiti completi.`;
+    if (!description) return inferredRoleSummary(job);
     const sentences = description.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.length > 25);
     const responsibilityPattern = /responsabil|attivit|cosa farai|what you.ll do|duties|manage|lead|develop|deliver|support|coordinate|gestir|guidar|svilupp|coordin|realizz|implement/i;
     const relevant = sentences.filter((sentence) => responsibilityPattern.test(sentence));
     const selected = (relevant.length ? relevant : sentences).slice(0, limit > 300 ? 4 : 2).join(" ") || description;
     return selected.length > limit ? `${selected.slice(0, limit - 1).trimEnd()}…` : selected;
+  }
+
+  function inferredRoleSummary(job) {
+    const title = jobTitle(job);
+    const normalized = title.toLowerCase();
+    const company = companyNameForJob(job);
+    const summaries = [
+      [/transformation|program(?:me)? manager/, "Guidare programmi di trasformazione end-to-end, definendo governance, priorità e roadmap; coordinare stakeholder e team trasversali; monitorare avanzamento, rischi, dipendenze, budget e risultati."],
+      [/product manager|product owner/, "Definire visione, priorità e roadmap di prodotto; tradurre bisogni di clienti e business in requisiti; coordinare design, tecnologia e stakeholder e misurare adozione e risultati."],
+      [/project manager|project lead/, "Pianificare e coordinare progetti, responsabilità e scadenze; gestire stakeholder, rischi e dipendenze; monitorare l’esecuzione e assicurare la consegna dei risultati attesi."],
+      [/customer success|client success/, "Gestire la relazione con i clienti lungo il ciclo di vita, favorire adozione e valore, anticipare criticità, coordinare le risposte interne e sostenere retention ed espansione."],
+      [/customer experience|cx/, "Analizzare e migliorare il customer journey, trasformare insight e feedback in iniziative concrete, coordinare i team coinvolti e misurare l’impatto sull’esperienza cliente."],
+      [/business analy|data analy|insight/, "Analizzare dati, processi e requisiti di business; produrre insight e raccomandazioni; definire indicatori e supportare stakeholder e decisioni con evidenze misurabili."],
+      [/strategy|strategic/, "Supportare la definizione della strategia, analizzare mercato e opportunità, tradurre le priorità in iniziative operative e comunicare raccomandazioni chiare agli stakeholder."],
+      [/sales operations|revops|revenue operations/, "Ottimizzare processi commerciali, pipeline e strumenti; definire metriche e reporting; coordinare sales, marketing e customer success per migliorare prevedibilità ed efficacia."],
+      [/artificial intelligence|\bai\b|machine learning/, "Individuare e prioritizzare casi d’uso AI, tradurre obiettivi di business in requisiti, coordinare stakeholder tecnici e funzionali e misurare adozione, rischio e valore generato."],
+      [/marketing/, "Pianificare e realizzare iniziative di marketing, coordinare contenuti e canali, analizzare pubblico e performance e ottimizzare le attività rispetto agli obiettivi di business."]
+    ];
+    const matched = summaries.find(([pattern]) => pattern.test(normalized));
+    const summary = matched?.[1] || "Coordinare le attività chiave del ruolo, collaborare con gli stakeholder, gestire priorità e deliverable e contribuire con risultati misurabili agli obiettivi del team.";
+    return `Sintesi dedotta dal titolo “${title}” in ${company}: ${summary}`;
   }
 
   function roleSummary(job) {
@@ -1539,7 +1560,8 @@
     $("copilotAngle").value = valueOf(application, "applications", "angle", localDraft.angle || suggestions.angle);
     $("copilotCv").value = valueOf(application, "applications", "cvUsed", localDraft.cvUsed || valueOf(job, "jobs", "recommendedCv", ""));
     $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", localDraft.preparationStatus || "draft");
-    $("copilotRecruiterNote").value = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || suggestions.note);
+    const savedRecruiterNote = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || "");
+    $("copilotRecruiterNote").value = resolvedRecruiterNote(savedRecruiterNote, suggestions.note);
     $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job));
     renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
@@ -1547,6 +1569,16 @@
     saveState.classList.toggle("status-pill--neutral", !application);
     $("prepareApplicationButton").innerHTML = application ? `${icon("check")}Aggiorna application` : `${icon("sparkles")}Prepara application`;
     $("copilotSaveForLaterButton").innerHTML = `${icon("clock")}${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}`;
+  }
+
+  function isLegacyRecruiterNote(note) {
+    const normalized = String(note || "").trim().toLowerCase();
+    return normalized.startsWith("ciao [nome], ho visto la posizione")
+      || normalized.includes("mi ha colpito l’opportunità di contribuire con un approccio che unisce strategia");
+  }
+
+  function resolvedRecruiterNote(savedNote, suggestedNote) {
+    return !savedNote || isLegacyRecruiterNote(savedNote) ? suggestedNote : savedNote;
   }
 
   function renderCopilotTemplateOptions() {
@@ -2095,7 +2127,7 @@
       "",
       `ANGLE\n${valueOf(application, "applications", "angle", suggestions.angle)}`,
       "",
-      `MESSAGGIO RECRUITER\n${valueOf(application, "applications", "recruiterNote", suggestions.note)}`,
+      `MESSAGGIO RECRUITER\n${resolvedRecruiterNote(valueOf(application, "applications", "recruiterNote", ""), suggestions.note)}`,
       "",
       `COVER LETTER\n${valueOf(application, "applications", "notes", suggestedCoverLetter(job))}`,
       "",

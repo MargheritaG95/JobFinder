@@ -1939,6 +1939,8 @@ textarea::placeholder {
 }
 
 .personalization-settings > .muted { margin: -7px 0 15px; font-size: 0.68rem; line-height: 1.5; }
+.preference-cv-field { margin-top: 16px; }
+.preference-cv-field textarea { min-height: 250px; line-height: 1.55; }
 
 .form-grid {
   display: grid;

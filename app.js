@@ -45,7 +45,8 @@
     minFit: 7,
     aiLearning: false,
     motivations: "Automotive: L’automotive è da sempre una mia grande passione e oggi sto cercando concretamente di trasformarla in una direzione del mio percorso professionale.\nAI: Ho completato un master in intelligenza artificiale e desidero applicare questa preparazione a progetti concreti e di valore per il business.",
-    profileSkills: ""
+    profileSkills: "",
+    profileCvText: ""
   };
   const DATA_ENTITIES = [
     "profiles",
@@ -807,6 +808,7 @@
       aiLearning: Boolean(valueOf(record, "preferences", "aiLearning", false)),
       motivations: local.motivations || DEFAULT_PREFERENCES.motivations,
       profileSkills: local.profileSkills || DEFAULT_PREFERENCES.profileSkills,
+      profileCvText: local.profileCvText || DEFAULT_PREFERENCES.profileCvText,
       isDefault: false,
       record
     };
@@ -1416,6 +1418,7 @@
     $("preferenceWorkModes").value = preferences.workModes.join("\n");
     $("preferenceMotivations").value = preferences.motivations;
     $("preferenceProfileSkills").value = preferences.profileSkills;
+    $("preferenceCvText").value = preferences.profileCvText;
     $("preferenceMinFit").value = String(preferences.minFit);
     $("preferenceMinFitOutput").textContent = asNumber(preferences.minFit, 7).toFixed(1);
     $("preferenceAiLearning").checked = preferences.aiLearning;
@@ -1495,9 +1498,14 @@
     const gaps = valueOf(job, "jobs", "gaps", "") || "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.";
     const angle = valueOf(job, "jobs", "angle", "") || `Posizionati come ponte tra obiettivi di business, bisogni del cliente e trasformazione operativa. Collega ogni affermazione a un risultato e mostra perché questo approccio è rilevante per ${company}.`;
     const motivation = motivationForJob(preferences, job);
+    const evidence = relevantCvEvidence(preferences, job);
     const skills = toList(preferences.profileSkills).slice(0, 4);
-    const skillPhrase = skills.length ? skills.join(", ") : "le competenze maturate nel mio percorso";
-    const note = `Buongiorno [Nome],\n\nspero non le dispiaccia se la contatto direttamente qui. Ho recentemente inviato la mia candidatura per la posizione di ${role} presso ${company} e ci tenevo a presentarmi anche personalmente.\n\n${motivation} Per questo la posizione ha attirato particolarmente la mia attenzione, anche perché credo che le competenze che ho maturato in ${skillPhrase} possano trovare una buona applicazione nelle attività e nelle responsabilità previste dal ruolo.\n\nMi farebbe piacere se avesse modo di dare uno sguardo al mio profilo: spero possa esserci l’opportunità di approfondire ciò che potrei portare al vostro team.\n\nLa ringrazio per il tempo dedicato e le auguro una buona giornata!\n${valueOf(state.profile, "profiles", "name", "[Nome]") || "[Nome]"}`;
+    const competenceSentence = evidence
+      ? `Nel mio percorso ho maturato esperienze particolarmente pertinenti: ${evidence}`
+      : skills.length
+        ? `Credo inoltre che il mio background in ${naturalList(skills)} sia coerente con le attività e le responsabilità previste dal ruolo.`
+        : "Prima dell’invio, aggiungi qui una competenza o un risultato concreto pertinente al ruolo: [competenza o risultato dal CV].";
+    const note = `Buongiorno [Nome],\n\nspero non le dispiaccia se la contatto direttamente. Ho recentemente inviato la mia candidatura per la posizione di ${role} presso ${company} e desideravo presentarmi brevemente.\n\n${motivation}\n\n${competenceSentence}\n\nSe avesse modo di valutare il mio profilo, sarei felice di approfondire il contributo che potrei portare al team.\n\nLa ringrazio per il tempo dedicato e le auguro una buona giornata.\n${valueOf(state.profile, "profiles", "name", "[Nome]") || "[Nome]"}`;
     return { why, gaps, angle, note };
   }
 
@@ -1508,7 +1516,33 @@
       return separator > 0 ? [line.slice(0, separator).trim(), line.slice(separator + 1).trim()] : null;
     }).filter((entry) => entry && entry[0] && entry[1]);
     const match = entries.find(([sector]) => haystack.includes(sector.toLowerCase()));
-    return match?.[1] || "Sono molto interessata a questa opportunità e al contributo concreto che il ruolo può portare al team.";
+    return match?.[1] || roleBasedMotivation(job);
+  }
+
+  function roleBasedMotivation(job) {
+    const role = jobTitle(job).toLowerCase();
+    if (/customer success|client success/.test(role)) return "La posizione mi interessa perché unisce relazione con il cliente, comprensione dei suoi obiettivi e capacità di trasformare l’adozione del prodotto in risultati concreti.";
+    if (/transformation|program(?:me)? manager/.test(role)) return "La posizione mi interessa per la possibilità di guidare iniziative di trasformazione complesse, allineando persone, priorità ed esecuzione verso risultati misurabili.";
+    if (/product manager|product owner/.test(role)) return "La posizione mi interessa perché permette di collegare bisogni degli utenti, priorità di business ed esecuzione di prodotto.";
+    if (/strategy|strategic/.test(role)) return "La posizione mi interessa per l’opportunità di trasformare analisi e priorità strategiche in decisioni e iniziative concrete.";
+    if (/business analy|data analy|insight/.test(role)) return "La posizione mi interessa perché combina analisi, comprensione del business e capacità di tradurre i dati in decisioni operative.";
+    return "La posizione ha attirato la mia attenzione per le responsabilità previste e per la possibilità di contribuire concretamente agli obiettivi del team.";
+  }
+
+  function relevantCvEvidence(preferences, job) {
+    const cvText = String(preferences.profileCvText || "").trim();
+    if (!cvText) return "";
+    const contextWords = new Set(`${jobTitle(job)} ${jobDescriptionText(job)}`.toLowerCase().match(/[a-zà-ÿ]{4,}/g) || []);
+    const sentences = cvText.split(/(?<=[.!?])\s+|\r?\n+/).map((sentence) => sentence.trim()).filter((sentence) => sentence.length >= 30);
+    return sentences.map((sentence, index) => {
+      const words = sentence.toLowerCase().match(/[a-zà-ÿ]{4,}/g) || [];
+      return { sentence, index, score: words.reduce((total, word) => total + (contextWords.has(word) ? 1 : 0), 0) };
+    }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || a.index - b.index).slice(0, 2).map((item) => item.sentence).join(" ");
+  }
+
+  function naturalList(items) {
+    if (items.length < 2) return items[0] || "";
+    return `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`;
   }
 
   function localCopilotDraftKey(jobId) {
@@ -2391,7 +2425,8 @@
     if (!ensureWritable()) return;
     const personalization = {
       motivations: $("preferenceMotivations").value.trim(),
-      profileSkills: $("preferenceProfileSkills").value.trim()
+      profileSkills: $("preferenceProfileSkills").value.trim(),
+      profileCvText: $("preferenceCvText").value.trim()
     };
     try {
       saveLocalPersonalization(personalization);

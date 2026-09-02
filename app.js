@@ -848,11 +848,8 @@
 
   function opportunityChoiceMarkup(job) {
     if (hasAppliedToJob(job)) return appliedStateMarkup();
-    if (Boolean(valueOf(job, "jobs", "saved", false))) {
-      return `<span class="opportunity-choice">${icon("clock")}Da applicare più tardi</span>`;
-    }
-    if (jobStatus(job) === "APPLY") {
-      return `<span class="opportunity-choice opportunity-choice--primary">${icon("sparkles")}Candidatura in preparazione</span>`;
+    if (Boolean(valueOf(job, "jobs", "saved", false)) || jobStatus(job) === "APPLY") {
+      return `<span class="opportunity-choice">${icon("clock")}Applica più tardi</span>`;
     }
     return "";
   }
@@ -1115,12 +1112,12 @@
         </div>
         <div class="opportunity-card__role-summary"><strong>Responsabilità principali</strong><p class="opportunity-card__description">${escapeHtml(roleSummary(job))}</p></div>
         <div class="opportunity-card__footer">
-          <div class="opportunity-actions opportunity-actions--stacked">
+          <div class="opportunity-card__action-row">
             <button class="button button--secondary" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}">${icon("external")}Apri annuncio</button>
-            <div class="opportunity-actions__decisions">
-            ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
-            ${hasAppliedToJob(job) ? "" : `<button class="button button--warning" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}<span>${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}</span></button><button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}<span>Ho applicato</span></button>`}
-            ${removeOpportunityButton(job)}
+            <div class="opportunity-card__action-row-right">
+              ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
+              ${hasAppliedToJob(job) ? "" : `<button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}<span>Ho applicato</span></button>`}
+              ${removeOpportunityButton(job)}
             </div>
           </div>
           <div class="opportunity-card__feedback"><span>Questa opportunità è utile?</span>${feedbackButtons(job.id)}</div>

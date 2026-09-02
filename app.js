@@ -249,12 +249,111 @@
     const valueContribution = language === "en"
       ? `I would bring ${skills.length ? naturalListEnglish(skills) : "a combination of transferable experience, customer focus, and execution skills"} to help the team turn priorities into measurable outcomes and create value for customers and the business.`
       : `Porterei ${skills.length ? naturalList(skills) : "un insieme di esperienze trasferibili, attenzione al cliente e capacità di execution"}, contribuendo a trasformare le priorità del team in risultati misurabili e valore per clienti e azienda.`;
+    const resourceTemplate = personalizedCoverLetterTemplate(job, language, {
+      name, company, role, source, evidence, skills, careerChange, valueContribution
+    });
+    if (resourceTemplate) return resourceTemplate;
     if (language === "en") {
       const date = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(new Date());
       return `${name}\n${valueOf(state.profile, "profiles", "email", state.user?.email || "[Email]")}\n${date}\n\nDear ${company} Hiring Team,\n\nI am writing to apply for the ${role} position, which I found through ${source}. ${roleBasedMotivationEnglish(job)}\n\n${careerChange ? `My decision to move into this field is deliberate: ${careerChange}` : "[Explain briefly why you decided to move into this field and how you prepared for the transition.]"}\n\n${evidence ? `My most relevant experience includes: ${evidence}` : "[Add one or two relevant professional or academic achievements from your CV.]"} ${valueContribution}\n\n${companyValuesAlignment(preferences, job, "en")} This alignment would allow me to contribute not only through my capabilities, but also through a way of working that supports ${company}'s culture and objectives.\n\nI would welcome the opportunity to discuss how my experience and potential could support the ${role} team. Thank you for considering my application.\n\nKind regards,\n${name}`;
     }
     const date = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" }).format(new Date());
     return `${name}\n${valueOf(state.profile, "profiles", "email", state.user?.email || "[Email]")}\n${date}\n\nGentile team di selezione di ${company},\n\ndesidero candidarmi per la posizione di ${role}, che ho trovato tramite ${source}. ${motivationForJob(preferences, job)}\n\n${careerChange ? `La decisione di orientare il mio percorso verso questo ambito è consapevole: ${careerChange}` : "[Spiega brevemente perché hai deciso di cambiare ambito e come ti sei preparata alla transizione.]"}\n\n${evidence ? `Tra le esperienze più rilevanti del mio percorso: ${evidence}` : "[Aggiungi uno o due risultati professionali o accademici pertinenti presenti nel CV.]"} ${valueContribution}\n\n${companyValuesAlignment(preferences, job, "it")} Questo allineamento mi permetterebbe di contribuire non solo attraverso le mie capacità, ma anche con un modo di lavorare coerente con la cultura e gli obiettivi di ${company}.\n\nSarei lieta di approfondire in un colloquio come la mia esperienza e il mio potenziale possano supportare il team ${role}. La ringrazio per l’attenzione dedicata alla mia candidatura.\n\nCordiali saluti,\n${name}`;
+  }
+
+  function coverLetterResource(language = "it") {
+    const coverLetters = state.data.answerBank.filter((item) => /cover\s*letter/i.test(String(valueOf(item, "answerBank", "category", ""))));
+    if (!coverLetters.length) return null;
+    const languagePattern = language === "en" ? /(?:\ben\b|english|inglese)/i : /(?:\bit\b|italian|italiano|italiana)/i;
+    return coverLetters.find((item) => languagePattern.test(`${valueOf(item, "answerBank", "title", "")} ${valueOf(item, "answerBank", "category", "")}`)) || coverLetters[0];
+  }
+
+  function personalizedCoverLetterTemplate(job, language, context) {
+    const template = coverLetterResource(language);
+    if (!template) return "";
+    const preferences = currentPreferences();
+    const english = language === "en";
+    const date = new Intl.DateTimeFormat(english ? "en-US" : "it-IT", english ? { month: "long", day: "numeric", year: "numeric" } : { day: "numeric", month: "long", year: "numeric" }).format(new Date());
+    const motivation = english ? roleBasedMotivationEnglish(job) : motivationForJob(preferences, job);
+    const experience = context.evidence || (english ? "[Add a relevant achievement from your CV]" : "[Aggiungi un risultato pertinente presente nel CV]");
+    const careerChange = context.careerChange || (english ? "[Explain why you decided to move into this field]" : "[Spiega perché hai deciso di cambiare campo]");
+    const companyValues = companyValuesAlignment(preferences, job, language);
+    const skillList = context.skills.length ? (english ? naturalListEnglish(context.skills) : naturalList(context.skills)) : (english ? "[Relevant skills]" : "[Competenze pertinenti]");
+    const replacements = {
+      nome: context.name,
+      name: context.name,
+      email: valueOf(state.profile, "profiles", "email", state.user?.email || "[Email]"),
+      data: date,
+      date,
+      azienda: context.company,
+      company: context.company,
+      ruolo: context.role,
+      role: context.role,
+      posizione: context.role,
+      position: context.role,
+      fonte: context.source,
+      source: context.source,
+      location: valueOf(job, "jobs", "location", english ? "[Location]" : "[Località]"),
+      motivazione: motivation,
+      motivation,
+      "motivo interesse": motivation,
+      "motivo dell'interesse": motivation,
+      "reason for interest": motivation,
+      "cambio campo": careerChange,
+      "cambio carriera": careerChange,
+      "career change": careerChange,
+      esperienza: experience,
+      "esperienza rilevante": experience,
+      experience,
+      "relevant experience": experience,
+      competenze: skillList,
+      skills: skillList,
+      "skill/ambito": skillList,
+      "key skills": skillList,
+      valore: context.valueContribution,
+      "valore per azienda": context.valueContribution,
+      "value for company": context.valueContribution,
+      potenziale: context.valueContribution,
+      potential: context.valueContribution,
+      "valori aziendali": companyValues,
+      "company values": companyValues,
+      "why company": companyValues,
+      "company knowledge": companyValues,
+      responsabilità: responsibilitySummary(job, 420),
+      responsibilities: responsibilitySummary(job, 420)
+    };
+    const content = String(valueOf(template, "answerBank", "content", "")).trim();
+    const templateKeys = new Set([...content.matchAll(/\[([^\]]+)\]/g)].map((match) => String(match[1]).trim().toLowerCase()));
+    let filled = content.replace(/\[([^\]]+)\]/g, (match, key) => replacements[String(key).trim().toLowerCase()] || match);
+    const hasAnyKey = (...keys) => keys.some((key) => templateKeys.has(key));
+    const header = hasAnyKey("data", "date", "email") ? "" : `${context.name}\n${replacements.email}\n${date}`;
+    const requiredParagraphs = [];
+    if (!hasAnyKey("ruolo", "role", "posizione", "position", "fonte", "source", "motivazione", "motivation", "motivo interesse", "motivo dell'interesse", "reason for interest")) {
+      requiredParagraphs.push(english
+        ? `I am applying for the ${context.role} position, which I found through ${context.source}. ${motivation}`
+        : `Desidero candidarmi per la posizione di ${context.role}, che ho trovato tramite ${context.source}. ${motivation}`);
+    }
+    if (!hasAnyKey("cambio campo", "cambio carriera", "career change")) {
+      requiredParagraphs.push(english ? `My decision to move into this field is deliberate: ${careerChange}` : `La decisione di orientare il mio percorso verso questo ambito è consapevole: ${careerChange}`);
+    }
+    if (!hasAnyKey("esperienza", "esperienza rilevante", "experience", "relevant experience", "competenze", "skills", "skill/ambito", "key skills", "valore", "valore per azienda", "value for company", "potenziale", "potential")) {
+      requiredParagraphs.push(english ? `My most relevant experience includes: ${experience}. ${context.valueContribution}` : `Tra le esperienze più rilevanti del mio percorso: ${experience}. ${context.valueContribution}`);
+    }
+    if (!hasAnyKey("valori aziendali", "company values", "why company", "company knowledge")) {
+      requiredParagraphs.push(english ? `${companyValues} This alignment would help me contribute in a way that supports ${context.company}'s culture and objectives.` : `${companyValues} Questo allineamento mi permetterebbe di contribuire con un modo di lavorare coerente con la cultura e gli obiettivi di ${context.company}.`);
+    }
+    const hasClosing = /interview|colloquio|thank you|ringrazio|considering my application|candidatura/i.test(filled);
+    if (!hasClosing) {
+      requiredParagraphs.push(english ? `I would welcome the opportunity to discuss how my experience and potential could support the ${context.role} team. Thank you for considering my application.` : `Sarei lieta di approfondire in un colloquio come la mia esperienza e il mio potenziale possano supportare il team ${context.role}. La ringrazio per l’attenzione dedicata alla mia candidatura.`);
+    }
+    if (requiredParagraphs.length) {
+      const closingPattern = /\n(?=(?:Kind regards|Sincerely|Best regards|Cordiali saluti|Distinti saluti)[,\s]*\n?)/i;
+      const closingIndex = filled.search(closingPattern);
+      filled = closingIndex >= 0
+        ? `${filled.slice(0, closingIndex).trimEnd()}\n\n${requiredParagraphs.join("\n\n")}\n${filled.slice(closingIndex).trimStart()}`
+        : `${filled}\n\n${requiredParagraphs.join("\n\n")}`;
+    }
+    return header ? `${header}\n\n${filled}` : filled;
   }
 
   function fieldName(entity, key) {
@@ -1676,6 +1775,10 @@
     const savedRecruiterNote = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || "");
     $("copilotRecruiterNote").value = resolvedRecruiterNote(savedRecruiterNote, suggestions.note);
     $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job, language));
+    const coverTemplate = coverLetterResource(language);
+    $("copilotCoverLetterSource").textContent = coverTemplate
+      ? `Adattata dalla risorsa “${valueOf(coverTemplate, "answerBank", "title", "Cover letter")}” e completata secondo le linee guida.`
+      : "Nessuna risorsa Cover letter trovata: viene usata la struttura guidata predefinita.";
     renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : localDraft.savedAt ? "Bozza salvata su questo dispositivo" : "Nuova application";
@@ -2164,6 +2267,10 @@
     $("copilotAngle").value = suggestions.angle;
     $("copilotRecruiterNote").value = suggestions.note;
     $("copilotCoverLetter").value = suggestedCoverLetter(job, language);
+    const coverTemplate = coverLetterResource(language);
+    $("copilotCoverLetterSource").textContent = coverTemplate
+      ? `Adattata dalla risorsa “${valueOf(coverTemplate, "answerBank", "title", "Cover letter")}” e completata secondo le linee guida.`
+      : "Nessuna risorsa Cover letter trovata: viene usata la struttura guidata predefinita.";
     showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
   }
 
@@ -2792,7 +2899,7 @@
           <label class="field"><span>Titolo *</span><input name="title" required maxlength="180" value="${escapeAttribute(valueOf(template, "answerBank", "title", ""))}" placeholder="Es. Primo messaggio al recruiter" /></label>
           <label class="field"><span>Categoria</span><select name="category">${categories.map((category) => optionMarkup(category, category, currentCategory)).join("")}</select></label>
           <label class="field"><span>Testo *</span><textarea name="content" rows="14" required placeholder="Ciao [Nome], ho visto la posizione [Ruolo] in [Azienda]…">${escapeHtml(valueOf(template, "answerBank", "content", ""))}</textarea></label>
-          <div class="notice notice--info"><strong>Personalizza prima di inviare</strong><span>Le parentesi quadre rendono visibili i dati da sostituire, per evitare messaggi generici o incompleti.</span></div>
+          <div class="notice notice--info"><strong>Variabili automatiche</strong><span>Per le cover letter puoi usare [Nome], [Email], [Data], [Azienda], [Ruolo], [Fonte], [Location], [Motivazione], [Cambio carriera], [Esperienza rilevante], [Competenze], [Valore per azienda], [Valori aziendali] e [Responsabilità]. Il Copilot le adatta a ogni annuncio.</span></div>
           <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--primary" type="submit">${icon("check")}${isEdit ? "Salva modifiche" : "Salva template"}</button></div>
         </form>`
     });

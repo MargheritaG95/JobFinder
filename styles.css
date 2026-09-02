@@ -1213,7 +1213,7 @@ textarea::placeholder {
 
 .top-opportunity {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 15px;
   padding: 15px 0;
@@ -1556,6 +1556,25 @@ textarea::placeholder {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 13px;
+}
+
+.opportunity-copy__badges .opportunity-choice,
+.opportunity-copy__badges .applied-state {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 99px;
+  font-size: 0.57rem;
+  text-transform: uppercase;
+}
+
+.opportunity-copy__badges .feedback-actions {
+  gap: 5px;
+}
+
+.opportunity-copy__badges .feedback-button {
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 99px;
 }
 
 .opportunity-card__top--decided {

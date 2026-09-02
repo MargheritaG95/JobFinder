@@ -411,7 +411,7 @@
       applications: [{ id: "a1", user_id: "demo-user", job_id: "j3", company_id: "c3", status: "APPLIED", cv_used: "CX / Customer Success", progress: 100, applied_at: now.toISOString(), notes: "Candidatura inviata tramite referral.", preparation_status: "submitted" }],
       contacts: [{ id: "ct1", user_id: "demo-user", name: "Recruiter Demo", email: "recruiter@example.com", company_id: "c3", role: "Talent Partner" }],
       followups: [{ id: "fu1", user_id: "demo-user", action: "Follow-up candidatura", job_id: "j3", application_id: "a1", contact_id: "ct1", due_date: tomorrow, completed: false, notes: "Inviare un messaggio breve con un insight sul ruolo." }],
-      answerBank: [{ id: "r1", user_id: "demo-user", title: "Perché vuoi questo ruolo?", category: "Motivazione", content: "Struttura: contesto, impatto desiderato, prova concreta, collegamento all’azienda." }],
+      answerBank: [{ id: "r1", user_id: "demo-user", title: "Perché vuoi questo ruolo?", category: "Motivazione", canonical_answer: "Struttura: contesto, impatto desiderato, prova concreta, collegamento all’azienda." }],
       preferences: []
     };
   }
@@ -861,17 +861,28 @@
     return `<button class="button button--danger-ghost" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>`;
   }
 
-  function roleSummary(job) {
+  function jobDescriptionText(job) {
     let importedDescription = "";
     try {
       importedDescription = window.localStorage.getItem(`jobfinder:job-description:${state.user?.id || "anonymous"}:${job.id}`) || "";
     } catch (_error) {
       // Continue with database fields or a factual fallback.
     }
-    const description = valueOf(job, "jobs", "description", "") || importedDescription;
-    const raw = description || `Posizione ${jobTitle(job)} presso ${companyNameForJob(job)}, ${valueOf(job, "jobs", "location", "località non indicata")}. Annuncio pubblicato tramite ${valueOf(job, "jobs", "source", "fonte non indicata")}. Apri l’annuncio per leggere responsabilità e requisiti completi.`;
-    const clean = String(raw).replace(/\s+/g, " ").trim();
-    return clean.length > 220 ? `${clean.slice(0, 217).trimEnd()}…` : clean;
+    return String(valueOf(job, "jobs", "description", "") || importedDescription).replace(/\s+/g, " ").trim();
+  }
+
+  function responsibilitySummary(job, limit = 260) {
+    const description = jobDescriptionText(job);
+    if (!description) return `Ruolo ${jobTitle(job)} presso ${companyNameForJob(job)}. Apri l’annuncio per consultare responsabilità e requisiti completi.`;
+    const sentences = description.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.length > 25);
+    const responsibilityPattern = /responsabil|attivit|cosa farai|what you.ll do|duties|manage|lead|develop|deliver|support|coordinate|gestir|guidar|svilupp|coordin|realizz|implement/i;
+    const relevant = sentences.filter((sentence) => responsibilityPattern.test(sentence));
+    const selected = (relevant.length ? relevant : sentences).slice(0, limit > 300 ? 4 : 2).join(" ") || description;
+    return selected.length > limit ? `${selected.slice(0, limit - 1).trimEnd()}…` : selected;
+  }
+
+  function roleSummary(job) {
+    return responsibilitySummary(job, 260);
   }
 
   function priorityBadge(priority) {
@@ -1085,34 +1096,34 @@
     const fit = jobFit(job);
     const location = valueOf(job, "jobs", "location", "Location non indicata");
     const source = valueOf(job, "jobs", "source", "Source non indicata");
+    const decision = opportunityChoiceMarkup(job);
     return `
-      <article class="opportunity-card">
-        <div class="opportunity-card__top">
+      <article class="opportunity-card opportunity-card--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
+        <div class="opportunity-card__top ${decision ? "opportunity-card__top--decided" : ""}">
           <div class="company-logo">${companyLogoContent(job)}</div>
           <div class="opportunity-copy">
             <h3>${escapeHtml(jobTitle(job))}</h3>
             <p>${escapeHtml(company)}</p>
             <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityBadge(jobPriority(job))}${easyApplyBadge(job)}</div>
           </div>
-          <div class="opportunity-card__primary-action">${hasAppliedToJob(job)
-            ? appliedStateMarkup()
-            : `<button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>`}
-          </div>
+          ${decision ? `<div class="opportunity-card__primary-action">${decision}</div>` : ""}
           <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
         </div>
         <div class="opportunity-card__meta">
           <span>${icon("building")}${escapeHtml(location)}</span>
           <span>${icon("link")}${escapeHtml(source)}</span>
         </div>
-        <p class="opportunity-card__description">${escapeHtml(roleSummary(job))}</p>
+        <div class="opportunity-card__role-summary"><strong>Responsabilità principali</strong><p class="opportunity-card__description">${escapeHtml(roleSummary(job))}</p></div>
         <div class="opportunity-card__footer">
-          ${feedbackButtons(job.id)}
-          <div class="opportunity-actions">
-            <button class="icon-button" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}" aria-label="Apri annuncio" title="Apri annuncio">${icon("external")}</button>
+          <div class="opportunity-actions opportunity-actions--stacked">
+            <button class="button button--secondary" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}">${icon("external")}Apri annuncio</button>
+            <div class="opportunity-actions__decisions">
             ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
             ${hasAppliedToJob(job) ? "" : `<button class="button button--warning" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}<span>${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}</span></button><button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}<span>Ho applicato</span></button>`}
             ${removeOpportunityButton(job)}
+            </div>
           </div>
+          <div class="opportunity-card__feedback"><span>Questa opportunità è utile?</span>${feedbackButtons(job.id)}</div>
         </div>
       </article>
     `;
@@ -1221,7 +1232,7 @@
       : status === "APPLIED" ? "Imposta follow-up" : status === "INTERVIEW" ? "Prepara colloquio" : "Aggiorna stato";
     return `
       <tr class="${missingRecord ? "application-row--warning" : ""}">
-        <td><div class="table-primary"><span class="company-logo">${escapeHtml(initials(company))}</span><span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(company)}</small></span></div></td>
+        <td><div class="table-primary"><span class="company-logo">${job ? companyLogoContent(job) : escapeHtml(initials(company))}</span><span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(company)}</small>${job ? `<small class="application-role-description"><b>Responsabilità:</b> ${escapeHtml(responsibilitySummary(job, 520))}</small>` : ""}</span></div></td>
         <td>${statusBadge(status)}</td>
         <td>${escapeHtml(appliedAt ? formatDate(appliedAt, { short: true }) : missingRecord ? "Da recuperare" : "Non indicata")}</td>
         <td><span class="${missingRecord ? "text-warning" : ""}">${escapeHtml(materialState)}</span></td>
@@ -1610,8 +1621,8 @@
     });
     document.addEventListener("click", handleDelegatedClick);
     document.addEventListener("keydown", (event) => {
-      const clickableOpportunity = event.target.closest?.(".top-opportunity--clickable");
-      if (clickableOpportunity && ["Enter", " "].includes(event.key)) {
+      const clickableOpportunity = event.target.closest?.(".top-opportunity--clickable, .opportunity-card--clickable");
+      if (clickableOpportunity && event.target === clickableOpportunity && ["Enter", " "].includes(event.key)) {
         event.preventDefault();
         clickableOpportunity.click();
       }

@@ -1484,9 +1484,14 @@ textarea::placeholder {
 
 .opportunity-card__top {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: start;
   gap: 13px;
+}
+
+.opportunity-card__primary-action {
+  display: flex;
+  align-items: flex-start;
 }
 
 .opportunity-card__meta {
@@ -2324,6 +2329,8 @@ textarea::placeholder {
   .result-line { align-items: flex-start; flex-direction: column; gap: 5px; }
 
   .opportunity-card { padding: 16px; }
+  .opportunity-card__top { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .opportunity-card__primary-action { grid-column: 2 / -1; }
   .opportunity-card__footer { align-items: stretch; flex-direction: column; }
   .opportunity-card__footer .opportunity-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; }
   .feedback-actions { justify-content: space-between; }

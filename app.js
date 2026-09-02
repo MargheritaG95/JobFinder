@@ -46,6 +46,8 @@
     motivations: "Automotive: L’automotive è da sempre una mia grande passione e oggi sto cercando concretamente di trasformarla in una direzione del mio percorso professionale.\nAI: Ho completato un master in intelligenza artificiale e desidero applicare questa preparazione a progetti concreti e di valore per il business.",
     profileSkills: "",
     profileCvText: "",
+    careerChangeReason: "Sto orientando il mio percorso verso ruoli in cui posso unire esperienza trasferibile, comprensione del cliente e capacità di trasformare obiettivi strategici in risultati concreti. Questa scelta nasce da un interesse maturato nel tempo e supportato da formazione mirata e progetti pertinenti.",
+    careerChangeReasonEn: "I am intentionally moving towards roles where I can combine transferable experience, customer understanding, and the ability to turn strategic goals into tangible outcomes. This decision is grounded in a long-standing interest, supported by targeted education and relevant projects.",
     companyValues: "TeamViewer: collaborazione, spirito di squadra, attenzione al cliente e innovazione | Mi riconosco in questi valori perché nel mio modo di lavorare metto al centro il cliente, la collaborazione tra stakeholder e il miglioramento continuo."
   };
   const DATA_ENTITIES = [
@@ -236,12 +238,23 @@
   }
 
   function suggestedCoverLetter(job, language = "it") {
-    const suggestions = suggestedCopilotContent(job, language);
+    const preferences = currentPreferences();
     const name = valueOf(state.profile, "profiles", "name", "").trim() || "[Nome e cognome]";
+    const company = companyNameForJob(job);
+    const role = jobTitle(job);
+    const source = valueOf(job, "jobs", "source", language === "en" ? "the job posting" : "l’annuncio");
+    const evidence = relevantCvEvidence(preferences, job);
+    const skills = toList(preferences.profileSkills).slice(0, 4);
+    const careerChange = String(language === "en" ? preferences.careerChangeReasonEn : preferences.careerChangeReason || "").trim();
+    const valueContribution = language === "en"
+      ? `I would bring ${skills.length ? naturalListEnglish(skills) : "a combination of transferable experience, customer focus, and execution skills"} to help the team turn priorities into measurable outcomes and create value for customers and the business.`
+      : `Porterei ${skills.length ? naturalList(skills) : "un insieme di esperienze trasferibili, attenzione al cliente e capacità di execution"}, contribuendo a trasformare le priorità del team in risultati misurabili e valore per clienti e azienda.`;
     if (language === "en") {
-      return `Dear ${companyNameForJob(job)} Hiring Team,\n\nI am writing to apply for the ${jobTitle(job)} position. ${suggestions.why}\n\n${suggestions.angle}\n\nI would welcome the opportunity to discuss how my experience could contribute to the role and to ${companyNameForJob(job)}'s goals.\n\nKind regards,\n${name}`;
+      const date = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(new Date());
+      return `${name}\n${valueOf(state.profile, "profiles", "email", state.user?.email || "[Email]")}\n${date}\n\nDear ${company} Hiring Team,\n\nI am writing to apply for the ${role} position, which I found through ${source}. ${roleBasedMotivationEnglish(job)}\n\n${careerChange ? `My decision to move into this field is deliberate: ${careerChange}` : "[Explain briefly why you decided to move into this field and how you prepared for the transition.]"}\n\n${evidence ? `My most relevant experience includes: ${evidence}` : "[Add one or two relevant professional or academic achievements from your CV.]"} ${valueContribution}\n\n${companyValuesAlignment(preferences, job, "en")} This alignment would allow me to contribute not only through my capabilities, but also through a way of working that supports ${company}'s culture and objectives.\n\nI would welcome the opportunity to discuss how my experience and potential could support the ${role} team. Thank you for considering my application.\n\nKind regards,\n${name}`;
     }
-    return `Gentile team di selezione di ${companyNameForJob(job)},\n\nvorrei candidarmi per la posizione di ${jobTitle(job)}. ${suggestions.why}\n\n${suggestions.angle}\n\nSarei felice di approfondire come la mia esperienza possa contribuire agli obiettivi del ruolo.\n\nCordiali saluti,\n${name}`;
+    const date = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" }).format(new Date());
+    return `${name}\n${valueOf(state.profile, "profiles", "email", state.user?.email || "[Email]")}\n${date}\n\nGentile team di selezione di ${company},\n\ndesidero candidarmi per la posizione di ${role}, che ho trovato tramite ${source}. ${motivationForJob(preferences, job)}\n\n${careerChange ? `La decisione di orientare il mio percorso verso questo ambito è consapevole: ${careerChange}` : "[Spiega brevemente perché hai deciso di cambiare ambito e come ti sei preparata alla transizione.]"}\n\n${evidence ? `Tra le esperienze più rilevanti del mio percorso: ${evidence}` : "[Aggiungi uno o due risultati professionali o accademici pertinenti presenti nel CV.]"} ${valueContribution}\n\n${companyValuesAlignment(preferences, job, "it")} Questo allineamento mi permetterebbe di contribuire non solo attraverso le mie capacità, ma anche con un modo di lavorare coerente con la cultura e gli obiettivi di ${company}.\n\nSarei lieta di approfondire in un colloquio come la mia esperienza e il mio potenziale possano supportare il team ${role}. La ringrazio per l’attenzione dedicata alla mia candidatura.\n\nCordiali saluti,\n${name}`;
   }
 
   function fieldName(entity, key) {
@@ -813,6 +826,8 @@
       motivations: local.motivations || DEFAULT_PREFERENCES.motivations,
       profileSkills: local.profileSkills || DEFAULT_PREFERENCES.profileSkills,
       profileCvText: local.profileCvText || DEFAULT_PREFERENCES.profileCvText,
+      careerChangeReason: local.careerChangeReason || DEFAULT_PREFERENCES.careerChangeReason,
+      careerChangeReasonEn: local.careerChangeReasonEn || DEFAULT_PREFERENCES.careerChangeReasonEn,
       companyValues: local.companyValues || DEFAULT_PREFERENCES.companyValues,
       isDefault: false,
       record
@@ -1442,6 +1457,8 @@
     $("preferenceMotivations").value = preferences.motivations;
     $("preferenceProfileSkills").value = preferences.profileSkills;
     $("preferenceCvText").value = preferences.profileCvText;
+    $("preferenceCareerChangeReason").value = preferences.careerChangeReason;
+    $("preferenceCareerChangeReasonEn").value = preferences.careerChangeReasonEn;
     $("preferenceCompanyValues").value = preferences.companyValues;
     $("preferenceMinFit").value = String(preferences.minFit);
     $("preferenceMinFitOutput").textContent = asNumber(preferences.minFit, 7).toFixed(1);
@@ -2504,6 +2521,8 @@
       motivations: $("preferenceMotivations").value.trim(),
       profileSkills: $("preferenceProfileSkills").value.trim(),
       profileCvText: $("preferenceCvText").value.trim(),
+      careerChangeReason: $("preferenceCareerChangeReason").value.trim(),
+      careerChangeReasonEn: $("preferenceCareerChangeReasonEn").value.trim(),
       companyValues: $("preferenceCompanyValues").value.trim()
     };
     try {

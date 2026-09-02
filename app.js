@@ -846,6 +846,30 @@
     return `<span class="applied-state">${icon("check")}Applicato</span>`;
   }
 
+  function opportunityChoiceMarkup(job) {
+    if (hasAppliedToJob(job)) return appliedStateMarkup();
+    if (Boolean(valueOf(job, "jobs", "saved", false))) {
+      return `<span class="opportunity-choice">${icon("clock")}Da applicare più tardi</span>`;
+    }
+    if (jobStatus(job) === "APPLY") {
+      return `<span class="opportunity-choice opportunity-choice--primary">${icon("sparkles")}Candidatura in preparazione</span>`;
+    }
+    return "";
+  }
+
+  function removeOpportunityButton(job) {
+    return `<button class="button button--danger-ghost" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>`;
+  }
+
+  function roleSummary(job) {
+    const raw = valueOf(job, "jobs", "description", "")
+      || valueOf(job, "jobs", "angle", "")
+      || valueOf(job, "jobs", "whyFit", "")
+      || `${jobTitle(job)} presso ${companyNameForJob(job)}, ${valueOf(job, "jobs", "location", "località da definire")}.`;
+    const clean = String(raw).replace(/\s+/g, " ").trim();
+    return clean.length > 220 ? `${clean.slice(0, 217).trimEnd()}…` : clean;
+  }
+
   function priorityBadge(priority) {
     const normalized = normalizeStatus(priority, "NORMAL");
     const className = ["HIGH", "URGENT", "ALTA"].includes(normalized) ? "badge--danger" : ["MEDIUM", "MEDIA"].includes(normalized) ? "badge--warning" : "";
@@ -972,10 +996,10 @@
           <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${easyApplyBadge(job)}</div>
         </div>
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
-        <div class="opportunity-actions">${hasAppliedToJob(job) ? appliedStateMarkup() : `
+        <div class="opportunity-actions">${opportunityChoiceMarkup(job) || `
           <button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}"><span>Applica ora</span>${icon("arrow-right")}</button>
           ${applicationActionButtons(job, { compact: true })}
-          ${saveButton(job)}`}
+          ${saveButton(job)}`}${removeOpportunityButton(job)}
         </div>
       </article>
     `;
@@ -1029,6 +1053,7 @@
     const company = $("opportunityCompanyFilter")?.value || "";
     const location = $("opportunityLocationFilter")?.value || "";
     return state.data.jobs
+      .filter((job) => jobStatus(job) !== "CLOSED")
       .filter((job) => jobFit(job) >= minFit)
       .filter((job) => !status || jobStatus(job) === status)
       .filter((job) => !priority || jobPriority(job) === priority)
@@ -1067,12 +1092,14 @@
           <span>${icon("building")}${escapeHtml(location)}</span>
           <span>${icon("link")}${escapeHtml(source)}</span>
         </div>
+        <p class="opportunity-card__description">${escapeHtml(roleSummary(job))}</p>
         <div class="opportunity-card__footer">
           ${feedbackButtons(job.id)}
           <div class="opportunity-actions">
             <button class="icon-button" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}" aria-label="Apri annuncio" title="Apri annuncio">${icon("external")}</button>
             ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
-            ${hasAppliedToJob(job) ? appliedStateMarkup() : `<button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>${applicationActionButtons(job)}${saveButton(job)}`}
+            ${opportunityChoiceMarkup(job) || `<button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>${applicationActionButtons(job)}${saveButton(job)}`}
+            ${removeOpportunityButton(job)}
           </div>
         </div>
       </article>
@@ -1728,8 +1755,13 @@
           await loadAllData();
           break;
         case "apply-now":
+          await startApplication(id, trigger);
+          break;
         case "open-copilot":
           openCopilot(id);
+          break;
+        case "remove-opportunity":
+          openRemoveOpportunityDialog(id);
           break;
         case "toggle-save":
           await toggleSavedJob(id, trigger);
@@ -2037,6 +2069,52 @@
       state.pendingJobActions.delete(actionKey);
       setBusy(button, false);
     }
+  }
+
+  async function startApplication(jobId, button) {
+    const job = getJobById(jobId);
+    if (!job || !ensureWritable()) return;
+    const actionKey = String(job.id);
+    if (state.pendingJobActions.has(actionKey)) return;
+    state.pendingJobActions.add(actionKey);
+    const application = getApplicationForJob(job.id);
+    setBusy(button, true, "Apertura…");
+    try {
+      await updateRecord("jobs", job.id, {
+        [fieldName("jobs", "status")]: "APPLY",
+        [fieldName("jobs", "saved")]: false
+      });
+      if (application) await updateRecord("applications", application.id, applicationDraftPayload(job, application));
+      else await insertRecord("applications", applicationDraftPayload(job));
+      renderAll();
+      openCopilot(job.id);
+      showToast("Scelta salvata: le altre opzioni sono state nascoste.", "success", "Candidatura in preparazione");
+    } finally {
+      state.pendingJobActions.delete(actionKey);
+      setBusy(button, false);
+    }
+  }
+
+  function openRemoveOpportunityDialog(jobId) {
+    const job = getJobById(jobId);
+    if (!job) return;
+    openDialog({
+      eyebrow: "RIMUOVI OPPORTUNITÀ",
+      title: `Rimuovere ${jobTitle(job)}?`,
+      body: `<p class="dialog-copy">L’opportunità sparirà dalla dashboard e dalla lista. Lo storico rimarrà nel database.</p>
+        <form data-dialog-form="remove-opportunity" data-record-id="${escapeAttribute(job.id)}"><div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--danger" type="submit">${icon("trash")}Cancella</button></div></form>`
+    });
+  }
+
+  async function submitRemoveOpportunity(form) {
+    const jobId = form.dataset.recordId;
+    await updateRecord("jobs", jobId, {
+      [fieldName("jobs", "status")]: "CLOSED",
+      [fieldName("jobs", "saved")]: false
+    });
+    closeDialog();
+    renderAll();
+    showToast("L’opportunità è stata rimossa dalla dashboard.", "success", "Opportunità cancellata");
   }
 
   function appliedApplicationPayload(job, application) {
@@ -2409,6 +2487,9 @@
           break;
         case "delete-template":
           await submitDeleteTemplate(form);
+          break;
+        case "remove-opportunity":
+          await submitRemoveOpportunity(form);
           break;
         default:
           throw new Error(`Form non gestito: ${type}`);

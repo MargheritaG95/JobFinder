@@ -2133,15 +2133,26 @@ textarea::placeholder {
   padding: 25px;
 }
 
+.copilot-role-brief {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--blue-100);
+  border-radius: 11px;
+  background: var(--blue-50);
+}
+
+.copilot-role-brief h3 { margin: 2px 0 6px; font-size: 0.9rem; }
+.copilot-role-brief > p:last-child { margin: 0; color: #526b91; font-size: 0.7rem; line-height: 1.5; }
+
 .field--accent {
-  margin-bottom: 16px;
-  padding: 15px;
+  margin-bottom: 8px;
+  padding: 11px 13px;
   border-left: 3px solid currentColor;
   border-radius: 0 10px 10px 0;
   background: #fbfcfe;
 }
 
-.field--accent textarea { color: var(--ink); background: #fff; }
+.field--accent textarea { min-height: 72px; color: var(--ink); background: #fff; }
 .field--success { color: var(--green); background: #f7fcfa; }
 .field--warning { color: var(--amber); background: #fffbf4; }
 .field--info { color: var(--blue-600); background: #f8faff; }

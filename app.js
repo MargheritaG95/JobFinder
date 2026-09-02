@@ -1492,6 +1492,7 @@
     $("copilotPriority").textContent = titleCase(jobPriority(job));
     $("copilotStatus").textContent = jobStatus(job);
     $("copilotLocation").textContent = valueOf(job, "jobs", "location", "Non indicata");
+    $("copilotRoleBrief").textContent = responsibilitySummary(job, 620);
     $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", localDraft.whyFit || suggestions.why);
     $("copilotGaps").value = valueOf(application, "applications", "gaps", localDraft.gaps || suggestions.gaps);
     $("copilotAngle").value = valueOf(application, "applications", "angle", localDraft.angle || suggestions.angle);

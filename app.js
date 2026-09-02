@@ -43,7 +43,9 @@
     locations: ["Milano", "Remote Italy", "EU"],
     workModes: ["Remote", "Hybrid"],
     minFit: 7,
-    aiLearning: false
+    aiLearning: false,
+    motivations: "Automotive: L’automotive è da sempre una mia grande passione e oggi sto cercando concretamente di trasformarla in una direzione del mio percorso professionale.\nAI: Ho completato un master in intelligenza artificiale e desidero applicare questa preparazione a progetti concreti e di valore per il business.",
+    profileSkills: ""
   };
   const DATA_ENTITIES = [
     "profiles",
@@ -72,6 +74,7 @@
     sessionUserId: null,
     sessionExpiredHandled: false,
     errors: {},
+    optionalErrors: {},
     lastSync: null,
     data: {
       profiles: [],
@@ -548,6 +551,7 @@
     state.sessionUserId = null;
     state.lastSync = null;
     state.errors = {};
+    state.optionalErrors = {};
     DATA_ENTITIES.forEach((entity) => { state.data[entity] = []; });
   }
 
@@ -560,13 +564,15 @@
     state.loadingData = true;
     setRefreshState(true);
     state.errors = {};
+    state.optionalErrors = {};
 
     const results = await Promise.all(DATA_ENTITIES.map(async (entity) => {
       try {
         const rows = await fetchEntity(entity);
         return [entity, rows];
       } catch (error) {
-        if (!OPTIONAL_ENTITIES.has(entity)) state.errors[entity] = error;
+        if (OPTIONAL_ENTITIES.has(entity)) state.optionalErrors[entity] = error;
+        else state.errors[entity] = error;
         await handleSessionError(error);
         return [entity, []];
       }
@@ -790,7 +796,8 @@
 
   function currentPreferences() {
     const record = state.data.preferences[0] || null;
-    if (!record) return { ...DEFAULT_PREFERENCES, isDefault: true, record: null };
+    const local = localPersonalization();
+    if (!record) return { ...DEFAULT_PREFERENCES, ...local, isDefault: true, record: null };
     return {
       roles: toList(valueOf(record, "preferences", "roles", [])),
       sectors: toList(valueOf(record, "preferences", "sectors", [])),
@@ -798,9 +805,28 @@
       workModes: toList(valueOf(record, "preferences", "workModes", [])),
       minFit: asNumber(valueOf(record, "preferences", "minFit", DEFAULT_PREFERENCES.minFit), DEFAULT_PREFERENCES.minFit),
       aiLearning: Boolean(valueOf(record, "preferences", "aiLearning", false)),
+      motivations: local.motivations || DEFAULT_PREFERENCES.motivations,
+      profileSkills: local.profileSkills || DEFAULT_PREFERENCES.profileSkills,
       isDefault: false,
       record
     };
+  }
+
+  function personalizationKey() {
+    return `jobfinder:personalization:${state.user?.id || "anonymous"}`;
+  }
+
+  function localPersonalization() {
+    try {
+      const value = JSON.parse(window.localStorage.getItem(personalizationKey()) || "null");
+      return value && typeof value === "object" ? value : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function saveLocalPersonalization(value) {
+    window.localStorage.setItem(personalizationKey(), JSON.stringify(value));
   }
 
   function statusBadge(status) {
@@ -871,12 +897,33 @@
 
   function responsibilitySummary(job, limit = 260) {
     const description = jobDescriptionText(job);
-    if (!description) return `Ruolo ${jobTitle(job)} presso ${companyNameForJob(job)}. Apri l’annuncio per consultare responsabilità e requisiti completi.`;
+    if (!description) return inferredRoleSummary(job);
     const sentences = description.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.length > 25);
     const responsibilityPattern = /responsabil|attivit|cosa farai|what you.ll do|duties|manage|lead|develop|deliver|support|coordinate|gestir|guidar|svilupp|coordin|realizz|implement/i;
     const relevant = sentences.filter((sentence) => responsibilityPattern.test(sentence));
     const selected = (relevant.length ? relevant : sentences).slice(0, limit > 300 ? 4 : 2).join(" ") || description;
     return selected.length > limit ? `${selected.slice(0, limit - 1).trimEnd()}…` : selected;
+  }
+
+  function inferredRoleSummary(job) {
+    const title = jobTitle(job);
+    const normalized = title.toLowerCase();
+    const company = companyNameForJob(job);
+    const summaries = [
+      [/transformation|program(?:me)? manager/, "Guidare programmi di trasformazione end-to-end, definendo governance, priorità e roadmap; coordinare stakeholder e team trasversali; monitorare avanzamento, rischi, dipendenze, budget e risultati."],
+      [/product manager|product owner/, "Definire visione, priorità e roadmap di prodotto; tradurre bisogni di clienti e business in requisiti; coordinare design, tecnologia e stakeholder e misurare adozione e risultati."],
+      [/project manager|project lead/, "Pianificare e coordinare progetti, responsabilità e scadenze; gestire stakeholder, rischi e dipendenze; monitorare l’esecuzione e assicurare la consegna dei risultati attesi."],
+      [/customer success|client success/, "Gestire la relazione con i clienti lungo il ciclo di vita, favorire adozione e valore, anticipare criticità, coordinare le risposte interne e sostenere retention ed espansione."],
+      [/customer experience|cx/, "Analizzare e migliorare il customer journey, trasformare insight e feedback in iniziative concrete, coordinare i team coinvolti e misurare l’impatto sull’esperienza cliente."],
+      [/business analy|data analy|insight/, "Analizzare dati, processi e requisiti di business; produrre insight e raccomandazioni; definire indicatori e supportare stakeholder e decisioni con evidenze misurabili."],
+      [/strategy|strategic/, "Supportare la definizione della strategia, analizzare mercato e opportunità, tradurre le priorità in iniziative operative e comunicare raccomandazioni chiare agli stakeholder."],
+      [/sales operations|revops|revenue operations/, "Ottimizzare processi commerciali, pipeline e strumenti; definire metriche e reporting; coordinare sales, marketing e customer success per migliorare prevedibilità ed efficacia."],
+      [/artificial intelligence|\bai\b|machine learning/, "Individuare e prioritizzare casi d’uso AI, tradurre obiettivi di business in requisiti, coordinare stakeholder tecnici e funzionali e misurare adozione, rischio e valore generato."],
+      [/marketing/, "Pianificare e realizzare iniziative di marketing, coordinare contenuti e canali, analizzare pubblico e performance e ottimizzare le attività rispetto agli obiettivi di business."]
+    ];
+    const matched = summaries.find(([pattern]) => pattern.test(normalized));
+    const summary = matched?.[1] || "Coordinare le attività chiave del ruolo, collaborare con gli stakeholder, gestire priorità e deliverable e contribuire con risultati misurabili agli obiettivi del team.";
+    return `Sintesi dedotta dal titolo “${title}” in ${company}: ${summary}`;
   }
 
   function roleSummary(job) {
@@ -1367,6 +1414,8 @@
     $("preferenceSectors").value = preferences.sectors.join("\n");
     $("preferenceLocations").value = preferences.locations.join("\n");
     $("preferenceWorkModes").value = preferences.workModes.join("\n");
+    $("preferenceMotivations").value = preferences.motivations;
+    $("preferenceProfileSkills").value = preferences.profileSkills;
     $("preferenceMinFit").value = String(preferences.minFit);
     $("preferenceMinFitOutput").textContent = asNumber(preferences.minFit, 7).toFixed(1);
     $("preferenceAiLearning").checked = preferences.aiLearning;
@@ -1445,8 +1494,21 @@
     const why = valueOf(job, "jobs", "whyFit", "") || `Fit ${fit.toFixed(1)}/10. Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`;
     const gaps = valueOf(job, "jobs", "gaps", "") || "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.";
     const angle = valueOf(job, "jobs", "angle", "") || `Posizionati come ponte tra obiettivi di business, bisogni del cliente e trasformazione operativa. Collega ogni affermazione a un risultato e mostra perché questo approccio è rilevante per ${company}.`;
-    const note = `Ciao [Nome], ho visto la posizione ${role} in ${company}${source ? ` tramite ${source}` : ""}. Mi ha colpito l’opportunità di contribuire con un approccio che unisce strategia, execution e attenzione al cliente. Se utile, condivido volentieri due esempi concreti di impatto rilevanti per il ruolo.${location ? ` Sono disponibile per confrontarci anche rispetto alla modalità ${location}.` : ""}`;
+    const motivation = motivationForJob(preferences, job);
+    const skills = toList(preferences.profileSkills).slice(0, 4);
+    const skillPhrase = skills.length ? skills.join(", ") : "le competenze maturate nel mio percorso";
+    const note = `Buongiorno [Nome],\n\nspero non le dispiaccia se la contatto direttamente qui. Ho recentemente inviato la mia candidatura per la posizione di ${role} presso ${company} e ci tenevo a presentarmi anche personalmente.\n\n${motivation} Per questo la posizione ha attirato particolarmente la mia attenzione, anche perché credo che le competenze che ho maturato in ${skillPhrase} possano trovare una buona applicazione nelle attività e nelle responsabilità previste dal ruolo.\n\nMi farebbe piacere se avesse modo di dare uno sguardo al mio profilo: spero possa esserci l’opportunità di approfondire ciò che potrei portare al vostro team.\n\nLa ringrazio per il tempo dedicato e le auguro una buona giornata!\n${valueOf(state.profile, "profiles", "name", "[Nome]") || "[Nome]"}`;
     return { why, gaps, angle, note };
+  }
+
+  function motivationForJob(preferences, job) {
+    const haystack = `${jobTitle(job)} ${companyNameForJob(job)} ${valueOf(job, "jobs", "source", "")} ${jobDescriptionText(job)}`.toLowerCase();
+    const entries = String(preferences.motivations || "").split(/\r?\n/).map((line) => {
+      const separator = line.indexOf(":");
+      return separator > 0 ? [line.slice(0, separator).trim(), line.slice(separator + 1).trim()] : null;
+    }).filter((entry) => entry && entry[0] && entry[1]);
+    const match = entries.find(([sector]) => haystack.includes(sector.toLowerCase()));
+    return match?.[1] || "Sono molto interessata a questa opportunità e al contributo concreto che il ruolo può portare al team.";
   }
 
   function localCopilotDraftKey(jobId) {
@@ -1498,7 +1560,8 @@
     $("copilotAngle").value = valueOf(application, "applications", "angle", localDraft.angle || suggestions.angle);
     $("copilotCv").value = valueOf(application, "applications", "cvUsed", localDraft.cvUsed || valueOf(job, "jobs", "recommendedCv", ""));
     $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", localDraft.preparationStatus || "draft");
-    $("copilotRecruiterNote").value = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || suggestions.note);
+    const savedRecruiterNote = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || "");
+    $("copilotRecruiterNote").value = resolvedRecruiterNote(savedRecruiterNote, suggestions.note);
     $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job));
     renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
@@ -1506,6 +1569,16 @@
     saveState.classList.toggle("status-pill--neutral", !application);
     $("prepareApplicationButton").innerHTML = application ? `${icon("check")}Aggiorna application` : `${icon("sparkles")}Prepara application`;
     $("copilotSaveForLaterButton").innerHTML = `${icon("clock")}${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}`;
+  }
+
+  function isLegacyRecruiterNote(note) {
+    const normalized = String(note || "").trim().toLowerCase();
+    return normalized.startsWith("ciao [nome], ho visto la posizione")
+      || normalized.includes("mi ha colpito l’opportunità di contribuire con un approccio che unisce strategia");
+  }
+
+  function resolvedRecruiterNote(savedNote, suggestedNote) {
+    return !savedNote || isLegacyRecruiterNote(savedNote) ? suggestedNote : savedNote;
   }
 
   function renderCopilotTemplateOptions() {
@@ -2054,7 +2127,7 @@
       "",
       `ANGLE\n${valueOf(application, "applications", "angle", suggestions.angle)}`,
       "",
-      `MESSAGGIO RECRUITER\n${valueOf(application, "applications", "recruiterNote", suggestions.note)}`,
+      `MESSAGGIO RECRUITER\n${resolvedRecruiterNote(valueOf(application, "applications", "recruiterNote", ""), suggestions.note)}`,
       "",
       `COVER LETTER\n${valueOf(application, "applications", "notes", suggestedCoverLetter(job))}`,
       "",
@@ -2316,6 +2389,16 @@
   async function savePreferences(event) {
     event.preventDefault();
     if (!ensureWritable()) return;
+    const personalization = {
+      motivations: $("preferenceMotivations").value.trim(),
+      profileSkills: $("preferenceProfileSkills").value.trim()
+    };
+    try {
+      saveLocalPersonalization(personalization);
+    } catch (error) {
+      showToast("Il browser non consente il salvataggio locale della personalizzazione.", "error", "Personalizzazione non salvata");
+      return;
+    }
     const payload = {};
     setMapped(payload, "preferences", "roles", toList($("preferenceRoles").value));
     setMapped(payload, "preferences", "sectors", toList($("preferenceSectors").value));
@@ -2326,10 +2409,12 @@
     const existing = state.data.preferences[0] || null;
     setBusy($("savePreferencesButton"), true, "Salvataggio…");
     try {
-      if (existing) await updateRecord("preferences", existing.id, payload);
-      else await insertRecord("preferences", payload);
+      if (!state.optionalErrors.preferences) {
+        if (existing) await updateRecord("preferences", existing.id, payload);
+        else await insertRecord("preferences", payload);
+      }
       renderPreferences();
-      showToast("Preferenze salvate nella tabella search_preferences.", "success", "Preferenze aggiornate");
+      showToast(state.optionalErrors.preferences ? "Motivazioni e competenze salvate su questo dispositivo." : "Preferenze e personalizzazione salvate.", "success", "Preferenze aggiornate");
     } catch (error) {
       showToast(humanizeError(error, "il salvataggio delle preferenze"), "error", "Preferenze non salvate");
     } finally {

@@ -828,7 +828,7 @@
   function companyLogoContent(job) {
     const companyName = companyNameForJob(job);
     const company = getCompanyById(valueOf(job, "jobs", "companyId", ""));
-    const candidateUrl = safeExternalUrl(valueOf(company, "companies", "website", "")) || safeExternalUrl(valueOf(job, "jobs", "url", ""));
+    const candidateUrl = safeExternalUrl(valueOf(company, "companies", "website", ""));
     let logo = "";
     if (candidateUrl) {
       try {
@@ -862,10 +862,14 @@
   }
 
   function roleSummary(job) {
-    const raw = valueOf(job, "jobs", "description", "")
-      || valueOf(job, "jobs", "angle", "")
-      || valueOf(job, "jobs", "whyFit", "")
-      || `${jobTitle(job)} presso ${companyNameForJob(job)}, ${valueOf(job, "jobs", "location", "località da definire")}.`;
+    let importedDescription = "";
+    try {
+      importedDescription = window.localStorage.getItem(`jobfinder:job-description:${state.user?.id || "anonymous"}:${job.id}`) || "";
+    } catch (_error) {
+      // Continue with database fields or a factual fallback.
+    }
+    const description = valueOf(job, "jobs", "description", "") || importedDescription;
+    const raw = description || `Posizione ${jobTitle(job)} presso ${companyNameForJob(job)}, ${valueOf(job, "jobs", "location", "località non indicata")}. Annuncio pubblicato tramite ${valueOf(job, "jobs", "source", "fonte non indicata")}. Apri l’annuncio per leggere responsabilità e requisiti completi.`;
     const clean = String(raw).replace(/\s+/g, " ").trim();
     return clean.length > 220 ? `${clean.slice(0, 217).trimEnd()}…` : clean;
   }
@@ -886,8 +890,7 @@
     const current = feedbackValueForJob(jobId);
     const items = [
       ["LIKE", "thumbs-up", "LIKE"],
-      ["DISLIKE", "thumbs-down", "DISLIKE"],
-      ["PASS", "close", "PASS"]
+      ["DISLIKE", "thumbs-down", "DISLIKE"]
     ];
     return `<div class="feedback-actions">${items.map(([value, iconName, label]) => `
       <button class="feedback-button ${current === value ? "is-active" : ""}" type="button" data-action="feedback" data-id="${escapeAttribute(jobId)}" data-feedback="${value}" aria-pressed="${current === value}">
@@ -1086,6 +1089,10 @@
             <p>${escapeHtml(company)}</p>
             <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityBadge(jobPriority(job))}${easyApplyBadge(job)}</div>
           </div>
+          <div class="opportunity-card__primary-action">${hasAppliedToJob(job)
+            ? appliedStateMarkup()
+            : `<button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>`}
+          </div>
           <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
         </div>
         <div class="opportunity-card__meta">
@@ -1098,7 +1105,7 @@
           <div class="opportunity-actions">
             <button class="icon-button" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}" aria-label="Apri annuncio" title="Apri annuncio">${icon("external")}</button>
             ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
-            ${opportunityChoiceMarkup(job) || `<button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>${applicationActionButtons(job)}${saveButton(job)}`}
+            ${hasAppliedToJob(job) ? "" : `<button class="button button--warning" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}<span>${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}</span></button><button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}<span>Ho applicato</span></button>`}
             ${removeOpportunityButton(job)}
           </div>
         </div>
@@ -1426,6 +1433,26 @@
     return { why, gaps, angle, note };
   }
 
+  function localCopilotDraftKey(jobId) {
+    return `jobfinder:copilot-draft:${state.user?.id || "anonymous"}:${jobId}`;
+  }
+
+  function getLocalCopilotDraft(jobId) {
+    try {
+      return JSON.parse(window.localStorage.getItem(localCopilotDraftKey(jobId)) || "null") || {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function saveLocalCopilotDraft(jobId, draft) {
+    window.localStorage.setItem(localCopilotDraftKey(jobId), JSON.stringify(draft));
+  }
+
+  function clearLocalCopilotDraft(jobId) {
+    window.localStorage.removeItem(localCopilotDraftKey(jobId));
+  }
+
   function renderCopilot() {
     const job = getJobById(state.selectedJobId);
     const empty = $("copilotEmpty");
@@ -1439,6 +1466,7 @@
     empty.classList.add("is-hidden");
     content.classList.remove("is-hidden");
     const application = getApplicationForJob(job.id);
+    const localDraft = application ? {} : getLocalCopilotDraft(job.id);
     const suggestions = suggestedCopilotContent(job);
     const company = companyNameForJob(job);
     $("copilotCompanyLogo").innerHTML = companyLogoContent(job);
@@ -1448,16 +1476,16 @@
     $("copilotPriority").textContent = titleCase(jobPriority(job));
     $("copilotStatus").textContent = jobStatus(job);
     $("copilotLocation").textContent = valueOf(job, "jobs", "location", "Non indicata");
-    $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", suggestions.why);
-    $("copilotGaps").value = valueOf(application, "applications", "gaps", suggestions.gaps);
-    $("copilotAngle").value = valueOf(application, "applications", "angle", suggestions.angle);
-    $("copilotCv").value = valueOf(application, "applications", "cvUsed", valueOf(job, "jobs", "recommendedCv", ""));
-    $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", "draft");
-    $("copilotRecruiterNote").value = valueOf(application, "applications", "recruiterNote", suggestions.note);
-    $("copilotCoverLetter").value = valueOf(application, "applications", "notes", suggestedCoverLetter(job));
+    $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", localDraft.whyFit || suggestions.why);
+    $("copilotGaps").value = valueOf(application, "applications", "gaps", localDraft.gaps || suggestions.gaps);
+    $("copilotAngle").value = valueOf(application, "applications", "angle", localDraft.angle || suggestions.angle);
+    $("copilotCv").value = valueOf(application, "applications", "cvUsed", localDraft.cvUsed || valueOf(job, "jobs", "recommendedCv", ""));
+    $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", localDraft.preparationStatus || "draft");
+    $("copilotRecruiterNote").value = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || suggestions.note);
+    $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job));
     renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
-    saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : "Nuova application";
+    saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : localDraft.savedAt ? "Bozza salvata su questo dispositivo" : "Nuova application";
     saveState.classList.toggle("status-pill--neutral", !application);
     $("prepareApplicationButton").innerHTML = application ? `${icon("check")}Aggiorna application` : `${icon("sparkles")}Prepara application`;
     $("copilotSaveForLaterButton").innerHTML = `${icon("clock")}${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}`;
@@ -2021,22 +2049,6 @@
     }
   }
 
-  function applicationDraftPayload(job, application = null) {
-    const payload = {};
-    const currentStatus = normalizeStatus(valueOf(application, "applications", "status", "DRAFT"), "DRAFT");
-    const currentPreparation = String(valueOf(application, "applications", "preparationStatus", "draft") || "draft").toLowerCase();
-    setMapped(payload, "applications", "jobId", job.id);
-    setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
-    setMapped(payload, "applications", "status", ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"].includes(currentStatus) ? currentStatus : "DRAFT");
-    setMapped(payload, "applications", "preparationStatus", ["in_progress", "ready", "submitted"].includes(currentPreparation) ? currentPreparation : "draft");
-    if (currentPreparation !== "submitted") {
-      const progress = application ? Math.min(applicationProgress(application), 85) : 20;
-      setMapped(payload, "applications", "progress", progress);
-      setMapped(payload, "applications", "appliedAt", null);
-    }
-    return payload;
-  }
-
   function recordPatch(entity, record, keys) {
     return Object.fromEntries(keys.map((key) => [fieldName(entity, key), valueOf(record, entity, key, null)]));
   }
@@ -2047,7 +2059,6 @@
     const actionKey = String(job.id);
     if (state.pendingJobActions.has(actionKey)) return;
     state.pendingJobActions.add(actionKey);
-    const application = getApplicationForJob(job.id);
     const previousJob = recordPatch("jobs", job, ["saved", "status"]);
     const jobPatch = { [fieldName("jobs", "saved")]: true };
     if (["NEW", "REVIEW"].includes(jobStatus(job))) jobPatch[fieldName("jobs", "status")] = "APPLY";
@@ -2056,8 +2067,6 @@
     try {
       await updateRecord("jobs", job.id, jobPatch);
       jobUpdated = true;
-      if (application) await updateRecord("applications", application.id, applicationDraftPayload(job, application));
-      else await insertRecord("applications", applicationDraftPayload(job));
       renderAll();
       showToast("Salvata per applicare più tardi", "success", "Opportunità salvata");
     } catch (error) {
@@ -2077,15 +2086,12 @@
     const actionKey = String(job.id);
     if (state.pendingJobActions.has(actionKey)) return;
     state.pendingJobActions.add(actionKey);
-    const application = getApplicationForJob(job.id);
     setBusy(button, true, "Apertura…");
     try {
       await updateRecord("jobs", job.id, {
         [fieldName("jobs", "status")]: "APPLY",
         [fieldName("jobs", "saved")]: false
       });
-      if (application) await updateRecord("applications", application.id, applicationDraftPayload(job, application));
-      else await insertRecord("applications", applicationDraftPayload(job));
       renderAll();
       openCopilot(job.id);
       showToast("Scelta salvata: le altre opzioni sono state nascoste.", "success", "Candidatura in preparazione");
@@ -2119,11 +2125,20 @@
 
   function appliedApplicationPayload(job, application) {
     const payload = {};
+    const localDraft = application ? {} : getLocalCopilotDraft(job.id);
     setMapped(payload, "applications", "jobId", job.id);
     setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
     setMapped(payload, "applications", "status", "APPLIED");
     setMapped(payload, "applications", "progress", 100);
     setMapped(payload, "applications", "preparationStatus", "submitted");
+    if (!application && Object.keys(localDraft).length) {
+      setMapped(payload, "applications", "cvUsed", localDraft.cvUsed || null);
+      setMapped(payload, "applications", "whyFit", localDraft.whyFit || null);
+      setMapped(payload, "applications", "gaps", localDraft.gaps || null);
+      setMapped(payload, "applications", "angle", localDraft.angle || null);
+      setMapped(payload, "applications", "recruiterNote", localDraft.recruiterNote || null);
+      setMapped(payload, "applications", "notes", localDraft.notes || null);
+    }
     if (!valueOf(application, "applications", "appliedAt", "")) setMapped(payload, "applications", "appliedAt", new Date().toISOString());
     return payload;
   }
@@ -2162,6 +2177,7 @@
         throw jobError;
       }
       renderAll();
+      clearLocalCopilotDraft(job.id);
       showToast("Candidatura registrata come inviata", "success", "Application aggiornata");
       openFollowupPrompt(savedApplication);
     } finally {
@@ -2236,8 +2252,23 @@
 
     setBusy($("prepareApplicationButton"), true, application ? "Aggiornamento…" : "Preparazione…");
     try {
-      if (application) await updateRecord("applications", application.id, payload);
-      else await insertRecord("applications", payload);
+      if (!application && preparationStatus !== "submitted") {
+        saveLocalCopilotDraft(job.id, {
+          cvUsed: $("copilotCv").value || "",
+          whyFit: $("copilotWhyFit").value.trim(),
+          gaps: $("copilotGaps").value.trim(),
+          angle: $("copilotAngle").value.trim(),
+          recruiterNote: $("copilotRecruiterNote").value.trim(),
+          notes: $("copilotCoverLetter").value.trim(),
+          preparationStatus,
+          savedAt: new Date().toISOString()
+        });
+      } else if (application) {
+        await updateRecord("applications", application.id, payload);
+      } else {
+        await insertRecord("applications", payload);
+        clearLocalCopilotDraft(job.id);
+      }
 
       const currentJobStatus = jobStatus(job);
       const desiredJobStatus = preparationStatus === "submitted" ? "APPLIED" : ["NEW", "REVIEW"].includes(currentJobStatus) ? "APPLY" : currentJobStatus;
@@ -2249,7 +2280,8 @@
         }
       }
       renderAll();
-      showToast(application ? "Application aggiornata su Supabase." : "Application creata su Supabase.", "success", "Preparazione salvata");
+      const locallySaved = !application && preparationStatus !== "submitted";
+      showToast(locallySaved ? "Bozza salvata su questo dispositivo. Il record application verrà creato solo quando la segni come inviata." : application ? "Application aggiornata su Supabase." : "Application inviata e creata su Supabase.", "success", "Preparazione salvata");
     } catch (error) {
       showToast(humanizeError(error, "la preparazione dell’application"), "error", "Application non salvata");
     } finally {
@@ -2587,6 +2619,11 @@
     setMapped(payload, "jobs", "gaps", analysis.gaps);
     setMapped(payload, "jobs", "angle", analysis.angle);
     const created = await insertRecord("jobs", payload);
+    try {
+      window.localStorage.setItem(`jobfinder:job-description:${state.user?.id || "anonymous"}:${created.id}`, description);
+    } catch (_error) {
+      // The job is still usable when local browser storage is unavailable.
+    }
     closeDialog();
     renderAll();
     openCopilot(created.id);

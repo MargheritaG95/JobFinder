@@ -893,8 +893,46 @@
   }
 
   function jobStatus(job) {
-    const status = normalizeStatus(valueOf(job, "jobs", "status", "NEW"));
+    const application = getApplicationForJob(job?.id);
+    const applicationStatus = normalizeStatus(valueOf(application, "applications", "status", ""), "");
+    const status = PIPELINE_STATES.includes(applicationStatus)
+      ? applicationStatus
+      : normalizeStatus(valueOf(job, "jobs", "status", "NEW"));
     return PIPELINE_STATES.includes(status) ? status : "NEW";
+  }
+
+  function applicationStatusForDatabase(status) {
+    const normalized = normalizeStatus(status, "DRAFT");
+    return { DRAFT: "draft", APPLY: "draft", APPLIED: "applied", CONTACTED: "contacted", INTERVIEW: "interview", OFFER: "offer", CLOSED: "closed" }[normalized] || normalized.toLowerCase();
+  }
+
+  function applicationStatusCandidates(status) {
+    const normalized = normalizeStatus(status, "DRAFT");
+    const aliases = {
+      DRAFT: ["draft", "in_progress", "DRAFT"], APPLIED: ["applied", "submitted", "APPLIED"],
+      CONTACTED: ["contacted", "screening", "CONTACTED"], INTERVIEW: ["interview", "interviewing", "INTERVIEW"],
+      OFFER: ["offer", "offered", "OFFER"], CLOSED: ["closed", "rejected", "withdrawn", "CLOSED"]
+    };
+    return [...new Set(aliases[normalized] || [applicationStatusForDatabase(normalized)])];
+  }
+
+  function isApplicationStatusConstraintError(error) {
+    const message = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+    return message.includes("applications_status_check") || (String(error?.code || "") === "23514" && message.includes("status"));
+  }
+
+  async function writeApplicationRecord(mode, recordId, payload, logicalStatus) {
+    let lastError = null;
+    for (const candidate of applicationStatusCandidates(logicalStatus)) {
+      try {
+        const compatiblePayload = { ...payload, [fieldName("applications", "status")]: candidate };
+        return mode === "update" ? await updateRecord("applications", recordId, compatiblePayload) : await insertRecord("applications", compatiblePayload);
+      } catch (error) {
+        lastError = error;
+        if (!isApplicationStatusConstraintError(error)) throw error;
+      }
+    }
+    throw lastError || new Error("Lo stato della candidatura non è compatibile con la configurazione del database.");
   }
 
   function jobPriority(job) {
@@ -1061,7 +1099,7 @@
     ];
     const matched = summaries.find(([pattern]) => pattern.test(normalized));
     const summary = matched?.[1] || "Coordinare le attività chiave del ruolo, collaborare con gli stakeholder, gestire priorità e deliverable e contribuire con risultati misurabili agli obiettivi del team.";
-    return `Sintesi dedotta dal titolo “${title}” in ${company}: ${summary}`;
+    return `${summary} In ${company}, la posizione richiede di comprendere rapidamente il contesto aziendale, trasformare le priorità in azioni concrete e comunicare con chiarezza avanzamento, decisioni e impatto generato.`;
   }
 
   function roleSummary(job) {
@@ -1377,7 +1415,7 @@
     }
     $("applicationsList").innerHTML = `
       ${errorNotice}
-      ${missing ? `<div class="notice notice--warning application-data-warning"><strong>${missing} ${missing === 1 ? "candidatura richiede" : "candidature richiedono"} attenzione</strong><span>Il job è registrato come APPLIED, ma Supabase non ha creato il record application. Usa “Registra ora”; se fallisce, controlla grant e policy RLS della tabella applications.</span></div>` : ""}
+      ${missing ? `<div class="notice notice--warning application-data-warning"><strong>${missing} ${missing === 1 ? "candidatura da riallineare" : "candidature da riallineare"}</strong><span>Questi sono record creati prima della correzione. Puoi ripararli insieme senza modificare gli annunci.</span><button class="button button--warning" type="button" data-action="repair-applications">Ripara tutti</button></div>` : ""}
       <table class="data-table">
         <thead><tr><th>Azienda / ruolo</th><th>Status</th><th>Data invio</th><th>Materiali</th><th>Prossima azione</th><th></th></tr></thead>
         <tbody>${entries.map(renderApplicationRow).join("")}</tbody>
@@ -2115,6 +2153,9 @@
         case "mark-applied":
           await markAsApplied(id || state.selectedJobId, trigger);
           break;
+        case "repair-applications":
+          await repairMissingApplications(trigger);
+          break;
         case "open-job":
           openJob(id || state.selectedJobId);
           break;
@@ -2460,7 +2501,7 @@
     const localDraft = application ? {} : getLocalCopilotDraft(job.id);
     setMapped(payload, "applications", "jobId", job.id);
     setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
-    setMapped(payload, "applications", "status", "APPLIED");
+    setMapped(payload, "applications", "status", applicationStatusForDatabase("APPLIED"));
     setMapped(payload, "applications", "progress", 100);
     setMapped(payload, "applications", "preparationStatus", "submitted");
     if (!application && Object.keys(localDraft).length) {
@@ -2488,14 +2529,10 @@
     try {
       try {
         savedApplication = existingApplication
-          ? await updateRecord("applications", existingApplication.id, appliedApplicationPayload(job, existingApplication))
-          : await insertRecord("applications", appliedApplicationPayload(job, null));
+          ? await writeApplicationRecord("update", existingApplication.id, appliedApplicationPayload(job, existingApplication), "APPLIED")
+          : await writeApplicationRecord("insert", null, appliedApplicationPayload(job, null), "APPLIED");
       } catch (applicationError) {
-        if (existingApplication) throw applicationError;
-        await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: "APPLIED" });
-        renderAll();
-        showToast(`Il job è registrato come APPLIED, ma il record application non è stato creato: ${humanizeError(applicationError, "la creazione dell’application")}`, "warning", "Candidatura da completare");
-        return;
+        throw new Error(`La candidatura non è stata modificata perché il record application non è stato salvato. ${humanizeError(applicationError, "la creazione dell’application")}`);
       }
       try {
         await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: "APPLIED" });
@@ -2516,6 +2553,28 @@
       state.pendingJobActions.delete(actionKey);
       setBusy(button, false);
     }
+  }
+
+  async function repairMissingApplications(button) {
+    const missingJobs = applicationRegisterEntries().filter((entry) => entry.missingRecord && entry.job).map((entry) => entry.job);
+    if (!missingJobs.length || !ensureWritable()) return;
+    setBusy(button, true, `Riparazione 0/${missingJobs.length}`);
+    let repaired = 0;
+    const errors = [];
+    for (const job of missingJobs) {
+      try {
+        await writeApplicationRecord("insert", null, appliedApplicationPayload(job, null), "APPLIED");
+        repaired += 1;
+        button.innerHTML = `<span class="spinner spinner--button"></span>Riparazione ${repaired}/${missingJobs.length}`;
+      } catch (error) {
+        errors.push(`${jobTitle(job)}: ${humanizeError(error, "la creazione dell’application")}`);
+      }
+    }
+    await loadAllData({ quiet: true });
+    renderAll();
+    setBusy(button, false);
+    if (errors.length) showToast(`${repaired} riparate, ${errors.length} non riuscite. ${errors[0]}`, "warning", "Riparazione parziale");
+    else showToast(`${repaired} candidature riallineate in tutte le pagine.`, "success", "Dati sincronizzati");
   }
 
   function openFollowupPrompt(application) {
@@ -2569,7 +2628,7 @@
     const preservedStatus = ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"].includes(currentApplicationStatus)
       ? currentApplicationStatus
       : "DRAFT";
-    setMapped(payload, "applications", "status", preparationStatus === "submitted" ? "APPLIED" : preservedStatus);
+    setMapped(payload, "applications", "status", applicationStatusForDatabase(preparationStatus === "submitted" ? "APPLIED" : preservedStatus));
     setMapped(payload, "applications", "cvUsed", $("copilotCv").value || null);
     setMapped(payload, "applications", "progress", progress);
     setMapped(payload, "applications", "whyFit", $("copilotWhyFit").value.trim());
@@ -2583,6 +2642,11 @@
     }
 
     setBusy($("prepareApplicationButton"), true, application ? "Aggiornamento…" : "Preparazione…");
+    let savedApplication = application;
+    let createdApplication = false;
+    const previousApplication = application
+      ? recordPatch("applications", application, ["status", "cvUsed", "progress", "whyFit", "gaps", "angle", "recruiterNote", "notes", "preparationStatus", "appliedAt"])
+      : null;
     try {
       if (!application && preparationStatus !== "submitted") {
         saveLocalCopilotDraft(job.id, {
@@ -2596,9 +2660,10 @@
           savedAt: new Date().toISOString()
         });
       } else if (application) {
-        await updateRecord("applications", application.id, payload);
+        savedApplication = await writeApplicationRecord("update", application.id, payload, preparationStatus === "submitted" ? "APPLIED" : preservedStatus);
       } else {
-        await insertRecord("applications", payload);
+        savedApplication = await writeApplicationRecord("insert", null, payload, preparationStatus === "submitted" ? "APPLIED" : preservedStatus);
+        createdApplication = true;
         clearLocalCopilotDraft(job.id);
       }
 
@@ -2608,7 +2673,13 @@
         try {
           await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: desiredJobStatus });
         } catch (jobError) {
-          showToast(`Application salvata, ma lo stato del job non è stato aggiornato: ${humanizeError(jobError)}`, "warning", "Salvataggio parziale");
+          try {
+            if (createdApplication && savedApplication) await deleteRecord("applications", savedApplication.id);
+            else if (application && previousApplication) await updateRecord("applications", application.id, previousApplication);
+          } catch (_rollbackError) {
+            await loadAllData({ quiet: true });
+          }
+          throw new Error(`Nessun dato è stato modificato perché la sincronizzazione del job è fallita. ${humanizeError(jobError)}`);
         }
       }
       renderAll();
@@ -2801,7 +2872,7 @@
       body: `
         <form class="form-stack" data-dialog-form="application-status" data-record-id="${escapeAttribute(application.id)}">
           <label class="field"><span>Nuovo stato</span><select name="status">${choices.map((status) => optionMarkup(status, titleCase(status), current)).join("")}</select></label>
-          <label class="switch-control"><span><strong>Sincronizza la pipeline</strong><small>Aggiorna anche lo stato del job collegato, se compatibile.</small></span><input name="sync_job" type="checkbox" checked /><i></i></label>
+          <p class="notice notice--info"><strong>Sincronizzazione automatica</strong><span>Il nuovo stato verrà mostrato in Dashboard, Opportunità, Pipeline e Le mie Application.</span></p>
           <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--primary" type="submit">${icon("check")}Aggiorna stato</button></div>
         </form>
       `
@@ -3063,24 +3134,24 @@
     const values = new FormData(form);
     const status = normalizeStatus(values.get("status"), "DRAFT");
     const progressByStatus = { DRAFT: 20, APPLIED: 100, CONTACTED: 100, INTERVIEW: 100, OFFER: 100, CLOSED: 100 };
-    const payload = { [fieldName("applications", "status")]: status };
+    const previousApplication = recordPatch("applications", application, ["status", "progress", "appliedAt"]);
+    const payload = { [fieldName("applications", "status")]: applicationStatusForDatabase(status) };
     if (progressByStatus[status] !== undefined) payload[fieldName("applications", "progress")] = progressByStatus[status];
     if (status === "APPLIED" && !valueOf(application, "applications", "appliedAt", "")) payload[fieldName("applications", "appliedAt")] = new Date().toISOString();
-    await updateRecord("applications", application.id, payload);
+    await writeApplicationRecord("update", application.id, payload, status);
 
-    if (values.get("sync_job") === "on" && PIPELINE_STATES.includes(status)) {
-      const job = getJobById(valueOf(application, "applications", "jobId", ""));
-      if (job) {
-        try {
-          await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: status });
-        } catch (error) {
-          showToast(`Application aggiornata, ma la pipeline no: ${humanizeError(error)}`, "warning", "Sincronizzazione parziale");
-        }
+    const job = getJobById(valueOf(application, "applications", "jobId", ""));
+    if (job && PIPELINE_STATES.includes(status)) {
+      try {
+        await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: status });
+      } catch (error) {
+        try { await updateRecord("applications", application.id, previousApplication); } catch (_rollbackError) { await loadAllData({ quiet: true }); }
+        throw new Error(`Nessuno stato è stato modificato perché la sincronizzazione della pipeline è fallita. ${humanizeError(error)}`);
       }
     }
     closeDialog();
     renderAll();
-    showToast(`Stato application aggiornato a ${status}.`, "success", "Application aggiornata");
+    showToast(`Stato aggiornato a ${status} in tutte le pagine.`, "success", "Application sincronizzata");
   }
 
   async function submitApplicationNoteForm(form) {

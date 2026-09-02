@@ -104,7 +104,7 @@ window.JOBFINDER_CONFIG = {
       answerBank: {
         title: "title",
         category: "category",
-        content: "content",
+        content: "canonical_answer",
         updatedAt: "updated_at"
       },
       preferences: {

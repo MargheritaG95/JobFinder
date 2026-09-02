@@ -1085,19 +1085,17 @@
     const fit = jobFit(job);
     const location = valueOf(job, "jobs", "location", "Location non indicata");
     const source = valueOf(job, "jobs", "source", "Source non indicata");
+    const decision = opportunityChoiceMarkup(job);
     return `
-      <article class="opportunity-card">
-        <div class="opportunity-card__top">
+      <article class="opportunity-card opportunity-card--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
+        <div class="opportunity-card__top ${decision ? "opportunity-card__top--decided" : ""}">
           <div class="company-logo">${companyLogoContent(job)}</div>
           <div class="opportunity-copy">
             <h3>${escapeHtml(jobTitle(job))}</h3>
             <p>${escapeHtml(company)}</p>
             <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityBadge(jobPriority(job))}${easyApplyBadge(job)}</div>
           </div>
-          <div class="opportunity-card__primary-action">${hasAppliedToJob(job)
-            ? appliedStateMarkup()
-            : `<button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}">Applica ora ${icon("arrow-right")}</button>`}
-          </div>
+          ${decision ? `<div class="opportunity-card__primary-action">${decision}</div>` : ""}
           <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
         </div>
         <div class="opportunity-card__meta">
@@ -1610,8 +1608,8 @@
     });
     document.addEventListener("click", handleDelegatedClick);
     document.addEventListener("keydown", (event) => {
-      const clickableOpportunity = event.target.closest?.(".top-opportunity--clickable");
-      if (clickableOpportunity && ["Enter", " "].includes(event.key)) {
+      const clickableOpportunity = event.target.closest?.(".top-opportunity--clickable, .opportunity-card--clickable");
+      if (clickableOpportunity && event.target === clickableOpportunity && ["Enter", " "].includes(event.key)) {
         event.preventDefault();
         clickableOpportunity.click();
       }

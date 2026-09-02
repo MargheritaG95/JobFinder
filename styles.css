@@ -1539,9 +1539,28 @@ textarea::placeholder {
 
 .opportunity-card__top {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 13px;
+}
+
+.opportunity-card__top--decided {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.opportunity-card--clickable {
+  cursor: pointer;
+}
+
+.opportunity-card--clickable:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 2px;
+  border-color: var(--blue-500);
+}
+
+.opportunity-card--clickable button,
+.opportunity-card--clickable a {
+  cursor: pointer;
 }
 
 .opportunity-card__primary-action {

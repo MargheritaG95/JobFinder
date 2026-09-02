@@ -1211,6 +1211,61 @@ textarea::placeholder {
   border-top: 0;
 }
 
+.top-opportunity--clickable {
+  padding-inline: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.18s;
+}
+
+.top-opportunity--clickable:hover,
+.top-opportunity--clickable:focus-visible {
+  outline: 0;
+  background: #f7f9fd;
+  transform: translateX(2px);
+}
+
+.top-opportunity__decision {
+  display: flex;
+  align-items: center;
+}
+
+.dashboard-opportunity-section {
+  display: grid;
+  gap: 7px;
+}
+
+.dashboard-opportunity-section--evaluated {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.dashboard-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-section-heading h3 {
+  margin: 0;
+  color: #364258;
+  font-size: 0.78rem;
+}
+
+.dashboard-section-heading span {
+  display: grid;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--blue-600);
+  background: var(--blue-50);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
 .company-logo {
   position: relative;
   overflow: hidden;
@@ -2318,6 +2373,7 @@ textarea::placeholder {
   .panel, .preferences-card, .copilot-form { padding: 17px; }
   .top-opportunity { grid-template-columns: auto minmax(0, 1fr) auto; }
   .top-opportunity .fit-score { grid-column: 2; justify-items: start; }
+  .top-opportunity__decision { grid-column: 3; grid-row: 1 / span 2; }
   .top-opportunity .opportunity-actions { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; }
   .top-opportunity .opportunity-actions .button span { display: none; }
   .attention-list { grid-template-columns: 1fr; }
@@ -2361,6 +2417,7 @@ textarea::placeholder {
   .filter-bar { grid-template-columns: 1fr; }
   .filter-bar .button { grid-column: auto; }
   .top-opportunity { grid-template-columns: auto minmax(0, 1fr); }
+  .top-opportunity__decision { grid-column: 1 / -1; grid-row: auto; justify-content: flex-end; }
   .top-opportunity .opportunity-actions { grid-column: 1 / -1; grid-row: auto; flex-direction: row; justify-content: flex-end; }
 }
 

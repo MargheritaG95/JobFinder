@@ -2143,6 +2143,37 @@ textarea::placeholder {
   padding: 25px;
 }
 
+.copilot-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-left: auto;
+}
+
+.copilot-language-compact {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.copilot-language-compact select {
+  width: 58px;
+  min-height: 30px;
+  padding: 4px 22px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  background-color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
 .copilot-role-brief {
   margin: 0 0 12px;
   padding: 14px 16px;

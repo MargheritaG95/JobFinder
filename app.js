@@ -1777,7 +1777,7 @@
     $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job, language));
     const coverTemplate = coverLetterResource(language);
     $("copilotCoverLetterSource").textContent = coverTemplate
-      ? `Adattata dalla risorsa “${valueOf(coverTemplate, "answerBank", "title", "Cover letter")}” e completata secondo le linee guida.`
+      ? `Ispirata alla risorsa “${valueOf(coverTemplate, "answerBank", "title", "Cover letter")}”, adattata all’annuncio e completata secondo le linee guida.`
       : "Nessuna risorsa Cover letter trovata: viene usata la struttura guidata predefinita.";
     renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
@@ -2269,7 +2269,7 @@
     $("copilotCoverLetter").value = suggestedCoverLetter(job, language);
     const coverTemplate = coverLetterResource(language);
     $("copilotCoverLetterSource").textContent = coverTemplate
-      ? `Adattata dalla risorsa “${valueOf(coverTemplate, "answerBank", "title", "Cover letter")}” e completata secondo le linee guida.`
+      ? `Ispirata alla risorsa “${valueOf(coverTemplate, "answerBank", "title", "Cover letter")}”, adattata all’annuncio e completata secondo le linee guida.`
       : "Nessuna risorsa Cover letter trovata: viene usata la struttura guidata predefinita.";
     showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
   }

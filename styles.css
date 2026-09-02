@@ -615,10 +615,10 @@ textarea::placeholder {
   align-items: center;
   gap: 7px;
   padding: 0 11px;
-  border: 1px solid #d7dee9;
+  border: 1px solid #f0cf91;
   border-radius: 9px;
-  color: #58657a;
-  background: #f7f9fc;
+  color: #84530a;
+  background: #fff8e8;
   font-size: 0.66rem;
   font-weight: 750;
 }
@@ -2227,17 +2227,19 @@ textarea::placeholder {
   background: linear-gradient(90deg, rgba(115, 95, 214, 0.07), transparent 34%);
 }
 
-.opportunity-actions--stacked {
+.opportunity-card__action-row {
+  display: flex;
   width: 100%;
-  align-items: flex-start;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.opportunity-actions__decisions {
+.opportunity-card__action-row-right {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 7px;
 }
 
@@ -2459,6 +2461,8 @@ textarea::placeholder {
   .opportunity-card__primary-action { grid-column: 2 / -1; }
   .opportunity-card__footer { align-items: stretch; flex-direction: column; }
   .opportunity-card__footer .opportunity-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; }
+  .opportunity-card__action-row { align-items: stretch; flex-direction: column; }
+  .opportunity-card__action-row-right { justify-content: flex-start; }
   .feedback-actions { justify-content: space-between; }
   .feedback-button { flex: 1; justify-content: center; }
 

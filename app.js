@@ -2,10 +2,9 @@
   "use strict";
 
   const CONFIG = window.JOBFINDER_CONFIG || {};
-  const PIPELINE_STATES = ["NEW", "REVIEW", "APPLY", "APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"];
+  const PIPELINE_STATES = ["NEW", "APPLY", "APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"];
   const PIPELINE_COLORS = {
     NEW: "#7f8da3",
-    REVIEW: "#4e83d9",
     APPLY: "#735fd6",
     APPLIED: "#9962cf",
     CONTACTED: "#d28a31",
@@ -124,7 +123,8 @@
       .replaceAll("-", "_")
       .replaceAll(" ", "_");
     const aliases = {
-      TO_REVIEW: "REVIEW",
+      TO_REVIEW: "NEW",
+      REVIEW: "NEW",
       READY_TO_APPLY: "APPLY",
       IN_PROGRESS: "APPLY",
       SUBMITTED: "APPLIED",
@@ -235,9 +235,12 @@
     return { score: Math.round(score * 10) / 10, why, gaps, angle, matches: strongest };
   }
 
-  function suggestedCoverLetter(job) {
-    const suggestions = suggestedCopilotContent(job);
+  function suggestedCoverLetter(job, language = "it") {
+    const suggestions = suggestedCopilotContent(job, language);
     const name = valueOf(state.profile, "profiles", "name", "").trim() || "[Nome e cognome]";
+    if (language === "en") {
+      return `Dear ${companyNameForJob(job)} Hiring Team,\n\nI am writing to apply for the ${jobTitle(job)} position. ${suggestions.why}\n\n${suggestions.angle}\n\nI would welcome the opportunity to discuss how my experience could contribute to the role and to ${companyNameForJob(job)}'s goals.\n\nKind regards,\n${name}`;
+    }
     return `Gentile team di selezione di ${companyNameForJob(job)},\n\nvorrei candidarmi per la posizione di ${jobTitle(job)}. ${suggestions.why}\n\n${suggestions.angle}\n\nSarei felice di approfondire come la mia esperienza possa contribuire agli obiettivi del ruolo.\n\nCordiali saluti,\n${name}`;
   }
 
@@ -409,7 +412,7 @@
       ],
       jobs: [
         { id: "j1", user_id: "demo-user", company_id: "c1", company_name: "Banca Generali", title: "AI Product Manager", location: "Milano · Hybrid", fit_score: 9.6, status: "NEW", priority: "HIGH", source: "LinkedIn", url: "https://example.com", is_saved: true, why_fit: "Esperienza trasversale tra strategia, customer experience e adozione AI.", gaps: "Approfondire i requisiti regolamentari del settore wealth management.", angle: "Portare l’AI dalla strategia all’adozione misurabile, con forte attenzione al cliente.", recommended_cv: "AI / Strategy" },
-        { id: "j2", user_id: "demo-user", company_id: "c2", company_name: "Motor Valley Labs", title: "Business Transformation Lead", location: "Modena · Hybrid", fit_score: 8.8, status: "REVIEW", priority: "HIGH", source: "Company site", url: "https://example.com", is_saved: false },
+        { id: "j2", user_id: "demo-user", company_id: "c2", company_name: "Motor Valley Labs", title: "Business Transformation Lead", location: "Modena · Hybrid", fit_score: 8.8, status: "NEW", priority: "HIGH", source: "JobTeaser", url: "https://example.com", is_saved: false },
         { id: "j3", user_id: "demo-user", company_id: "c3", company_name: "Cloud North", title: "Customer Success Strategy Manager", location: "Remote EU", fit_score: 8.2, status: "APPLIED", priority: "MEDIUM", source: "Referral", url: "https://example.com", is_saved: true },
         { id: "j4", user_id: "demo-user", company_name: "PlayForge", title: "Customer Insights Lead", location: "Milano", fit_score: 7.5, status: "INTERVIEW", priority: "MEDIUM", source: "LinkedIn", url: "", is_saved: false }
       ],
@@ -899,6 +902,23 @@
     return String(valueOf(job, "jobs", "description", "") || importedDescription).replace(/\s+/g, " ").trim();
   }
 
+  function salaryFromJob(job) {
+    const description = jobDescriptionText(job);
+    if (!description) return "";
+    const patterns = [
+      /(?:ral|retribuzione|stipendio|salary|compensation|pay range|base salary)\s*[:\-–—]?\s*((?:€|eur|£|gbp|\$|usd)?\s*\d{2,3}(?:[.,]\d{3})?(?:\s*[kK])?\s*(?:[-–—]|to|a)\s*(?:€|eur|£|gbp|\$|usd)?\s*\d{2,3}(?:[.,]\d{3})?(?:\s*[kK])?(?:\s*(?:annui|annuo|per year|yearly|p\.a\.))?)/i,
+      /((?:€|eur|£|gbp|\$|usd)\s*\d{2,3}(?:[.,]\d{3})?(?:\s*[kK])?\s*(?:[-–—]|to|a)\s*(?:€|eur|£|gbp|\$|usd)?\s*\d{2,3}(?:[.,]\d{3})?(?:\s*[kK])?(?:\s*(?:annui|annuo|per year|yearly|p\.a\.))?)/i,
+      /(?:ral|retribuzione|stipendio|salary|compensation)\s*[:\-–—]?\s*((?:€|eur|£|gbp|\$|usd)?\s*\d{2,3}(?:[.,]\d{3})?(?:\s*[kK])?(?:\s*(?:annui|annuo|per year|yearly|p\.a\.))?)/i
+    ];
+    const match = patterns.map((pattern) => description.match(pattern)).find(Boolean);
+    return match ? match[1].replace(/\s+/g, " ").trim() : "";
+  }
+
+  function salaryMarkup(job) {
+    const salary = salaryFromJob(job);
+    return salary ? `<span class="opportunity-salary">${icon("briefcase")}RAL / stipendio: ${escapeHtml(salary)}</span>` : "";
+  }
+
   function responsibilitySummary(job, limit = 260) {
     const description = jobDescriptionText(job);
     if (!description) return inferredRoleSummary(job);
@@ -1038,7 +1058,7 @@
     const visibleJobs = jobs.filter((job) => jobStatus(job) !== "CLOSED");
     const isEvaluated = (job) => hasAppliedToJob(job)
       || Boolean(valueOf(job, "jobs", "saved", false))
-      || !["NEW", "REVIEW"].includes(jobStatus(job))
+      || jobStatus(job) !== "NEW"
       || Boolean(feedbackValueForJob(job.id));
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
     const newJobs = visibleJobs.filter((job) => !isEvaluated(job)).sort(byNewest).slice(0, 6);
@@ -1163,6 +1183,7 @@
         <div class="opportunity-card__meta">
           <span>${icon("building")}${escapeHtml(location)}</span>
           <span>${icon("link")}${escapeHtml(source)}</span>
+          ${salaryMarkup(job)}
         </div>
         <div class="opportunity-card__role-summary"><strong>Responsabilità principali</strong><p class="opportunity-card__description">${escapeHtml(roleSummary(job))}</p></div>
         <div class="opportunity-card__footer">
@@ -1489,7 +1510,7 @@
     `).join("");
   }
 
-  function suggestedCopilotContent(job) {
+  function suggestedCopilotContent(job, language = "it") {
     const preferences = currentPreferences();
     const company = companyNameForJob(job);
     const role = jobTitle(job);
@@ -1497,18 +1518,22 @@
     const location = valueOf(job, "jobs", "location", "");
     const source = valueOf(job, "jobs", "source", "");
     const fit = jobFit(job);
-    const why = valueOf(job, "jobs", "whyFit", "") || `Fit ${fit.toFixed(1)}/10. Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`;
-    const gaps = valueOf(job, "jobs", "gaps", "") || "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.";
-    const angle = valueOf(job, "jobs", "angle", "") || `Posizionati come ponte tra obiettivi di business, bisogni del cliente e trasformazione operativa. Collega ogni affermazione a un risultato e mostra perché questo approccio è rilevante per ${company}.`;
+    const why = language === "en" ? `Fit ${fit.toFixed(1)}/10. The ${role} role is aligned with the target profile${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Highlight measurable outcomes, the ability to connect strategy with execution, and customer impact.` : valueOf(job, "jobs", "whyFit", "") || `Fit ${fit.toFixed(1)}/10. Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`;
+    const gaps = language === "en" ? "Check which technical or industry requirements are not yet covered by your profile. Address any gaps through relevant transferable experience and a concrete learning plan." : valueOf(job, "jobs", "gaps", "") || "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.";
+    const angle = language === "en" ? `Position yourself as the link between business goals, customer needs, and operational transformation. Support each statement with an outcome and explain why this approach is relevant to ${company}.` : valueOf(job, "jobs", "angle", "") || `Posizionati come ponte tra obiettivi di business, bisogni del cliente e trasformazione operativa. Collega ogni affermazione a un risultato e mostra perché questo approccio è rilevante per ${company}.`;
     const motivation = motivationForJob(preferences, job);
     const evidence = relevantCvEvidence(preferences, job);
     const skills = toList(preferences.profileSkills).slice(0, 4);
     const competenceSentence = evidence
-      ? `Nel mio percorso ho maturato esperienze particolarmente pertinenti: ${evidence}`
+      ? language === "en" ? `My background includes experience that is particularly relevant to this role: ${evidence}` : `Nel mio percorso ho maturato esperienze particolarmente pertinenti: ${evidence}`
       : skills.length
-        ? `Credo inoltre che il mio background in ${naturalList(skills)} sia coerente con le attività e le responsabilità previste dal ruolo.`
-        : "Prima dell’invio, aggiungi qui una competenza o un risultato concreto pertinente al ruolo: [competenza o risultato dal CV].";
-    const valuesAlignment = companyValuesAlignment(preferences, job);
+        ? language === "en" ? `I also believe that my background in ${naturalListEnglish(skills)} is well aligned with the responsibilities of the role.` : `Credo inoltre che il mio background in ${naturalList(skills)} sia coerente con le attività e le responsabilità previste dal ruolo.`
+        : language === "en" ? "Before sending, add a relevant skill or measurable result from your CV: [skill or result]." : "Prima dell’invio, aggiungi qui una competenza o un risultato concreto pertinente al ruolo: [competenza o risultato dal CV].";
+    const valuesAlignment = companyValuesAlignment(preferences, job, language);
+    if (language === "en") {
+      const note = `Hello [Name],\n\nI hope you do not mind me contacting you directly. I recently applied for the ${role} position at ${company} and wanted to introduce myself briefly.\n\n${roleBasedMotivationEnglish(job)}\n\n${competenceSentence}\n\n${valuesAlignment}\n\nI would be grateful if you had the opportunity to review my profile, and I would be happy to discuss the contribution I could bring to the team.\n\nThank you for your time.\nBest regards,\n${valueOf(state.profile, "profiles", "name", "[Name]") || "[Name]"}`;
+      return { why, gaps, angle, note };
+    }
     const note = `Buongiorno [Nome],\n\nspero non le dispiaccia se la contatto direttamente. Ho recentemente inviato la mia candidatura per la posizione di ${role} presso ${company} e desideravo presentarmi brevemente.\n\n${motivation}\n\n${competenceSentence}\n\n${valuesAlignment}\n\nSe avesse modo di valutare il mio profilo, sarei felice di approfondire il contributo che potrei portare al team.\n\nLa ringrazio per il tempo dedicato e le auguro una buona giornata.\n${valueOf(state.profile, "profiles", "name", "[Nome]") || "[Nome]"}`;
     return { why, gaps, angle, note };
   }
@@ -1533,6 +1558,16 @@
     return "La posizione ha attirato la mia attenzione per le responsabilità previste e per la possibilità di contribuire concretamente agli obiettivi del team.";
   }
 
+  function roleBasedMotivationEnglish(job) {
+    const role = jobTitle(job).toLowerCase();
+    if (/customer success|client success/.test(role)) return "I am particularly interested in this opportunity because it combines customer relationships, a strong understanding of client goals, and the ability to turn product adoption into tangible outcomes.";
+    if (/transformation|program(?:me)? manager/.test(role)) return "I am particularly interested in the opportunity to lead complex transformation initiatives, aligning people, priorities, and execution around measurable outcomes.";
+    if (/product manager|product owner/.test(role)) return "I am particularly interested in the opportunity to connect user needs, business priorities, and product execution.";
+    if (/strategy|strategic/.test(role)) return "I am particularly interested in the opportunity to turn analysis and strategic priorities into concrete decisions and initiatives.";
+    if (/business analy|data analy|insight/.test(role)) return "I am particularly interested in the way this role combines analysis, business understanding, and the ability to turn data into actionable decisions.";
+    return "This opportunity caught my attention because of its responsibilities and the possibility of contributing directly to the team's goals.";
+  }
+
   function relevantCvEvidence(preferences, job) {
     const cvText = String(preferences.profileCvText || "").trim();
     if (!cvText) return "";
@@ -1549,7 +1584,12 @@
     return `${items.slice(0, -1).join(", ")} e ${items.at(-1)}`;
   }
 
-  function companyValuesAlignment(preferences, job) {
+  function naturalListEnglish(items) {
+    if (items.length < 2) return items[0] || "";
+    return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+  }
+
+  function companyValuesAlignment(preferences, job, language = "it") {
     const company = companyNameForJob(job);
     const entries = String(preferences.companyValues || "").split(/\r?\n/).map((line) => {
       const separator = line.indexOf(":");
@@ -1559,8 +1599,9 @@
       return name && values ? { name, values, reason } : null;
     }).filter(Boolean);
     const match = entries.find((entry) => company.toLowerCase().includes(entry.name.toLowerCase()) || entry.name.toLowerCase().includes(company.toLowerCase()));
-    if (!match) return `Prima dell’invio, completa l’allineamento con i valori di ${company}: [valori aziendali verificati e perché ti rappresentano].`;
-    if (!match.reason) return `Mi ritrovo nei valori di ${company}, in particolare ${match.values}. Prima dell’invio aggiungi una prova personale: [perché questi valori ti rappresentano].`;
+    if (!match) return language === "en" ? `Before sending, complete your alignment with ${company}'s values: [verified company values and why they resonate with you].` : `Prima dell’invio, completa l’allineamento con i valori di ${company}: [valori aziendali verificati e perché ti rappresentano].`;
+    if (!match.reason) return language === "en" ? `I identify with ${company}'s values, particularly ${match.values}. Before sending, add a personal example: [why these values resonate with you].` : `Mi ritrovo nei valori di ${company}, in particolare ${match.values}. Prima dell’invio aggiungi una prova personale: [perché questi valori ti rappresentano].`;
+    if (language === "en") return `I also identify with ${company}'s values, particularly ${match.values}. ${match.reason}`;
     return `Mi ritrovo inoltre nei valori di ${company}, in particolare ${match.values}. ${match.reason}`;
   }
 
@@ -1598,7 +1639,8 @@
     content.classList.remove("is-hidden");
     const application = getApplicationForJob(job.id);
     const localDraft = application ? {} : getLocalCopilotDraft(job.id);
-    const suggestions = suggestedCopilotContent(job);
+    const language = $("copilotLanguage")?.value || "it";
+    const suggestions = suggestedCopilotContent(job, language);
     const company = companyNameForJob(job);
     $("copilotCompanyLogo").innerHTML = companyLogoContent(job);
     $("copilotRole").textContent = jobTitle(job);
@@ -1607,6 +1649,7 @@
     $("copilotPriority").textContent = titleCase(jobPriority(job));
     $("copilotStatus").textContent = jobStatus(job);
     $("copilotLocation").textContent = valueOf(job, "jobs", "location", "Non indicata");
+    $("copilotSalary").textContent = salaryFromJob(job) || "Non indicata nell’annuncio";
     $("copilotRoleBrief").textContent = responsibilitySummary(job, 620);
     $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", localDraft.whyFit || suggestions.why);
     $("copilotGaps").value = valueOf(application, "applications", "gaps", localDraft.gaps || suggestions.gaps);
@@ -1615,7 +1658,7 @@
     $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", localDraft.preparationStatus || "draft");
     const savedRecruiterNote = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || "");
     $("copilotRecruiterNote").value = resolvedRecruiterNote(savedRecruiterNote, suggestions.note);
-    $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job));
+    $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job, language));
     renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : localDraft.savedAt ? "Bozza salvata su questo dispositivo" : "Nuova application";
@@ -1742,6 +1785,7 @@
     });
     $("preferencesForm")?.addEventListener("submit", savePreferences);
     $("copilotForm")?.addEventListener("submit", saveApplicationFromCopilot);
+    $("copilotLanguage")?.addEventListener("change", regenerateCopilotTexts);
     $("closeDialogButton")?.addEventListener("click", closeDialog);
     $("appDialog")?.addEventListener("close", () => document.body.classList.remove("dialog-open"));
     $("appDialog")?.addEventListener("click", (event) => {
@@ -2093,6 +2137,19 @@
     }
   }
 
+  function regenerateCopilotTexts() {
+    const job = getJobById(state.selectedJobId);
+    if (!job) return;
+    const language = $("copilotLanguage")?.value || "it";
+    const suggestions = suggestedCopilotContent(job, language);
+    $("copilotWhyFit").value = suggestions.why;
+    $("copilotGaps").value = suggestions.gaps;
+    $("copilotAngle").value = suggestions.angle;
+    $("copilotRecruiterNote").value = suggestions.note;
+    $("copilotCoverLetter").value = suggestedCoverLetter(job, language);
+    showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
+  }
+
   function renderTemplates() {
     const templates = [...state.data.answerBank].sort((a, b) => String(valueOf(a, "answerBank", "title", "")).localeCompare(String(valueOf(b, "answerBank", "title", "")), "it"));
     $("templatesList").innerHTML = templates.length
@@ -2121,7 +2178,7 @@
       eyebrow: "DISCOVER & PRIORITIZE",
       title: "Importa e valuta un annuncio",
       body: `
-        <p class="dialog-copy">Incolla il link e il testo dell’annuncio. JobFinder evita duplicati, calcola il fit sulle tue preferenze e prepara subito la candidatura. Per LinkedIn usa il testo dell’annuncio o un alert email: non viene eseguito scraping automatico.</p>
+        <p class="dialog-copy">Incolla il link e il testo dell’annuncio da LinkedIn, JobTeaser o dal sito aziendale. JobFinder evita duplicati, calcola il fit e riconosce automaticamente fonte, Easy Apply e RAL/stipendio quando presenti.</p>
         <form class="form-stack" data-dialog-form="opportunity-import" novalidate>
           <label class="field"><span>URL annuncio</span><input name="url" type="url" required placeholder="https://azienda.com/jobs/…" /></label>
           <div class="form-grid form-grid--two">
@@ -2130,7 +2187,7 @@
           </div>
           <div class="form-grid form-grid--two">
             <label class="field"><span>Località / modalità</span><input name="location" placeholder="Milano · Hybrid" /></label>
-            <label class="field"><span>Fonte</span><select name="source"><option>Career site</option><option>LinkedIn alert</option><option>LinkedIn Easy Apply</option><option>Lever</option><option>Greenhouse</option><option>Altro</option></select></label>
+            <label class="field"><span>Fonte</span><select name="source"><option>Career site</option><option>LinkedIn alert</option><option>LinkedIn Easy Apply</option><option>JobTeaser</option><option>Lever</option><option>Greenhouse</option><option>Altro</option></select></label>
           </div>
           <label class="field"><span>Testo dell’annuncio</span><textarea name="description" rows="12" required placeholder="Incolla responsabilità, requisiti e informazioni sulla posizione…"></textarea></label>
           <div class="notice notice--info"><strong>Ranking trasparente</strong><span>Il punteggio usa ruolo, settore, località e modalità di lavoro salvati in Preferenze. Potrai correggerlo dal database senza perdere i contenuti generati.</span></div>
@@ -2212,7 +2269,7 @@
     state.pendingJobActions.add(actionKey);
     const previousJob = recordPatch("jobs", job, ["saved", "status"]);
     const jobPatch = { [fieldName("jobs", "saved")]: true };
-    if (["NEW", "REVIEW"].includes(jobStatus(job))) jobPatch[fieldName("jobs", "status")] = "APPLY";
+    if (jobStatus(job) === "NEW") jobPatch[fieldName("jobs", "status")] = "APPLY";
     setBusy(button, true, "Salvataggio…");
     let jobUpdated = false;
     try {
@@ -2422,7 +2479,7 @@
       }
 
       const currentJobStatus = jobStatus(job);
-      const desiredJobStatus = preparationStatus === "submitted" ? "APPLIED" : ["NEW", "REVIEW"].includes(currentJobStatus) ? "APPLY" : currentJobStatus;
+      const desiredJobStatus = preparationStatus === "submitted" ? "APPLIED" : currentJobStatus === "NEW" ? "APPLY" : currentJobStatus;
       if (desiredJobStatus !== currentJobStatus) {
         try {
           await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: desiredJobStatus });
@@ -2755,6 +2812,8 @@
     const location = String(values.get("location") || "").trim();
     let source = String(values.get("source") || "Career site").trim();
     const description = String(values.get("description") || "").trim();
+    if (/jobteaser\.(?:com|fr|it|de|co\.uk)/i.test(url)) source = "JobTeaser";
+    else if (/linkedin\.com/i.test(url) && !/linkedin/i.test(source)) source = "LinkedIn alert";
     if (/easy\s*apply/i.test(description) && /linkedin/i.test(`${source} ${url}`)) source = "LinkedIn Easy Apply";
     const duplicate = state.data.jobs.find((job) => {
       const existingUrl = safeExternalUrl(valueOf(job, "jobs", "url", ""));
@@ -2775,7 +2834,7 @@
     setMapped(payload, "jobs", "companyName", company);
     setMapped(payload, "jobs", "location", location || null);
     setMapped(payload, "jobs", "fitScore", analysis.score);
-    setMapped(payload, "jobs", "status", "REVIEW");
+    setMapped(payload, "jobs", "status", "NEW");
     setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "HIGH" : analysis.score >= 6.5 ? "MEDIUM" : "LOW");
     setMapped(payload, "jobs", "source", source);
     setMapped(payload, "jobs", "url", url);

@@ -1213,7 +1213,7 @@ textarea::placeholder {
 
 .top-opportunity {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 15px;
   padding: 15px 0;

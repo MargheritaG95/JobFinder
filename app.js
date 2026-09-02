@@ -56,6 +56,7 @@
     "answerBank",
     "preferences"
   ];
+  const OPTIONAL_ENTITIES = new Set(["preferences"]);
 
   const state = {
     client: null,
@@ -565,7 +566,7 @@
         const rows = await fetchEntity(entity);
         return [entity, rows];
       } catch (error) {
-        state.errors[entity] = error;
+        if (!OPTIONAL_ENTITIES.has(entity)) state.errors[entity] = error;
         await handleSessionError(error);
         return [entity, []];
       }
@@ -1015,8 +1016,9 @@
         <div class="opportunity-copy">
           <h3>${escapeHtml(jobTitle(job))}</h3>
           <p>${escapeHtml(company)} · ${escapeHtml(location)}</p>
-          <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${choice}${feedbackButtons(job.id, true, true)}</div>
+          <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${feedbackButtons(job.id, true, true)}</div>
         </div>
+        ${choice ? `<div class="top-opportunity__decision">${choice}</div>` : ""}
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
       </article>
     `;
@@ -1490,6 +1492,7 @@
     $("copilotPriority").textContent = titleCase(jobPriority(job));
     $("copilotStatus").textContent = jobStatus(job);
     $("copilotLocation").textContent = valueOf(job, "jobs", "location", "Non indicata");
+    $("copilotRoleBrief").textContent = responsibilitySummary(job, 620);
     $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", localDraft.whyFit || suggestions.why);
     $("copilotGaps").value = valueOf(application, "applications", "gaps", localDraft.gaps || suggestions.gaps);
     $("copilotAngle").value = valueOf(application, "applications", "angle", localDraft.angle || suggestions.angle);

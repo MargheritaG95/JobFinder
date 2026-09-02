@@ -636,6 +636,20 @@ textarea::placeholder {
   line-height: 1.55;
 }
 
+.opportunity-card__role-summary {
+  display: grid;
+  gap: 7px;
+}
+
+.opportunity-card__role-summary > strong {
+  color: #364258;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.application-role-description b { color: #46536a; }
+
 .button--google {
   min-height: 48px;
   border-color: var(--border-strong);
@@ -1539,9 +1553,28 @@ textarea::placeholder {
 
 .opportunity-card__top {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 13px;
+}
+
+.opportunity-card__top--decided {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.opportunity-card--clickable {
+  cursor: pointer;
+}
+
+.opportunity-card--clickable:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 2px;
+  border-color: var(--blue-500);
+}
+
+.opportunity-card--clickable button,
+.opportunity-card--clickable a {
+  cursor: pointer;
 }
 
 .opportunity-card__primary-action {
@@ -1570,8 +1603,8 @@ textarea::placeholder {
 
 .opportunity-card__footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 12px;
   padding-top: 14px;
   border-top: 1px solid #eff2f6;
@@ -2192,6 +2225,43 @@ textarea::placeholder {
 .field--cover-letter {
   border-left-color: #735fd6;
   background: linear-gradient(90deg, rgba(115, 95, 214, 0.07), transparent 34%);
+}
+
+.opportunity-actions--stacked {
+  width: 100%;
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.opportunity-actions__decisions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+}
+
+.opportunity-card__feedback {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 11px;
+  border-top: 1px solid #eff2f6;
+  color: var(--muted-2);
+  font-size: 0.61rem;
+}
+
+.application-role-description {
+  display: block;
+  max-width: 440px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.61rem;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: normal;
 }
 
 .field--cover-letter textarea {

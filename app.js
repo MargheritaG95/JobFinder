@@ -975,13 +975,22 @@
     $("kpiOffersMeta").textContent = offerIds.size ? "Congratulazioni!" : "Nessuna offerta aperta";
     $("kpiCompaniesMeta").textContent = `${state.data.companies.filter((company) => normalizeStatus(valueOf(company, "companies", "tier", ""), "") === "A").length} Tier A`;
 
-    const topJobs = jobs
-      .filter((job) => jobStatus(job) !== "CLOSED")
-      .sort((a, b) => jobFit(b) - jobFit(a))
-      .slice(0, 5);
-    $("topOpportunities").innerHTML = topJobs.length
-      ? topJobs.map(renderTopOpportunity).join("")
-      : emptyState("Nessuna opportunità", "Quando la tabella jobs conterrà posizioni, qui vedrai quelle con Fit Score più alto.", { route: "opportunities", label: "Apri opportunità", icon: "search" });
+    const visibleJobs = jobs.filter((job) => jobStatus(job) !== "CLOSED");
+    const isEvaluated = (job) => hasAppliedToJob(job)
+      || Boolean(valueOf(job, "jobs", "saved", false))
+      || !["NEW", "REVIEW"].includes(jobStatus(job))
+      || Boolean(feedbackValueForJob(job.id));
+    const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
+    const newJobs = visibleJobs.filter((job) => !isEvaluated(job)).sort(byNewest).slice(0, 6);
+    const evaluatedJobs = visibleJobs.filter(isEvaluated).sort(byNewest).slice(0, 6);
+    $("newOpportunityCount").textContent = String(newJobs.length);
+    $("evaluatedOpportunityCount").textContent = String(evaluatedJobs.length);
+    $("newOpportunities").innerHTML = newJobs.length
+      ? newJobs.map(renderTopOpportunity).join("")
+      : emptyState("Nessuna nuova opportunità", "Le nuove posizioni importate compariranno qui prima della valutazione.", { route: "opportunities", label: "Apri opportunità", icon: "search" });
+    $("evaluatedOpportunities").innerHTML = evaluatedJobs.length
+      ? evaluatedJobs.map(renderTopOpportunity).join("")
+      : emptyState("Nessuna opportunità valutata", "Quando scegli di applicare ora, più tardi o registri una candidatura, la posizione passerà qui.");
 
     renderAttentionList();
   }
@@ -991,19 +1000,15 @@
     const fit = jobFit(job);
     const location = valueOf(job, "jobs", "location", "Location non indicata");
     return `
-      <article class="top-opportunity">
+      <article class="top-opportunity top-opportunity--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
         <div class="company-logo">${companyLogoContent(job)}</div>
         <div class="opportunity-copy">
           <h3>${escapeHtml(jobTitle(job))}</h3>
           <p>${escapeHtml(company)} · ${escapeHtml(location)}</p>
           <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${easyApplyBadge(job)}</div>
         </div>
+        <div class="top-opportunity__decision">${opportunityChoiceMarkup(job) || `<span class="badge badge--blue">DA VALUTARE</span>`}</div>
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
-        <div class="opportunity-actions">${opportunityChoiceMarkup(job) || `
-          <button class="button button--primary" type="button" data-action="apply-now" data-id="${escapeAttribute(job.id)}"><span>Applica ora</span>${icon("arrow-right")}</button>
-          ${applicationActionButtons(job, { compact: true })}
-          ${saveButton(job)}`}${removeOpportunityButton(job)}
-        </div>
       </article>
     `;
   }
@@ -1604,6 +1609,13 @@
       if (event.target === $("appDialog")) closeDialog();
     });
     document.addEventListener("click", handleDelegatedClick);
+    document.addEventListener("keydown", (event) => {
+      const clickableOpportunity = event.target.closest?.(".top-opportunity--clickable");
+      if (clickableOpportunity && ["Enter", " "].includes(event.key)) {
+        event.preventDefault();
+        clickableOpportunity.click();
+      }
+    });
     document.addEventListener("submit", handleDelegatedSubmit);
     window.addEventListener("hashchange", () => {
       const route = window.location.hash.slice(1);

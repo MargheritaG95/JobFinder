@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260902.1" />
+    <link rel="stylesheet" href="styles.css?v=20260902.2" />
   </head>
   <body>
     <noscript>
@@ -303,12 +303,19 @@
               <section class="panel dashboard-grid__main">
                 <div class="panel-heading">
                   <div>
-                    <p class="eyebrow">MATCHING</p>
-                    <h2>Top opportunità per te</h2>
+                    <p class="eyebrow">DAILY MATCHING</p>
+                    <h2>Le tue opportunità</h2>
                   </div>
                   <button class="text-button" type="button" data-route="opportunities">Vedi tutte <svg class="icon"><use href="#icon-arrow-right"></use></svg></button>
                 </div>
-                <div id="topOpportunities" class="opportunity-stack"></div>
+                <div class="dashboard-opportunity-section">
+                  <div class="dashboard-section-heading"><h3>Nuove da valutare</h3><span id="newOpportunityCount">0</span></div>
+                  <div id="newOpportunities" class="opportunity-stack"></div>
+                </div>
+                <div class="dashboard-opportunity-section dashboard-opportunity-section--evaluated">
+                  <div class="dashboard-section-heading"><h3>Già valutate</h3><span id="evaluatedOpportunityCount">0</span></div>
+                  <div id="evaluatedOpportunities" class="opportunity-stack"></div>
+                </div>
               </section>
 
               <aside class="panel dashboard-grid__side">
@@ -685,8 +692,8 @@
       <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260902.1" defer></script>
+    <script src="config.js?v=20260902.2" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260902.1" defer></script>
+    <script src="app.js?v=20260902.2" defer></script>
   </body>
 </html>

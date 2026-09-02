@@ -598,6 +598,44 @@ textarea::placeholder {
   background: var(--red-soft);
 }
 
+.button--danger-ghost {
+  border-color: transparent;
+  color: var(--red);
+  background: transparent;
+}
+
+.button--danger-ghost:hover {
+  border-color: #ffd6dc;
+  background: var(--red-soft);
+}
+
+.opportunity-choice {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid #d7dee9;
+  border-radius: 9px;
+  color: #58657a;
+  background: #f7f9fc;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.opportunity-choice--primary {
+  border-color: #cddcff;
+  color: var(--blue-600);
+  background: var(--blue-50);
+}
+
+.opportunity-card__description {
+  margin: -4px 0 0;
+  color: #5f6c80;
+  font-size: 0.69rem;
+  line-height: 1.55;
+}
+
 .button--google {
   min-height: 48px;
   border-color: var(--border-strong);

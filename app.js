@@ -846,10 +846,10 @@
     return `<span class="applied-state">${icon("check")}Applicato</span>`;
   }
 
-  function opportunityChoiceMarkup(job) {
+  function opportunityChoiceMarkup(job, laterLabel = "Applica più tardi") {
     if (hasAppliedToJob(job)) return appliedStateMarkup();
     if (Boolean(valueOf(job, "jobs", "saved", false)) || jobStatus(job) === "APPLY") {
-      return `<span class="opportunity-choice">${icon("clock")}Applica più tardi</span>`;
+      return `<span class="opportunity-choice">${icon("clock")}${escapeHtml(laterLabel)}</span>`;
     }
     return "";
   }
@@ -894,13 +894,13 @@
     return `<span class="badge">FIT ${fit.toFixed(1)}</span>`;
   }
 
-  function feedbackButtons(jobId, compact = false) {
+  function feedbackButtons(jobId, compact = false, exclusiveSelection = false) {
     const current = feedbackValueForJob(jobId);
     const items = [
       ["LIKE", "thumbs-up", "LIKE"],
       ["DISLIKE", "thumbs-down", "DISLIKE"]
-    ];
-    return `<div class="feedback-actions">${items.map(([value, iconName, label]) => `
+    ].filter(([value]) => !exclusiveSelection || !current || current === value);
+    return `<div class="feedback-actions ${exclusiveSelection ? "feedback-actions--exclusive" : ""}">${items.map(([value, iconName, label]) => `
       <button class="feedback-button ${current === value ? "is-active" : ""}" type="button" data-action="feedback" data-id="${escapeAttribute(jobId)}" data-feedback="${value}" aria-pressed="${current === value}">
         ${icon(iconName)}${compact ? "" : `<span>${label}</span>`}
       </button>
@@ -1007,15 +1007,16 @@
     const company = companyNameForJob(job);
     const fit = jobFit(job);
     const location = valueOf(job, "jobs", "location", "Location non indicata");
+    const choice = opportunityChoiceMarkup(job, "Applica dopo");
+    const dashboardStatus = jobStatus(job) === "APPLY" ? "" : statusBadge(jobStatus(job));
     return `
       <article class="top-opportunity top-opportunity--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
         <div class="company-logo">${companyLogoContent(job)}</div>
         <div class="opportunity-copy">
           <h3>${escapeHtml(jobTitle(job))}</h3>
           <p>${escapeHtml(company)} · ${escapeHtml(location)}</p>
-          <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${easyApplyBadge(job)}</div>
+          <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${choice}${feedbackButtons(job.id, true, true)}</div>
         </div>
-        <div class="top-opportunity__decision">${opportunityChoiceMarkup(job) || `<span class="badge badge--blue">DA VALUTARE</span>`}</div>
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
       </article>
     `;

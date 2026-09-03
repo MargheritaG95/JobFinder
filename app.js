@@ -50,6 +50,44 @@
     careerChangeReasonEn: "I am intentionally moving towards roles where I can combine transferable experience, customer understanding, and the ability to turn strategic goals into tangible outcomes. This decision is grounded in a long-standing interest, supported by targeted education and relevant projects.",
     companyValues: "TeamViewer: collaborazione, spirito di squadra, attenzione al cliente e innovazione | Mi riconosco in questi valori perché nel mio modo di lavorare metto al centro il cliente, la collaborazione tra stakeholder e il miglioramento continuo."
   };
+  const PRIMARY_COVER_LETTERS = {
+    en: `Dear Hiring Team,
+
+I am writing to express my interest in the [Role] position, advertised through [Source]. With over eight years of international experience in business development, customer experience, sales operations, and cross-functional transformation projects, I am particularly attracted by this opportunity at [Company]. [Motivation]
+
+In my most recent role at Generali Corporate & Commercial, I led a cross-functional team of 15+ people across nine countries to design and scale a global data-driven NPS framework, translating customer insights and predictive trends into strategic recommendations for C-level stakeholders. Previously, I managed a €20M portfolio of multinational clients and generated €6M in new business, while also leading initiatives involving Salesforce CRM redesign, Power BI solutions, and commercial process improvement.
+
+Building on this professional experience, I am currently pursuing an International Master in Artificial Intelligence at Rome Business School, focused on machine learning, AI-driven decision-making and data strategy, as well as a Master in Game Programming & AI Programming at Digital Bros Game Academy, where I am developing hands-on skills in C++, AI systems and object-oriented programming. [Career change]
+
+[Value for company] My experience managing stakeholders across countries and functions has taught me how to turn complex business challenges into structured initiatives, align different priorities and drive implementation—capabilities I would be excited to apply to [Company].
+
+[Company values]
+
+Fluent in Italian, English, French and Spanish, I would welcome the opportunity to discuss how my experience and evolving technical expertise could contribute to the [Role] team.
+
+Thank you for considering my application.
+
+Kind regards,
+[Name]`,
+    it: `Gentile Team di Selezione,
+
+desidero esprimere il mio interesse per la posizione di [Ruolo], pubblicata tramite [Fonte]. Con oltre otto anni di esperienza internazionale in business development, customer experience, sales operations e progetti di trasformazione cross-funzionali, sono particolarmente interessata a questa opportunità in [Azienda]. [Motivazione]
+
+Nel mio ruolo più recente presso Generali Corporate & Commercial, ho guidato un team cross-funzionale di oltre 15 persone in nove Paesi per progettare e sviluppare un framework NPS globale e data-driven, traducendo insight sui clienti e trend predittivi in raccomandazioni strategiche per stakeholder C-level. In precedenza ho gestito un portafoglio di clienti multinazionali da €20 milioni e generato €6 milioni di nuovo business, guidando anche iniziative di redesign di Salesforce CRM, soluzioni Power BI e miglioramento dei processi commerciali.
+
+A partire da questa esperienza professionale, sto frequentando un International Master in Artificial Intelligence presso Rome Business School, focalizzato su machine learning, decisioni supportate dall’AI e data strategy, oltre a un Master in Game Programming & AI Programming presso Digital Bros Game Academy, dove sto sviluppando competenze pratiche in C++, sistemi AI e programmazione orientata agli oggetti. [Cambio campo]
+
+[Valore per azienda] L’esperienza nella gestione di stakeholder in Paesi e funzioni differenti mi ha insegnato a trasformare sfide di business complesse in iniziative strutturate, allineare priorità diverse e guidarne l’implementazione: capacità che sarei entusiasta di applicare in [Azienda].
+
+[Valori aziendali]
+
+Parlo fluentemente italiano, inglese, francese e spagnolo e sarei lieta di approfondire come la mia esperienza e le competenze tecniche in continua evoluzione possano contribuire al team responsabile della posizione di [Ruolo].
+
+La ringrazio per l’attenzione dedicata alla mia candidatura.
+
+Cordiali saluti,
+[Nome]`
+  };
   const DATA_ENTITIES = [
     "profiles",
     "companies",
@@ -269,8 +307,6 @@
   }
 
   function personalizedCoverLetterTemplate(job, language, context) {
-    const template = coverLetterResource(language);
-    if (!template) return "";
     const preferences = currentPreferences();
     const english = language === "en";
     const date = new Intl.DateTimeFormat(english ? "en-US" : "it-IT", english ? { month: "long", day: "numeric", year: "numeric" } : { day: "numeric", month: "long", year: "numeric" }).format(new Date());
@@ -322,7 +358,7 @@
       responsabilità: responsibilitySummary(job, 420),
       responsibilities: responsibilitySummary(job, 420)
     };
-    const content = String(valueOf(template, "answerBank", "content", "")).trim();
+    const content = PRIMARY_COVER_LETTERS[english ? "en" : "it"];
     const templateKeys = new Set([...content.matchAll(/\[([^\]]+)\]/g)].map((match) => String(match[1]).trim().toLowerCase()));
     let filled = content.replace(/\[([^\]]+)\]/g, (match, key) => replacements[String(key).trim().toLowerCase()] || match);
     const hasAnyKey = (...keys) => keys.some((key) => templateKeys.has(key));
@@ -336,7 +372,7 @@
     if (!hasAnyKey("cambio campo", "cambio carriera", "career change")) {
       requiredParagraphs.push(english ? `My decision to move into this field is deliberate: ${careerChange}` : `La decisione di orientare il mio percorso verso questo ambito è consapevole: ${careerChange}`);
     }
-    if (!hasAnyKey("esperienza", "esperienza rilevante", "experience", "relevant experience", "competenze", "skills", "skill/ambito", "key skills", "valore", "valore per azienda", "value for company", "potenziale", "potential")) {
+    if (!/Generali Corporate & Commercial/i.test(filled) && !hasAnyKey("esperienza", "esperienza rilevante", "experience", "relevant experience", "competenze", "skills", "skill/ambito", "key skills", "valore", "valore per azienda", "value for company", "potenziale", "potential")) {
       requiredParagraphs.push(english ? `My most relevant experience includes: ${experience}. ${context.valueContribution}` : `Tra le esperienze più rilevanti del mio percorso: ${experience}. ${context.valueContribution}`);
     }
     if (!hasAnyKey("valori aziendali", "company values", "why company", "company knowledge")) {
@@ -1813,10 +1849,7 @@
     const savedRecruiterNote = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || "");
     $("copilotRecruiterNote").value = resolvedRecruiterNote(savedRecruiterNote, suggestions.note);
     $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job, language));
-    const coverTemplate = coverLetterResource(language);
-    $("copilotCoverLetterSource").textContent = coverTemplate
-      ? `Ispirata alla risorsa “${valueOf(coverTemplate, "answerBank", "title", "Cover letter")}”, adattata all’annuncio e completata secondo le linee guida.`
-      : "Nessuna risorsa Cover letter trovata: viene usata la struttura guidata predefinita.";
+    $("copilotCoverLetterSource").textContent = "Basata sul modello principale di Margherita, adattata all’annuncio e completata secondo le linee guida.";
     renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : localDraft.savedAt ? "Bozza salvata su questo dispositivo" : "Nuova application";
@@ -2308,10 +2341,7 @@
     $("copilotAngle").value = suggestions.angle;
     $("copilotRecruiterNote").value = suggestions.note;
     $("copilotCoverLetter").value = suggestedCoverLetter(job, language);
-    const coverTemplate = coverLetterResource(language);
-    $("copilotCoverLetterSource").textContent = coverTemplate
-      ? `Ispirata alla risorsa “${valueOf(coverTemplate, "answerBank", "title", "Cover letter")}”, adattata all’annuncio e completata secondo le linee guida.`
-      : "Nessuna risorsa Cover letter trovata: viene usata la struttura guidata predefinita.";
+    $("copilotCoverLetterSource").textContent = "Basata sul modello principale di Margherita, adattata all’annuncio e completata secondo le linee guida.";
     showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
   }
 

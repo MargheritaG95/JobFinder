@@ -2157,9 +2157,9 @@ textarea::placeholder {
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 0.58rem;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
 }
 
 .copilot-language-compact select {
@@ -2170,7 +2170,9 @@ textarea::placeholder {
   border-radius: 8px;
   color: var(--ink);
   background-color: #fff;
-  font: inherit;
+  font-family: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -2342,6 +2344,21 @@ textarea::placeholder {
   line-height: 1.65;
 }
 
+.copilot-form > .field:not(.field--accent) { margin-top: 22px; }
+
+.copilot-form > .field--cover-letter {
+  margin-top: 26px;
+  padding: 17px 18px;
+}
+
+.field--cover-letter small {
+  display: block;
+  margin: 2px 0 11px;
+  line-height: 1.45;
+}
+
+#copilotRecruiterNote { min-height: 180px; }
+
 .dialog-body form[data-dialog-form="opportunity-import"] .notice {
   margin: 2px 0 4px;
 }
@@ -2356,6 +2373,7 @@ textarea::placeholder {
 .copilot-template-tool {
   display: grid;
   gap: 16px;
+  margin: 22px 0 26px;
   padding: 18px;
   border: 1px solid #dcd7fa;
   border-radius: 14px;

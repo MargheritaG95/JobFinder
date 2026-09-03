@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260902.13" />
+    <link rel="stylesheet" href="styles.css?v=20260902.19" />
   </head>
   <body>
     <noscript>
@@ -483,9 +483,9 @@
                   </label>
                 </div>
                 <label class="field preference-cv-field">
-                  <span>Profilo professionale / testo del CV</span>
-                  <small>Incolla il testo del CV, senza dati sensibili non necessari. Rimane soltanto in questo browser e non viene pubblicato su GitHub.</small>
-                  <textarea id="preferenceCvText" rows="12" placeholder="Incolla qui esperienze, risultati, competenze e formazione presenti nel tuo CV…"></textarea>
+                  <span>CV di riferimento</span>
+                  <small>Incolla qui uno o più CV. Se ne usi più di uno, separali con intestazioni come “CV AI / Strategy” e “CV Customer Success”. Il testo rimane soltanto in questo browser.</small>
+                  <textarea id="preferenceCvText" rows="12" placeholder="CV AI / Strategy&#10;Esperienze, risultati, competenze e formazione…&#10;&#10;CV Customer Success&#10;Esperienze, risultati, competenze e formazione…"></textarea>
                 </label>
                 <div class="form-grid form-grid--two">
                   <label class="field">
@@ -644,6 +644,7 @@
                       <option value="ready">Pronta per l’invio</option>
                       <option value="submitted">Candidatura inviata</option>
                     </select>
+                    <small>Il contenuto di riferimento si inserisce in Preferenze → CV di riferimento.</small>
                   </label>
                 </div>
                 <section class="copilot-template-tool" aria-labelledby="copilotTemplateTitle">
@@ -748,8 +749,8 @@
       <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260902.18" defer></script>
+    <script src="config.js?v=20260902.19" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260902.18" defer></script>
+    <script src="app.js?v=20260902.19" defer></script>
   </body>
 </html>

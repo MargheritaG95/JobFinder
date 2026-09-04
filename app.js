@@ -1497,6 +1497,11 @@ Cordiali saluti,
     const location = valueOf(job, "jobs", "location", "Location non indicata");
     const choice = opportunityChoiceMarkup(job, "Applica dopo");
     const dashboardStatus = jobStatus(job) === "APPLY" ? "" : statusBadge(jobStatus(job));
+    const stageActions = stage === "review"
+      ? `<button class="button button--success" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">${icon("sparkles")}Applica ora</button><button class="button button--warning" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}Applica dopo</button>`
+      : stage === "to-apply"
+        ? `${choice}<button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Ho applicato</button>`
+        : choice;
     return `
       <article class="top-opportunity top-opportunity--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
         <div class="company-logo">${companyLogoContent(job)}</div>
@@ -1505,13 +1510,8 @@ Cordiali saluti,
           <p>${escapeHtml(company)} · ${escapeHtml(location)}</p>
           <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${priorityStarButton(job, true)}${referralButton(job, true)}${feedbackButtons(job.id, true, true)}</div>
         </div>
-        ${choice ? `<div class="top-opportunity__decision">${choice}</div>` : ""}
+        <div class="top-opportunity__quick-actions">${stageActions}<button class="button button--danger" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button></div>
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
-        <div class="top-opportunity__quick-actions">
-          ${stage === "review" ? `<button class="button button--primary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">${icon("sparkles")}Applica ora</button><button class="button button--secondary" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}Applica dopo</button>` : ""}
-          ${stage === "to-apply" ? `<button class="button button--primary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">${icon("sparkles")}Prepara candidatura</button><button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Ho applicato</button>` : ""}
-        </div>
-        <button class="button button--danger-ghost top-opportunity__remove" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>
       </article>
     `;
   }

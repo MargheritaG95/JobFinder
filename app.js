@@ -1034,6 +1034,15 @@ Cordiali saluti,
     return ["HIGH", "URGENT", "ALTA"].includes(jobPriority(job));
   }
 
+  function referralStorageKey(jobId) {
+    return `jobfinder:referral:${state.user?.id || "anonymous"}:${jobId}`;
+  }
+
+  function isReferralJob(job) {
+    try { return window.localStorage.getItem(referralStorageKey(job.id)) === "true"; }
+    catch (_error) { return false; }
+  }
+
   function feedbackForJob(jobId) {
     const jobColumn = fieldName("feedback", "jobId");
     return state.data.feedback.find((feedback) => String(feedback[jobColumn]) === String(jobId)) || null;
@@ -1355,6 +1364,11 @@ Cordiali saluti,
     return `<button class="priority-star-button ${active ? "is-active" : ""}" type="button" data-action="toggle-priority" data-id="${escapeAttribute(job.id)}" aria-pressed="${active}" aria-label="${active ? "Rimuovi priorità" : "Segna come prioritaria"}"><span aria-hidden="true">${active ? "★" : "☆"}</span>${compact ? "" : "Priorità"}</button>`;
   }
 
+  function referralButton(job, compact = false) {
+    const active = isReferralJob(job);
+    return `<button class="referral-button ${active ? "is-active" : ""}" type="button" data-action="toggle-referral" data-id="${escapeAttribute(job.id)}" aria-pressed="${active}" aria-label="${active ? "Rimuovi referral" : "Segna come referral"}">${icon("user")}${compact ? "" : "Referral"}</button>`;
+  }
+
   function applicationActionButtons(job, options = {}) {
     const saved = Boolean(valueOf(job, "jobs", "saved", false));
     const compact = Boolean(options.compact);
@@ -1468,7 +1482,7 @@ Cordiali saluti,
         <div class="opportunity-copy">
           <h3>${escapeHtml(jobTitle(job))}</h3>
           <p>${escapeHtml(company)} · ${escapeHtml(location)}</p>
-          <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${priorityStarButton(job, true)}${feedbackButtons(job.id, true, true)}</div>
+          <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${priorityStarButton(job, true)}${referralButton(job, true)}${feedbackButtons(job.id, true, true)}</div>
         </div>
         ${choice ? `<div class="top-opportunity__decision">${choice}</div>` : ""}
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
@@ -1557,10 +1571,10 @@ Cordiali saluti,
           <div class="opportunity-copy">
             <h3>${escapeHtml(jobTitle(job))}</h3>
             <p>${escapeHtml(company)}</p>
-            <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityStarButton(job)}${easyApplyBadge(job)}</div>
+            <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityStarButton(job)}${referralButton(job)}${easyApplyBadge(job)}</div>
           </div>
           ${decision ? `<div class="opportunity-card__primary-action">${decision}</div>` : ""}
-          <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
+          <div class="opportunity-card__score-actions"><div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>${removeOpportunityButton(job)}</div>
         </div>
         <div class="opportunity-card__meta">
           <span>${icon("building")}${escapeHtml(location)}</span>
@@ -1578,7 +1592,6 @@ Cordiali saluti,
             <div class="opportunity-card__action-row-right">
               ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
               ${hasAppliedToJob(job) ? "" : `<button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}<span>Ho applicato</span></button>`}
-              ${removeOpportunityButton(job)}
             </div>
           </div>
           <div class="opportunity-card__feedback"><span>Questa opportunità è utile?</span>${feedbackButtons(job.id)}</div>
@@ -1685,7 +1698,7 @@ Cordiali saluti,
     return `
       <article class="kanban-card kanban-card--clickable" draggable="true" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" data-pipeline-job-id="${escapeAttribute(job.id)}" data-pipeline-status="${status}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}. Trascina per cambiare il ranking nella colonna.">
         <div class="kanban-card__drag-handle" title="Trascina per ordinare">⋮⋮ <span>Trascina per ordinare</span></div>
-        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="kanban-card__signals">${isPriorityJob(job) ? `<span class="pipeline-priority-star" title="Opportunità prioritaria" aria-label="Opportunità prioritaria">★</span>` : ""}<span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></span></div>
+        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="kanban-card__signals">${isPriorityJob(job) ? `<span class="pipeline-priority-star" title="Opportunità prioritaria" aria-label="Opportunità prioritaria">★</span>` : ""}${isReferralJob(job) ? `<span class="pipeline-referral-icon" title="Referral" aria-label="Referral">${icon("user")}</span>` : ""}<span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></span></div>
         <h3>${escapeHtml(jobTitle(job))}</h3>
         <p>${escapeHtml(companyNameForJob(job))} · ${escapeHtml(valueOf(job, "jobs", "location", "—"))}</p>
         <div class="kanban-card__footer">
@@ -2124,6 +2137,12 @@ Cordiali saluti,
       priorityButton.setAttribute("aria-pressed", String(active));
       priorityButton.innerHTML = `<span aria-hidden="true">${active ? "★" : "☆"}</span>Priorità`;
     }
+    const referralToggle = $("copilotReferralButton");
+    if (referralToggle) {
+      const active = isReferralJob(job);
+      referralToggle.classList.toggle("is-active", active);
+      referralToggle.setAttribute("aria-pressed", String(active));
+    }
     $("copilotStatus").textContent = jobStatus(job);
     $("copilotLocation").textContent = valueOf(job, "jobs", "location", "Non indicata");
     $("copilotIndustry").textContent = companyIndustry(job);
@@ -2484,6 +2503,9 @@ Cordiali saluti,
         case "toggle-priority":
           await toggleJobPriority(id || state.selectedJobId, trigger);
           break;
+        case "toggle-referral":
+          toggleJobReferral(id || state.selectedJobId);
+          break;
         case "save-for-later":
           await saveForLater(id || state.selectedJobId, trigger);
           break;
@@ -2656,7 +2678,7 @@ Cordiali saluti,
   async function toggleJobPriority(jobId, button) {
     const job = getJobById(jobId);
     if (!job || !ensureWritable()) return;
-    const next = isPriorityJob(job) ? "NORMAL" : "HIGH";
+    const next = isPriorityJob(job) ? "MEDIUM" : "HIGH";
     setBusy(button, true, "");
     try {
       await updateRecord("jobs", job.id, { [fieldName("jobs", "priority")]: next });
@@ -2665,6 +2687,16 @@ Cordiali saluti,
     } finally {
       setBusy(button, false);
     }
+  }
+
+  function toggleJobReferral(jobId) {
+    const job = getJobById(jobId);
+    if (!job) return;
+    const next = !isReferralJob(job);
+    try { window.localStorage.setItem(referralStorageKey(job.id), String(next)); }
+    catch (_error) { showToast("Il browser non consente di memorizzare il referral.", "error", "Referral non salvato"); return; }
+    renderAll();
+    showToast(next ? "Referral attivato e mantenuto nella dashboard." : "Referral rimosso.", "success", "Referral aggiornato");
   }
 
   function handlePipelineDragStart(event) {

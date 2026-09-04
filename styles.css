@@ -2118,9 +2118,9 @@ textarea::placeholder {
 
 .copilot-layout {
   display: grid;
-  grid-template-columns: 285px minmax(0, 1fr);
+  grid-template-columns: minmax(380px, 0.92fr) minmax(500px, 1.08fr);
   align-items: start;
-  gap: 18px;
+  gap: 24px;
 }
 
 .copilot-summary,
@@ -2132,29 +2132,34 @@ textarea::placeholder {
 }
 
 .copilot-summary {
-  position: sticky;
-  top: calc(var(--topbar-height) + 20px);
-  padding: 23px;
+  padding: 28px;
 }
 
 .copilot-kicker {
   display: block;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
   color: var(--blue-600);
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.1em;
 }
 
-.copilot-summary h1 { margin-bottom: 7px; font-size: 1.4rem; }
-.copilot-summary > p { color: var(--muted); font-size: 0.75rem; }
+.copilot-company-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.copilot-company-header h1 { margin: 0 0 6px; font-size: clamp(1.25rem, 2vw, 1.75rem); line-height: 1.18; }
+.copilot-company-header p { margin: 0; color: var(--blue-600); font-size: 0.78rem; font-weight: 750; }
 
 .copilot-score {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 24px 0;
-  padding: 16px;
+  margin: 22px 0;
+  padding: 14px 16px;
   border-radius: 11px;
   color: var(--green);
   background: var(--green-soft);
@@ -2162,30 +2167,32 @@ textarea::placeholder {
 
 .copilot-score strong { font-size: 1.8rem; }
 .copilot-score span { color: #4a8d76; font-size: 0.55rem; font-weight: 800; line-height: 1.4; }
+.copilot-score small { margin-left: auto; color: #4a8d76; font-size: 0.61rem; font-weight: 650; }
 
 .meta-list {
   display: grid;
-  gap: 12px;
-  margin: 0 0 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0 0 18px;
 }
 
-.meta-list > div { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding-bottom: 10px; border-bottom: 1px solid #eff2f6; }
+.meta-list > div { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid #edf1f6; border-radius: 9px; background: #fbfcfe; }
 .meta-list dt { color: var(--muted); font-size: 0.63rem; }
-.meta-list dd { margin: 0; font-size: 0.65rem; font-weight: 700; text-align: right; }
+.meta-list dd { margin: 0; font-size: 0.67rem; font-weight: 750; text-align: left; }
 
 .copilot-company-overview {
-  margin: 15px 0;
-  padding: 12px;
+  margin: 18px 0;
+  padding: 15px 16px;
   border: 1px solid var(--blue-100);
   border-radius: 10px;
   background: var(--blue-50);
 }
 
-.copilot-company-overview strong { font-size: 0.66rem; }
-.copilot-company-overview p { margin: 5px 0 0; color: #526b91; font-size: 0.62rem; line-height: 1.5; }
+.copilot-company-overview strong { font-size: 0.7rem; }
+.copilot-company-overview p { margin: 6px 0 0; color: #526b91; font-size: 0.67rem; line-height: 1.58; }
 
 .copilot-form {
-  padding: 25px;
+  padding: 28px;
 }
 
 .copilot-heading-actions {
@@ -2222,15 +2229,19 @@ textarea::placeholder {
 }
 
 .copilot-role-brief {
-  margin: 0 0 12px;
-  padding: 14px 16px;
+  margin: 18px 0;
+  padding: 17px 18px;
   border: 1px solid var(--blue-100);
   border-radius: 11px;
   background: var(--blue-50);
 }
 
-.copilot-role-brief h3 { margin: 2px 0 6px; font-size: 0.9rem; }
-.copilot-role-brief > p:last-child { margin: 0; color: #526b91; font-size: 0.7rem; line-height: 1.5; }
+.copilot-role-brief h3 { margin: 3px 0 8px; font-size: 0.92rem; }
+.copilot-role-brief > p:last-child { margin: 0; color: #526b91; font-size: 0.69rem; line-height: 1.62; }
+
+.copilot-insight-grid { display: grid; gap: 10px; margin: 18px 0; }
+.copilot-insight-grid .field--accent { margin: 0; }
+.copilot-insight-grid textarea { min-height: 78px; resize: vertical; }
 
 .field--accent {
   margin-bottom: 8px;
@@ -2404,6 +2415,32 @@ textarea::placeholder {
 }
 
 #copilotRecruiterNote { min-height: 180px; }
+
+.copilot-content-card {
+  padding: 17px 18px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: #fbfcff;
+}
+
+.copilot-content-card--recruiter { border-color: #bfe8d9; background: #f6fcf9; }
+.copilot-content-card__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.copilot-content-card__heading > span { display: inline-flex; align-items: center; gap: 12px; }
+.copilot-content-card__heading .text-button { font-size: 0.62rem; }
+.copilot-content-card textarea { margin-top: 11px; background: #fff; }
+
+.copilot-form > .form-actions {
+  position: sticky;
+  z-index: 3;
+  bottom: 12px;
+  margin: 24px -10px -10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 32px rgba(17, 35, 67, 0.12);
+  backdrop-filter: blur(10px);
+}
 
 .dialog-body form[data-dialog-form="opportunity-import"] .notice {
   margin: 2px 0 4px;

@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260904.21" />
+    <link rel="stylesheet" href="styles.css?v=20260904.22" />
   </head>
   <body>
     <noscript>
@@ -583,10 +583,11 @@
             <div id="copilotContent" class="copilot-layout">
               <aside class="copilot-summary">
                 <span class="copilot-kicker">APPLICATION COPILOT</span>
-                <div id="copilotCompanyLogo" class="company-logo company-logo--large">JF</div>
-                <h1 id="copilotRole">Ruolo</h1>
-                <p id="copilotCompany">Azienda</p>
-                <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
+                <div class="copilot-company-header">
+                  <div id="copilotCompanyLogo" class="company-logo company-logo--large">JF</div>
+                  <div><h1 id="copilotRole">Ruolo</h1><p id="copilotCompany">Azienda</p></div>
+                </div>
+                <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span><small>Compatibilità con il tuo profilo</small></div>
                 <dl class="meta-list">
                   <div><dt>Priorità</dt><dd id="copilotPriority">—</dd></div>
                   <div><dt>Stato</dt><dd id="copilotStatus">—</dd></div>
@@ -595,6 +596,25 @@
                   <div><dt>RAL / stipendio</dt><dd id="copilotSalary">Non indicata</dd></div>
                 </dl>
                 <div class="copilot-company-overview"><strong>Cosa fa l’azienda</strong><p id="copilotCompanyOverview">Informazioni non disponibili.</p></div>
+                <section class="copilot-role-brief" aria-labelledby="copilotRoleBriefTitle">
+                  <p class="eyebrow">RUOLO E RESPONSABILITÀ</p>
+                  <h3 id="copilotRoleBriefTitle">Cosa prevede questa opportunità</h3>
+                  <p id="copilotRoleBrief">Seleziona un’opportunità per visualizzare la descrizione del ruolo.</p>
+                </section>
+                <div class="copilot-insight-grid">
+                  <label class="field field--accent field--success">
+                    <span>WHY YOU FIT</span>
+                    <textarea id="copilotWhyFit" rows="3" placeholder="I punti forti più rilevanti per questo ruolo…"></textarea>
+                  </label>
+                  <label class="field field--accent field--warning">
+                    <span>EVENTUALI GAP</span>
+                    <textarea id="copilotGaps" rows="2" placeholder="Gap da gestire e come compensarli…"></textarea>
+                  </label>
+                  <label class="field field--accent field--info">
+                    <span>YOUR ANGLE</span>
+                    <textarea id="copilotAngle" rows="3" placeholder="Il posizionamento distintivo della candidatura…"></textarea>
+                  </label>
+                </div>
                 <button id="openJobButton" class="button button--secondary button--wide" type="button" data-action="open-job">
                   <svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio
                 </button>
@@ -614,23 +634,6 @@
                     <span id="copilotSaveState" class="status-pill status-pill--neutral">Non salvata</span>
                   </div>
                 </div>
-                <section class="copilot-role-brief" aria-labelledby="copilotRoleBriefTitle">
-                  <p class="eyebrow">RUOLO E RESPONSABILITÀ</p>
-                  <h3 id="copilotRoleBriefTitle">Cosa prevede questa opportunità</h3>
-                  <p id="copilotRoleBrief">Seleziona un’opportunità per visualizzare la descrizione del ruolo.</p>
-                </section>
-                <label class="field field--accent field--success">
-                  <span>WHY YOU FIT</span>
-                  <textarea id="copilotWhyFit" rows="3" placeholder="I punti forti più rilevanti per questo ruolo…"></textarea>
-                </label>
-                <label class="field field--accent field--warning">
-                  <span>EVENTUALI GAP</span>
-                  <textarea id="copilotGaps" rows="2" placeholder="Gap da gestire e come compensarli…"></textarea>
-                </label>
-                <label class="field field--accent field--info">
-                  <span>YOUR ANGLE</span>
-                  <textarea id="copilotAngle" rows="3" placeholder="Il posizionamento distintivo della candidatura…"></textarea>
-                </label>
                 <div class="form-grid form-grid--two">
                   <label class="field">
                     <span>CV consigliato</span>
@@ -669,12 +672,12 @@
                     <button class="text-button" type="button" data-route="templates">Gestisci templates</button>
                   </div>
                 </section>
-                <label class="field">
-                  <span>Note / messaggio recruiter</span>
+                <label class="field copilot-content-card copilot-content-card--recruiter">
+                  <span class="copilot-content-card__heading"><b>Messaggio recruiter</b><span><button class="text-button" type="button" data-action="regenerate-copilot">Rigenera</button><button class="text-button" type="button" data-action="copy-copilot-field" data-field="copilotRecruiterNote">Copia</button></span></span>
                   <textarea id="copilotRecruiterNote" rows="6" placeholder="Messaggio personalizzato, riferimenti e prossimi passi…"></textarea>
                 </label>
-                <label class="field field--accent field--cover-letter">
-                  <span>COVER LETTER</span>
+                <label class="field field--accent field--cover-letter copilot-content-card">
+                  <span class="copilot-content-card__heading"><b>COVER LETTER</b><span><button class="text-button" type="button" data-action="regenerate-copilot">Rigenera</button><button class="text-button" type="button" data-action="copy-copilot-field" data-field="copilotCoverLetter">Copia</button></span></span>
                   <small id="copilotCoverLetterSource">La risorsa Cover letter verrà adattata e completata automaticamente secondo le linee guida.</small>
                   <textarea id="copilotCoverLetter" rows="10" placeholder="Bozza della cover letter personalizzata…"></textarea>
                 </label>
@@ -757,8 +760,8 @@
       <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260904.21" defer></script>
+    <script src="config.js?v=20260904.22" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260904.21" defer></script>
+    <script src="app.js?v=20260904.22" defer></script>
   </body>
 </html>

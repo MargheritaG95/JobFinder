@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260904.28" />
+    <link rel="stylesheet" href="styles.css?v=20260904.29" />
   </head>
   <body>
     <noscript>
@@ -585,7 +585,8 @@
                 <span class="copilot-kicker">APPLICATION COPILOT</span>
                 <div class="copilot-company-header copilot-company-header--hero">
                   <div id="copilotCompanyLogo" class="company-logo company-logo--large">JF</div>
-                  <div><h1 id="copilotRole">Ruolo</h1><p id="copilotCompany">Azienda</p><button class="copilot-open-job-link" type="button" data-action="open-job"><svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio</button></div>
+                  <div><h1 id="copilotRole">Ruolo</h1><p id="copilotCompany">Azienda</p></div>
+                  <button class="button button--primary copilot-open-job-button" type="button" data-action="open-job"><svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio</button>
                   <div class="copilot-score-stack">
                     <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
                     <div class="copilot-signal-toggles"><button id="copilotPriorityButton" class="copilot-priority-toggle" type="button" data-action="toggle-priority" aria-pressed="false"><span aria-hidden="true">☆</span>Priorità</button><button id="copilotReferralButton" class="copilot-referral-toggle" type="button" data-action="toggle-referral" aria-pressed="false"><svg class="icon"><use href="#icon-user"></use></svg>Referral</button></div>
@@ -628,9 +629,9 @@
                 <select id="copilotTemplateTarget" class="visually-hidden"><option value="recruiter">Messaggio recruiter</option><option value="cover-letter">Cover letter</option></select>
                 <div class="copilot-strategy-heading"><h3>Strategia della candidatura</h3><p>Posizionamento consigliato per questa opportunità.</p></div>
                 <div class="copilot-insight-grid">
-                  <label class="field field--accent field--success"><span>1. WHY YOU FIT</span><textarea id="copilotWhyFit" rows="3" placeholder="I punti forti più rilevanti per questo ruolo…"></textarea></label>
-                  <label class="field field--accent field--warning"><span>2. POSSIBILI GAP</span><textarea id="copilotGaps" rows="2" placeholder="Gap da gestire e come compensarli…"></textarea></label>
-                  <label class="field field--accent field--info"><span>3. YOUR ANGLE</span><textarea id="copilotAngle" rows="3" placeholder="Il posizionamento distintivo della candidatura…"></textarea></label>
+                  <label class="field field--accent field--success"><span><i class="copilot-insight-icon">✓</i>1. WHY YOU FIT</span><textarea id="copilotWhyFit" rows="3" placeholder="I punti forti più rilevanti per questo ruolo…"></textarea></label>
+                  <label class="field field--accent field--warning"><span><i class="copilot-insight-icon">!</i>2. POSSIBILI GAP</span><textarea id="copilotGaps" rows="2" placeholder="Gap da gestire e come compensarli…"></textarea></label>
+                  <label class="field field--accent field--info"><span><i class="copilot-insight-icon">◇</i>3. YOUR ANGLE</span><textarea id="copilotAngle" rows="3" placeholder="Il posizionamento distintivo della candidatura…"></textarea></label>
                 </div>
                 <div class="copilot-content-grid">
                 <label class="field copilot-content-card copilot-content-card--recruiter">
@@ -719,8 +720,8 @@
       <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260904.28" defer></script>
+    <script src="config.js?v=20260904.29" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260904.28" defer></script>
+    <script src="app.js?v=20260904.29" defer></script>
   </body>
 </html>

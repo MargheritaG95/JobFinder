@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260904.26" />
+    <link rel="stylesheet" href="styles.css?v=20260904.27" />
   </head>
   <body>
     <noscript>
@@ -580,22 +580,31 @@
               <svg class="icon"><use href="#icon-arrow-left"></use></svg>Torna alle opportunità
             </button>
             <div id="copilotEmpty" class="empty-state is-hidden"></div>
-            <div id="copilotContent" class="copilot-layout">
-              <aside class="copilot-summary">
+            <div id="copilotContent" class="copilot-layout copilot-layout--command">
+              <section class="copilot-summary copilot-summary--hero">
                 <span class="copilot-kicker">APPLICATION COPILOT</span>
-                <div class="copilot-company-header">
+                <div class="copilot-company-header copilot-company-header--hero">
                   <div id="copilotCompanyLogo" class="company-logo company-logo--large">JF</div>
                   <div><h1 id="copilotRole">Ruolo</h1><p id="copilotCompany">Azienda</p></div>
+                  <div class="copilot-score-stack">
+                    <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
+                    <button id="copilotPriorityButton" class="copilot-priority-toggle" type="button" data-action="toggle-priority" aria-pressed="false"><span aria-hidden="true">☆</span>Priorità</button>
+                    <div class="language-segmented" role="group" aria-label="Lingua dei testi"><button type="button" data-action="set-copilot-language" data-language="it" aria-pressed="true">IT</button><button type="button" data-action="set-copilot-language" data-language="en" aria-pressed="false">EN</button></div>
+                    <select id="copilotLanguage" class="visually-hidden" aria-label="Lingua dei testi"><option value="it">IT</option><option value="en">EN</option></select>
+                  </div>
                 </div>
-                <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span><small>Compatibilità con il tuo profilo</small></div>
-                <dl class="meta-list">
-                  <div><dt>Priorità</dt><dd id="copilotPriority">—</dd></div>
+                <dl class="meta-list copilot-meta-inline">
                   <div><dt>Stato</dt><dd id="copilotStatus">—</dd></div>
                   <div><dt>Location</dt><dd id="copilotLocation">—</dd></div>
                   <div><dt>Industria</dt><dd id="copilotIndustry">—</dd></div>
-                  <div class="meta-list__wide"><dt>RAL / stipendio</dt><dd id="copilotSalary">Non indicata</dd></div>
+                  <div><dt>RAL / stipendio</dt><dd id="copilotSalary">Non indicata</dd></div>
                 </dl>
-                <div class="copilot-company-overview"><strong>Cosa fa l’azienda</strong><p id="copilotCompanyOverview">Informazioni non disponibili.</p></div>
+              </section>
+              <section class="copilot-context-card">
+                <div class="copilot-context-columns">
+                  <div class="copilot-context-block"><i><svg class="icon"><use href="#icon-building"></use></svg></i><div><h3>L’azienda</h3><p id="copilotCompanyOverview">Informazioni non disponibili.</p></div></div>
+                  <div class="copilot-context-block"><i><svg class="icon"><use href="#icon-briefcase"></use></svg></i><div><h3>Il ruolo in breve</h3><p id="copilotRoleBrief">Seleziona un’opportunità per visualizzare la descrizione del ruolo.</p></div></div>
+                </div>
                 <div class="copilot-role-facts" aria-label="Informazioni essenziali sul ruolo">
                   <div><i><svg class="icon"><use href="#icon-briefcase"></use></svg></i><span>Livello<strong id="copilotSeniority">Non indicato</strong></span></div>
                   <div><i><svg class="icon"><use href="#icon-award"></use></svg></i><span>Anni di esperienza<strong id="copilotExperience">Non indicata</strong></span></div>
@@ -603,119 +612,51 @@
                   <div><i><svg class="icon"><use href="#icon-message"></use></svg></i><span>Lingua<strong id="copilotLanguages">Non indicata</strong></span></div>
                 </div>
                 <section class="copilot-role-brief" aria-labelledby="copilotRoleBriefTitle">
-                  <p class="eyebrow">RUOLO E RESPONSABILITÀ</p>
-                  <h3 id="copilotRoleBriefTitle">Sintesi del ruolo</h3>
-                  <p id="copilotRoleBrief">Seleziona un’opportunità per visualizzare la descrizione del ruolo.</p>
-                  <h4>Responsabilità principali</h4>
+                  <h3 id="copilotRoleBriefTitle">Responsabilità principali</h3>
                   <ul id="copilotResponsibilities" class="copilot-responsibility-list"></ul>
                 </section>
-                <div class="copilot-insight-grid">
-                  <label class="field field--accent field--success">
-                    <span>WHY YOU FIT</span>
-                    <textarea id="copilotWhyFit" rows="3" placeholder="I punti forti più rilevanti per questo ruolo…"></textarea>
-                  </label>
-                  <label class="field field--accent field--warning">
-                    <span>EVENTUALI GAP</span>
-                    <textarea id="copilotGaps" rows="2" placeholder="Gap da gestire e come compensarli…"></textarea>
-                  </label>
-                  <label class="field field--accent field--info">
-                    <span>YOUR ANGLE</span>
-                    <textarea id="copilotAngle" rows="3" placeholder="Il posizionamento distintivo della candidatura…"></textarea>
-                  </label>
-                </div>
-                <button id="openJobButton" class="button button--secondary button--wide" type="button" data-action="open-job">
-                  <svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio
-                </button>
-              </aside>
+              </section>
 
               <form id="copilotForm" class="copilot-form" novalidate>
                 <div class="panel-heading">
                   <div><p class="eyebrow">PREPARAZIONE PERSONALIZZATA</p><h2>Application Copilot</h2><p class="copilot-heading-copy">Materiali personalizzati e pronti da usare per questa candidatura.</p></div>
-                  <div class="copilot-heading-actions">
-                    <div class="copilot-language-compact" title="Cambiando lingua vengono rigenerati tutti i testi">
-                      <div class="language-segmented" role="group" aria-label="Lingua dei testi">
-                        <button type="button" data-action="set-copilot-language" data-language="it" aria-pressed="true">IT</button>
-                        <button type="button" data-action="set-copilot-language" data-language="en" aria-pressed="false">EN</button>
-                      </div>
-                      <select id="copilotLanguage" class="visually-hidden" aria-label="Lingua dei testi">
-                        <option value="it">IT</option>
-                        <option value="en">EN</option>
-                      </select>
-                    </div>
-                    <span id="copilotSaveState" class="status-pill status-pill--neutral">Non salvata</span>
-                  </div>
+                  <label class="copilot-cv-compact"><span>CV</span><select id="copilotCv"><option value="">Seleziona</option><option>AI / Strategy</option><option>CX / Customer Success</option><option>Commercial / Enterprise</option><option>Automotive</option><option>Business Analytics / Transformation</option></select></label>
+                  <span id="copilotSaveState" class="status-pill status-pill--neutral">Non salvata</span>
                 </div>
-                <div class="form-grid form-grid--two copilot-setup-grid">
-                  <label class="field">
-                    <span>CV consigliato</span>
-                    <select id="copilotCv">
-                      <option value="">Seleziona una versione</option>
-                      <option>AI / Strategy</option>
-                      <option>CX / Customer Success</option>
-                      <option>Commercial / Enterprise</option>
-                      <option>Automotive</option>
-                      <option>Business Analytics / Transformation</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>Stato preparazione</span>
-                    <select id="copilotPreparationStatus">
-                      <option value="draft">Bozza</option>
-                      <option value="in_progress">In preparazione</option>
-                      <option value="ready">Pronta per l’invio</option>
-                      <option value="submitted">Candidatura inviata</option>
-                    </select>
-                    <small>Il contenuto di riferimento si inserisce in Preferenze → CV di riferimento.</small>
-                  </label>
+                <select id="copilotPreparationStatus" class="visually-hidden"><option value="draft">Bozza</option><option value="in_progress">In preparazione</option><option value="ready">Pronta</option><option value="submitted">Inviata</option></select>
+                <select id="copilotTemplateSelect" class="visually-hidden"><option value="">Template</option></select>
+                <select id="copilotTemplateTarget" class="visually-hidden"><option value="recruiter">Messaggio recruiter</option><option value="cover-letter">Cover letter</option></select>
+                <div class="copilot-strategy-heading"><h3>Strategia della candidatura</h3><p>Posizionamento consigliato per questa opportunità.</p></div>
+                <div class="copilot-insight-grid">
+                  <label class="field field--accent field--success"><span>1. WHY YOU FIT</span><textarea id="copilotWhyFit" rows="3" placeholder="I punti forti più rilevanti per questo ruolo…"></textarea></label>
+                  <label class="field field--accent field--warning"><span>2. POSSIBILI GAP</span><textarea id="copilotGaps" rows="2" placeholder="Gap da gestire e come compensarli…"></textarea></label>
+                  <label class="field field--accent field--info"><span>3. YOUR ANGLE</span><textarea id="copilotAngle" rows="3" placeholder="Il posizionamento distintivo della candidatura…"></textarea></label>
                 </div>
-                <section class="copilot-template-tool" aria-labelledby="copilotTemplateTitle">
-                  <div>
-                    <p class="eyebrow">TEMPLATE AUTOMATION</p>
-                    <h3 id="copilotTemplateTitle">Inserisci un testo personalizzato</h3>
-                  </div>
-                  <div class="form-grid form-grid--two">
-                    <label class="field"><span>Template</span><select id="copilotTemplateSelect"><option value="">Seleziona dalla libreria</option></select></label>
-                    <label class="field"><span>Inserisci in</span><select id="copilotTemplateTarget"><option value="recruiter">Messaggio recruiter</option><option value="cover-letter">Cover letter</option><option value="why-fit">Why you fit</option><option value="angle">Your angle</option></select></label>
-                  </div>
-                  <div class="copilot-template-actions">
-                    <button class="button button--primary" type="button" data-action="apply-copilot-template">Inserisci template</button>
-                    <button class="button button--secondary" type="button" data-action="copy-filled-template">Copia compilato</button>
-                    <button class="text-button" type="button" data-route="templates">Gestisci templates</button>
-                  </div>
-                </section>
+                <div class="copilot-content-grid">
                 <label class="field copilot-content-card copilot-content-card--recruiter">
-                  <span class="copilot-content-card__heading"><b>Messaggio recruiter</b><span><button class="text-button" type="button" data-action="regenerate-copilot">Rigenera</button><button class="text-button" type="button" data-action="copy-copilot-field" data-field="copilotRecruiterNote">Copia</button></span></span>
+                  <span class="copilot-content-card__heading"><b>Messaggio recruiter <em>Pronto</em></b><button class="icon-button" type="button" data-action="edit-copilot-content" data-field="copilotRecruiterNote"><svg class="icon"><use href="#icon-edit"></use></svg></button></span>
                   <textarea id="copilotRecruiterNote" rows="6" placeholder="Messaggio personalizzato, riferimenti e prossimi passi…"></textarea>
+                  <span class="copilot-card-actions"><button class="text-button" type="button" data-action="copy-copilot-field" data-field="copilotRecruiterNote">Copia</button><button class="text-button" type="button" data-action="regenerate-copilot">Rigenera</button></span>
                 </label>
                 <label class="field field--accent field--cover-letter copilot-content-card">
-                  <span class="copilot-content-card__heading"><b>COVER LETTER</b><span><button class="text-button" type="button" data-action="regenerate-copilot">Rigenera</button><button class="text-button" type="button" data-action="copy-copilot-field" data-field="copilotCoverLetter">Copia</button></span></span>
+                  <span class="copilot-content-card__heading"><b>Cover letter <em>Pronta</em></b><button class="icon-button" type="button" data-action="edit-copilot-content" data-field="copilotCoverLetter"><svg class="icon"><use href="#icon-edit"></use></svg></button></span>
                   <small id="copilotCoverLetterSource">La risorsa Cover letter verrà adattata e completata automaticamente secondo le linee guida.</small>
                   <textarea id="copilotCoverLetter" rows="10" placeholder="Bozza della cover letter personalizzata…"></textarea>
+                  <span class="copilot-card-actions"><button class="text-button" type="button" data-action="copy-copilot-field" data-field="copilotCoverLetter">Copia</button><button class="text-button" type="button" data-action="regenerate-copilot">Rigenera</button></span>
                 </label>
-                <div class="submission-note">
-                  <svg class="icon"><use href="#icon-shield"></use></svg>
-                  <span><strong>L’invio resta sotto il tuo controllo.</strong> JobFinder prepara e salva i materiali, ma non invia automaticamente la candidatura.</span>
                 </div>
                 <div class="form-actions">
-                  <button id="copilotOpenJobSecondaryButton" class="button button--secondary" type="button" data-action="open-job">Apri annuncio</button>
-                  <button id="copilotSaveForLaterButton" class="button button--secondary" type="button" data-action="save-for-later">
+                  <button id="copilotSaveForLaterButton" class="button button--warning" type="button" data-action="save-for-later">
                     <svg class="icon"><use href="#icon-clock"></use></svg>Applica più tardi
                   </button>
                   <button id="copilotMarkAppliedButton" class="button button--success" type="button" data-action="mark-applied">
                     <svg class="icon"><use href="#icon-check"></use></svg>Ho applicato
                   </button>
-                  <button id="copilotRejectedButton" class="button button--danger" type="button" data-action="mark-rejected">
-                    Rifiutata
-                  </button>
-                  <button id="copilotCopyKitButton" class="button button--secondary" type="button" data-action="copy-application-kit">
-                    <svg class="icon"><use href="#icon-copy"></use></svg>Copia kit
-                  </button>
-                  <button id="prepareApplicationButton" class="button button--primary" type="submit">
-                    <svg class="icon"><use href="#icon-sparkles"></use></svg>Prepara application
-                  </button>
+                  <button id="prepareApplicationButton" class="button button--secondary" type="submit"><svg class="icon"><use href="#icon-file"></use></svg>Salva bozza</button>
                   <button id="copilotRemoveOpportunityButton" class="button button--danger-ghost" type="button" data-action="remove-opportunity">
                     <svg class="icon"><use href="#icon-trash"></use></svg>Cancella
                   </button>
+                  <button id="copilotRejectedButton" class="button button--danger" type="button" data-action="mark-rejected">Rifiutata</button>
                 </div>
               </form>
             </div>
@@ -777,8 +718,8 @@
       <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260904.26" defer></script>
+    <script src="config.js?v=20260904.27" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260904.26" defer></script>
+    <script src="app.js?v=20260904.27" defer></script>
   </body>
 </html>

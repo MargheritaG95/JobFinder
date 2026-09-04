@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260904.27" />
+    <link rel="stylesheet" href="styles.css?v=20260904.28" />
   </head>
   <body>
     <noscript>
@@ -585,31 +585,31 @@
                 <span class="copilot-kicker">APPLICATION COPILOT</span>
                 <div class="copilot-company-header copilot-company-header--hero">
                   <div id="copilotCompanyLogo" class="company-logo company-logo--large">JF</div>
-                  <div><h1 id="copilotRole">Ruolo</h1><p id="copilotCompany">Azienda</p></div>
+                  <div><h1 id="copilotRole">Ruolo</h1><p id="copilotCompany">Azienda</p><button class="copilot-open-job-link" type="button" data-action="open-job"><svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio</button></div>
                   <div class="copilot-score-stack">
                     <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
-                    <button id="copilotPriorityButton" class="copilot-priority-toggle" type="button" data-action="toggle-priority" aria-pressed="false"><span aria-hidden="true">☆</span>Priorità</button>
+                    <div class="copilot-signal-toggles"><button id="copilotPriorityButton" class="copilot-priority-toggle" type="button" data-action="toggle-priority" aria-pressed="false"><span aria-hidden="true">☆</span>Priorità</button><button id="copilotReferralButton" class="copilot-referral-toggle" type="button" data-action="toggle-referral" aria-pressed="false"><svg class="icon"><use href="#icon-user"></use></svg>Referral</button></div>
                     <div class="language-segmented" role="group" aria-label="Lingua dei testi"><button type="button" data-action="set-copilot-language" data-language="it" aria-pressed="true">IT</button><button type="button" data-action="set-copilot-language" data-language="en" aria-pressed="false">EN</button></div>
                     <select id="copilotLanguage" class="visually-hidden" aria-label="Lingua dei testi"><option value="it">IT</option><option value="en">EN</option></select>
                   </div>
                 </div>
                 <dl class="meta-list copilot-meta-inline">
-                  <div><dt>Stato</dt><dd id="copilotStatus">—</dd></div>
-                  <div><dt>Location</dt><dd id="copilotLocation">—</dd></div>
-                  <div><dt>Industria</dt><dd id="copilotIndustry">—</dd></div>
-                  <div><dt>RAL / stipendio</dt><dd id="copilotSalary">Non indicata</dd></div>
+                  <div><dt><svg class="icon"><use href="#icon-check"></use></svg>Stato</dt><dd id="copilotStatus">—</dd></div>
+                  <div><dt><svg class="icon"><use href="#icon-link"></use></svg>Località</dt><dd id="copilotLocation">—</dd></div>
+                  <div><dt><svg class="icon"><use href="#icon-building"></use></svg>Industria</dt><dd id="copilotIndustry">—</dd></div>
+                  <div><dt><svg class="icon"><use href="#icon-briefcase"></use></svg>RAL / stipendio</dt><dd id="copilotSalary">Non indicata</dd></div>
                 </dl>
               </section>
               <section class="copilot-context-card">
-                <div class="copilot-context-columns">
-                  <div class="copilot-context-block"><i><svg class="icon"><use href="#icon-building"></use></svg></i><div><h3>L’azienda</h3><p id="copilotCompanyOverview">Informazioni non disponibili.</p></div></div>
-                  <div class="copilot-context-block"><i><svg class="icon"><use href="#icon-briefcase"></use></svg></i><div><h3>Il ruolo in breve</h3><p id="copilotRoleBrief">Seleziona un’opportunità per visualizzare la descrizione del ruolo.</p></div></div>
-                </div>
                 <div class="copilot-role-facts" aria-label="Informazioni essenziali sul ruolo">
                   <div><i><svg class="icon"><use href="#icon-briefcase"></use></svg></i><span>Livello<strong id="copilotSeniority">Non indicato</strong></span></div>
                   <div><i><svg class="icon"><use href="#icon-award"></use></svg></i><span>Anni di esperienza<strong id="copilotExperience">Non indicata</strong></span></div>
                   <div><i><svg class="icon"><use href="#icon-briefcase"></use></svg></i><span>Tipo di contratto<strong id="copilotContract">Non indicato</strong></span></div>
                   <div><i><svg class="icon"><use href="#icon-message"></use></svg></i><span>Lingua<strong id="copilotLanguages">Non indicata</strong></span></div>
+                </div>
+                <div class="copilot-context-columns">
+                  <div class="copilot-context-block"><i><svg class="icon"><use href="#icon-building"></use></svg></i><div><h3>L’azienda</h3><p id="copilotCompanyOverview">Informazioni non disponibili.</p></div></div>
+                  <div class="copilot-context-block"><i><svg class="icon"><use href="#icon-briefcase"></use></svg></i><div><h3>Il ruolo in breve</h3><p id="copilotRoleBrief">Seleziona un’opportunità per visualizzare la descrizione del ruolo.</p></div></div>
                 </div>
                 <section class="copilot-role-brief" aria-labelledby="copilotRoleBriefTitle">
                   <h3 id="copilotRoleBriefTitle">Responsabilità principali</h3>
@@ -682,6 +682,7 @@
       <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
       <symbol id="icon-columns" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="16" rx="2"/><rect x="14" y="4" width="7" height="16" rx="2"/></symbol>
       <symbol id="icon-file" viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></symbol>
+      <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
       <symbol id="icon-building" viewBox="0 0 24 24"><path d="M4 22V4l10-2v20M14 8h6v14M8 7h2M8 11h2M8 15h2M8 19h2M17 12h1M17 16h1M2 22h20"/></symbol>
       <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
       <symbol id="icon-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></symbol>
@@ -718,8 +719,8 @@
       <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260904.27" defer></script>
+    <script src="config.js?v=20260904.28" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260904.27" defer></script>
+    <script src="app.js?v=20260904.28" defer></script>
   </body>
 </html>

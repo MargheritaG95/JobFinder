@@ -2608,16 +2608,25 @@ textarea::placeholder {
 .copilot-company-header--hero { grid-template-columns: auto minmax(0, 1fr) auto; padding: 0; border: 0; }
 .copilot-company-header--hero h1 { font-size: clamp(1.35rem, 2.25vw, 2rem); }
 .copilot-score-stack { display: grid; justify-items: center; gap: 7px; }
+.copilot-signal-toggles { display: flex; align-items: center; gap: 10px; }
 .copilot-score-stack .copilot-score { display: grid; grid-template-columns: auto auto; margin: 0; padding: 8px 13px; border: 2px solid #83d4b5; border-radius: 999px; background: #f5fcf9; }
 .copilot-score-stack .copilot-score strong { font-size: 1.35rem; }
 .copilot-priority-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 2px 5px; border: 0; color: #526075; background: transparent; font: inherit; font-size: .67rem; font-weight: 750; cursor: pointer; }
 .copilot-priority-toggle span { color: #9aa7b8; font-size: 1.05rem; }
 .copilot-priority-toggle.is-active span { color: #f2aa00; }
 .copilot-priority-toggle:hover { color: var(--blue-600); }
+.copilot-referral-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 2px 5px; border: 0; color: #68758a; background: transparent; font: inherit; font-size: .65rem; font-weight: 750; cursor: pointer; }
+.copilot-referral-toggle .icon { width: 16px; height: 16px; }
+.copilot-referral-toggle.is-active { color: var(--blue-600); }
+.copilot-open-job-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 0; border: 0; color: var(--blue-600); background: transparent; font: inherit; font-size: .64rem; font-weight: 750; cursor: pointer; }
+.copilot-open-job-link .icon { width: 14px; height: 14px; }
 .copilot-meta-inline { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 18px 0 0 72px; padding-top: 14px; border-top: 1px solid #edf1f6; }
 .copilot-meta-inline > div { padding: 4px 12px; border: 0; border-right: 1px solid #edf1f6; border-radius: 0; background: transparent; }
 .copilot-meta-inline > div:last-child { border-right: 0; }
-.copilot-context-card { padding: 0 24px 20px; }
+.copilot-meta-inline dt { display: flex; align-items: center; gap: 6px; color: var(--blue-600); }
+.copilot-meta-inline dt .icon { width: 14px; height: 14px; }
+.copilot-context-card { padding: 20px 24px; }
+.copilot-context-card > .copilot-role-facts { margin: 0 0 18px; background: linear-gradient(100deg, #f0f6ff, #f7fbff); }
 .copilot-context-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .copilot-context-block { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; padding: 20px 22px; }
 .copilot-context-block + .copilot-context-block { border-left: 1px solid #e5eaf1; }
@@ -2641,9 +2650,19 @@ textarea::placeholder {
 .copilot-bottom-actions { position: static !important; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 18px !important; }
 .kanban-card__signals { display: inline-flex; align-items: center; gap: 7px; }
 .pipeline-priority-star { color: #f2aa00; font-size: 1rem; line-height: 1; }
+.pipeline-referral-icon { display: inline-flex; color: var(--blue-600); }
+.pipeline-referral-icon .icon { width: 16px; height: 16px; }
 .priority-star-button { display: inline-flex; min-height: 25px; align-items: center; gap: 5px; padding: 2px 7px; border: 0; color: #68758a; background: transparent; font: inherit; font-size: .59rem; font-weight: 750; cursor: pointer; }
 .priority-star-button span { font-size: .95rem; }
 .priority-star-button.is-active span { color: #f2aa00; }
+.referral-button { display: inline-flex; min-height: 25px; align-items: center; gap: 5px; padding: 2px 7px; border: 0; color: #7a8698; background: transparent; font: inherit; font-size: .59rem; font-weight: 750; cursor: pointer; }
+.referral-button .icon { width: 15px; height: 15px; }
+.referral-button.is-active { color: var(--blue-600); }
+
+.opportunity-card .opportunity-card__top { align-items: start; }
+.opportunity-card .fit-score { align-self: start; }
+.opportunity-card__score-actions { display: flex; align-items: flex-start; justify-content: flex-end; gap: 9px; }
+.opportunity-card__score-actions .button--danger-ghost { min-height: 34px; padding: 6px 9px; }
 .copilot-strategy-heading { margin-top: 2px; }
 .copilot-strategy-heading h3 { margin: 0 0 4px; font-size: .78rem; }
 .copilot-strategy-heading p { margin: 0; color: var(--muted); font-size: .63rem; }

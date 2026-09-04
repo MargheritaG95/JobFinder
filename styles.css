@@ -2139,12 +2139,12 @@ textarea::placeholder {
 }
 
 .copilot-summary {
-  padding: 28px;
+  padding: 24px;
 }
 
 .copilot-kicker {
   display: block;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   color: var(--blue-600);
   font-size: 0.62rem;
   font-weight: 800;
@@ -2155,41 +2155,44 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #edf1f6;
 }
 
-.copilot-company-header h1 { margin: 0 0 6px; font-size: clamp(1.25rem, 2vw, 1.75rem); line-height: 1.18; }
+.copilot-company-header h1 { margin: 0 0 5px; font-size: clamp(1.12rem, 1.65vw, 1.48rem); line-height: 1.2; letter-spacing: -0.025em; }
 .copilot-company-header p { margin: 0; color: var(--blue-600); font-size: 0.78rem; font-weight: 750; }
 
 .copilot-score {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 22px 0;
-  padding: 14px 16px;
+  margin: 16px 0;
+  padding: 12px 14px;
   border-radius: 11px;
   color: var(--green);
   background: var(--green-soft);
 }
 
-.copilot-score strong { font-size: 1.8rem; }
+.copilot-score strong { font-size: 1.62rem; }
 .copilot-score span { color: #4a8d76; font-size: 0.55rem; font-weight: 800; line-height: 1.4; }
 .copilot-score small { margin-left: auto; color: #4a8d76; font-size: 0.61rem; font-weight: 650; }
 
 .meta-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-  margin: 0 0 18px;
+  gap: 8px;
+  margin: 0 0 16px;
 }
 
-.meta-list > div { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid #edf1f6; border-radius: 9px; background: #fbfcfe; }
+.meta-list > div { display: grid; gap: 3px; padding: 9px 11px; border: 1px solid #e6ebf2; border-radius: 9px; background: #fbfcfe; }
+.meta-list .meta-list__wide { grid-column: 1 / -1; grid-template-columns: minmax(105px, 0.35fr) minmax(0, 1fr); align-items: center; }
 .meta-list dt { color: var(--muted); font-size: 0.63rem; }
 .meta-list dd { margin: 0; font-size: 0.67rem; font-weight: 750; text-align: left; }
 
 .copilot-company-overview {
-  margin: 18px 0;
-  padding: 15px 16px;
+  margin: 16px 0 18px;
+  padding: 14px 15px;
   border: 1px solid var(--blue-100);
   border-radius: 10px;
   background: var(--blue-50);
@@ -2223,8 +2226,16 @@ textarea::placeholder {
 .copilot-role-facts strong { color: var(--ink); font-size: 0.67rem; font-weight: 650; line-height: 1.35; }
 
 .copilot-form {
-  padding: 28px;
+  padding: 24px;
 }
+
+.copilot-form > .panel-heading { margin-bottom: 16px; padding-bottom: 17px; border-bottom: 1px solid #edf1f6; }
+.copilot-form > .panel-heading h2 { margin-bottom: 0; font-size: 1.12rem; }
+.copilot-setup-grid { gap: 14px; padding: 2px 0 19px; border-bottom: 1px solid #edf1f6; }
+.copilot-setup-grid .field { gap: 7px; }
+.copilot-setup-grid .field > span { font-size: 0.68rem; }
+.copilot-setup-grid .field select { min-height: 40px; border-radius: 9px; font-size: 0.72rem; }
+.copilot-setup-grid .field small { margin-top: 0; font-size: 0.59rem; line-height: 1.35; }
 
 .copilot-heading-actions {
   display: flex;
@@ -2491,18 +2502,23 @@ textarea::placeholder {
 
 .copilot-template-tool {
   display: grid;
-  gap: 16px;
-  margin: 26px 0 30px;
-  padding: 21px;
+  gap: 13px;
+  margin: 20px 0 26px;
+  padding: 17px 18px;
   border: 1px solid #dcd7fa;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(115, 95, 214, 0.09), rgba(78, 131, 217, 0.04));
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(115, 95, 214, 0.065), rgba(78, 131, 217, 0.025));
 }
 
-.copilot-template-tool h3 { margin: 2px 0 5px; font-size: 0.95rem; }
+.copilot-template-tool h3 { margin: 1px 0 3px; font-size: 0.86rem; }
+.copilot-template-tool .form-grid { gap: 14px; }
+.copilot-template-tool .field { gap: 7px; }
+.copilot-template-tool .field > span { font-size: 0.66rem; }
+.copilot-template-tool .field select { min-height: 40px; border-radius: 9px; font-size: 0.69rem; }
 .copilot-template-tool > div > p:last-child { margin: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.55; }
 .copilot-template-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
 .copilot-template-actions .text-button { margin-left: auto; }
+.copilot-template-actions .button { min-height: 38px; padding: 8px 13px; }
 
 .dialog-details {
   display: grid;
@@ -2650,6 +2666,7 @@ textarea::placeholder {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .copilot-role-facts { grid-template-columns: 1fr; gap: 11px; padding: 15px; }
   .copilot-role-facts > div { min-height: 42px; }
+  .meta-list .meta-list__wide { grid-template-columns: 1fr; align-items: start; }
   .copilot-heading-actions { width: 100%; justify-content: flex-start; margin: 12px 0 0; }
   .copilot-form .panel-heading { align-items: flex-start; flex-direction: column; }
   .preference-questionnaire { grid-template-columns: 1fr; }

@@ -37,6 +37,7 @@ window.JOBFINDER_CONFIG = {
       companies: {
         name: "name",
         sector: "sector",
+        logoUrl: "logo_url",
         tier: "tier",
         website: "website",
         notes: "notes",
@@ -58,6 +59,7 @@ window.JOBFINDER_CONFIG = {
         gaps: "gaps",
         angle: "angle",
         recommendedCv: "recommended_cv",
+        industry: "industry",
         createdAt: "created_at",
         updatedAt: "updated_at"
       },

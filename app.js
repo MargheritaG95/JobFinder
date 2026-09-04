@@ -253,6 +253,29 @@ Cordiali saluti,
       .filter((token) => token.length > 2 && !stopWords.has(token));
   }
 
+  function preferenceLearningKey() {
+    return `jobfinder:preference-learning:${state.user?.id || "anonymous"}`;
+  }
+
+  function preferenceLearningProfile() {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(preferenceLearningKey()) || "[]");
+      return Array.isArray(stored) ? stored : [];
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  function rememberRejectedOpportunity(job, reason, notes) {
+    try {
+      const learned = preferenceLearningProfile();
+      learned.unshift({ title: jobTitle(job), company: companyNameForJob(job), industry: companyIndustry(job), location: valueOf(job, "jobs", "location", ""), reason, notes, recordedAt: new Date().toISOString() });
+      window.localStorage.setItem(preferenceLearningKey(), JSON.stringify(learned.slice(0, 60)));
+    } catch (error) {
+      console.warn("Preference learning could not be saved locally", error);
+    }
+  }
+
   function analyzeOpportunity({ title, company, location, description }) {
     const preferences = currentPreferences();
     const searchable = normalizedTokens(`${title} ${company} ${location} ${description}`);
@@ -943,7 +966,14 @@ Cordiali saluti,
   }
 
   function jobFit(job) {
-    return Math.max(0, Math.min(10, asNumber(valueOf(job, "jobs", "fitScore", 0), 0)));
+    const base = asNumber(valueOf(job, "jobs", "fitScore", 0), 0);
+    const searchable = normalizedTokens(`${jobTitle(job)} ${companyNameForJob(job)} ${valueOf(job, "jobs", "location", "")} ${jobDescriptionText(job)}`);
+    const penalty = Math.min(2, preferenceLearningProfile().reduce((total, item) => {
+      const dislikedTokens = new Set(normalizedTokens(`${item.title || ""} ${item.company || ""} ${item.industry || ""} ${item.location || ""} ${item.notes || ""}`));
+      const overlap = searchable.filter((token) => dislikedTokens.has(token)).length;
+      return total + Math.min(0.6, overlap * 0.12);
+    }, 0));
+    return Math.max(0, Math.min(10, base - penalty));
   }
 
   function jobStatus(job) {
@@ -953,6 +983,13 @@ Cordiali saluti,
       ? applicationStatus
       : normalizeStatus(valueOf(job, "jobs", "status", "NEW"));
     return PIPELINE_STATES.includes(status) ? status : "NEW";
+  }
+
+  function rejectedState(job) {
+    const application = getApplicationForJob(job?.id);
+    const rawStatus = String(valueOf(application, "applications", "status", "")).toUpperCase();
+    const notes = String(valueOf(application, "applications", "notes", ""));
+    return rawStatus === "REJECTED" || notes.includes("[ESITO: RIFIUTATA]");
   }
 
   function applicationStatusForDatabase(status) {
@@ -1043,9 +1080,10 @@ Cordiali saluti,
   }
 
   function statusBadge(status) {
+    const explicitlyRejected = String(status || "").trim().toUpperCase() === "REJECTED";
     const normalized = normalizeStatus(status);
     const className = normalized === "OFFER" ? "badge--fit" : normalized === "INTERVIEW" ? "badge--warning" : normalized === "CLOSED" ? "badge--danger" : normalized === "APPLY" || normalized === "APPLIED" ? "badge--violet" : "badge--blue";
-    const labels = { APPLIED: "APPLICATO", APPLY: "DA CANDIDARSI", DRAFT: "BOZZA", CONTACTED: "CONTATTATO", INTERVIEW: "COLLOQUIO", OFFER: "OFFERTA", CLOSED: "CHIUSO" };
+    const labels = { APPLIED: "APPLICATO", APPLY: "DA CANDIDARSI", DRAFT: "BOZZA", CONTACTED: "CONTATTATO", INTERVIEW: "COLLOQUIO", OFFER: "OFFERTA", CLOSED: explicitlyRejected ? "RIFIUTATA" : "CHIUSO" };
     return `<span class="badge ${className}">${escapeHtml(labels[normalized] || normalized)}</span>`;
   }
 
@@ -1425,6 +1463,7 @@ Cordiali saluti,
         </div>
         ${choice ? `<div class="top-opportunity__decision">${choice}</div>` : ""}
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
+        <button class="button button--danger-ghost top-opportunity__remove" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>
       </article>
     `;
   }
@@ -1586,29 +1625,30 @@ Cordiali saluti,
   }
 
   function downloadPipelineReport() {
-    const entries = applicationRegisterEntries().filter((entry) => entry.job);
-    if (!entries.length) {
-      showToast("Non ci sono candidature da includere nel report.", "warning", "Report non creato");
+    const jobs = state.data.jobs;
+    if (!jobs.length) {
+      showToast("Non ci sono opportunità da includere nel report.", "warning", "Report non creato");
       return;
     }
-    const header = ["Ranking", "Azienda", "Industria", "Posizione", "Stato", "Data candidatura", "RAL / stipendio", "Fonte", "Link opportunità"];
-    const rankedJobs = PIPELINE_STATES.flatMap((status) => sortPipelineJobs(state.data.jobs.filter((job) => jobStatus(job) === status), status));
+    const header = ["Ranking", "Azienda", "Cosa fa l'azienda", "Industria", "Posizione", "Stato", "Fit score", "Priorità", "Località", "RAL / stipendio", "Livello", "Esperienza", "Contratto", "Lingue", "Data candidatura", "Fonte", "Link opportunità", "Sintesi ruolo", "Responsabilità", "Why you fit", "Eventuali gap", "Your angle", "CV usato", "Preparazione", "Messaggio recruiter", "Note application"];
+    const rankedJobs = PIPELINE_STATES.flatMap((status) => sortPipelineJobs(jobs.filter((job) => jobStatus(job) === status), status));
     const rank = new Map(rankedJobs.map((job, index) => [String(job.id), index + 1]));
-    const rows = entries.sort((a, b) => (rank.get(String(a.job.id)) || Number.MAX_SAFE_INTEGER) - (rank.get(String(b.job.id)) || Number.MAX_SAFE_INTEGER)).map(({ application, job }) => [
-      rank.get(String(job.id)) || "", companyNameForJob(job), companyIndustry(job), jobTitle(job), jobStatus(job),
-      valueOf(application, "applications", "appliedAt", "") ? formatDate(valueOf(application, "applications", "appliedAt", "")) : "",
-      salaryFromJob(job) || "Non indicata", valueOf(job, "jobs", "source", ""), valueOf(job, "jobs", "url", "")
-    ]);
-    const csv = `\uFEFF${[header, ...rows].map((row) => row.map(csvCell).join(";")).join("\r\n")}`;
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const rows = rankedJobs.map((job) => {
+      const application = getApplicationForJob(job.id);
+      return [rank.get(String(job.id)) || "", companyNameForJob(job), companyOverview(job), companyIndustry(job), jobTitle(job), rejectedState(job) ? "RIFIUTATA" : jobStatus(job), jobFit(job).toFixed(1), jobPriority(job), valueOf(job, "jobs", "location", ""), salaryFromJob(job) || "Non indicata", jobSeniority(job), jobExperience(job), jobContract(job), jobLanguages(job), valueOf(application, "applications", "appliedAt", "") ? formatDate(valueOf(application, "applications", "appliedAt", "")) : "", valueOf(job, "jobs", "source", ""), valueOf(job, "jobs", "url", ""), roleSynopsis(job), responsibilityItems(job).join(" | "), valueOf(application, "applications", "whyFit", valueOf(job, "jobs", "whyFit", "")), valueOf(application, "applications", "gaps", valueOf(job, "jobs", "gaps", "")), valueOf(application, "applications", "angle", valueOf(job, "jobs", "angle", "")), valueOf(application, "applications", "cvUsed", ""), valueOf(application, "applications", "preparationStatus", ""), valueOf(application, "applications", "recruiterNote", ""), valueOf(application, "applications", "notes", "")];
+    });
+    const xmlEscape = (value) => escapeHtml(String(value ?? ""));
+    const worksheetRows = [header, ...rows].map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="String">${xmlEscape(cell)}</Data></Cell>`).join("")}</Row>`).join("");
+    const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Pipeline"><Table>${worksheetRows}</Table></Worksheet></Workbook>`;
+    const url = URL.createObjectURL(new Blob([workbook], { type: "application/vnd.ms-excel;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `jobfinder-pipeline-${todayIso()}.csv`;
+    anchor.download = `jobfinder-pipeline-${todayIso()}.xls`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast(`${rows.length} candidature incluse nel file.`, "success", "Report scaricato");
+    showToast(`${rows.length} opportunità e tutte le informazioni disponibili incluse nel file.`, "success", "Excel scaricato");
   }
 
   function renderPipeline() {
@@ -1630,15 +1670,17 @@ Cordiali saluti,
     const application = getApplicationForJob(job.id);
     const nextAction = ["APPLIED", "CONTACTED", "INTERVIEW"].includes(status)
       ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>`
-      : `<button class="button button--secondary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Prepara candidatura</button>`;
+      : status === "APPLY"
+        ? `<button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Ho applicato</button>`
+        : `<button class="button button--secondary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Prepara candidatura</button>`;
     return `
-      <article class="kanban-card" draggable="true" data-pipeline-job-id="${escapeAttribute(job.id)}" data-pipeline-status="${status}" aria-label="${escapeAttribute(jobTitle(job))}. Trascina per cambiare il ranking nella colonna.">
+      <article class="kanban-card kanban-card--clickable" draggable="true" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" data-pipeline-job-id="${escapeAttribute(job.id)}" data-pipeline-status="${status}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}. Trascina per cambiare il ranking nella colonna.">
         <div class="kanban-card__drag-handle" title="Trascina per ordinare">⋮⋮ <span>Trascina per ordinare</span></div>
         <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></div>
         <h3>${escapeHtml(jobTitle(job))}</h3>
         <p>${escapeHtml(companyNameForJob(job))} · ${escapeHtml(valueOf(job, "jobs", "location", "—"))}</p>
         <div class="kanban-card__footer">
-          ${status === "CLOSED" ? `<span class="badge">CHIUSA</span>` : nextAction}
+          ${status === "CLOSED" ? `<span class="badge ${rejectedState(job) ? "badge--danger" : ""}">${rejectedState(job) ? "RIFIUTATA" : "CHIUSA"}</span>` : nextAction}
           ${application && status === "APPLIED" ? `<button class="text-button" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}">Follow-up</button>` : ""}
         </div>
       </article>
@@ -1685,7 +1727,9 @@ Cordiali saluti,
   function applicationRegisterEntries() {
     const entries = state.data.applications.map((application) => {
       const job = getJobById(valueOf(application, "applications", "jobId", ""));
-      return { application, job, missingRecord: false, status: normalizeStatus(valueOf(application, "applications", "status", job ? jobStatus(job) : "DRAFT"), "DRAFT") };
+      const rawStatus = String(valueOf(application, "applications", "status", "")).toUpperCase();
+      const rejected = rawStatus === "REJECTED" || String(valueOf(application, "applications", "notes", "")).includes("[ESITO: RIFIUTATA]");
+      return { application, job, missingRecord: false, status: rejected ? "REJECTED" : normalizeStatus(rawStatus || (job ? jobStatus(job) : "DRAFT"), "DRAFT") };
     });
     const represented = new Set(entries.map((entry) => String(entry.job?.id || "")).filter(Boolean));
     state.data.jobs
@@ -2054,6 +2098,11 @@ Cordiali saluti,
     const localDraft = application ? {} : getLocalCopilotDraft(job.id);
     const language = $("copilotLanguage")?.value || "it";
     const suggestions = suggestedCopilotContent(job, language);
+    document.querySelectorAll("[data-action='set-copilot-language']").forEach((button) => {
+      const active = button.dataset.language === language;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
     const company = companyNameForJob(job);
     $("copilotCompanyLogo").innerHTML = companyLogoContent(job);
     $("copilotRole").textContent = jobTitle(job);
@@ -2086,6 +2135,9 @@ Cordiali saluti,
     saveState.classList.toggle("status-pill--neutral", !application);
     $("prepareApplicationButton").innerHTML = application ? `${icon("check")}Aggiorna application` : `${icon("sparkles")}Prepara application`;
     $("copilotSaveForLaterButton").innerHTML = `${icon("clock")}${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}`;
+    const rejectedButton = $("copilotRejectedButton");
+    rejectedButton.disabled = !hasAppliedToJob(job) || rejectedState(job);
+    rejectedButton.textContent = rejectedState(job) ? "Rifiutata registrata" : "Rifiutata";
   }
 
   function isLegacyRecruiterNote(note) {
@@ -2218,7 +2270,7 @@ Cordiali saluti,
     document.addEventListener("drop", handlePipelineDrop);
     document.addEventListener("dragend", clearPipelineDragState);
     document.addEventListener("keydown", (event) => {
-      const clickableOpportunity = event.target.closest?.(".top-opportunity--clickable, .opportunity-card--clickable");
+      const clickableOpportunity = event.target.closest?.(".top-opportunity--clickable, .opportunity-card--clickable, .kanban-card--clickable");
       if (clickableOpportunity && event.target === clickableOpportunity && ["Enter", " "].includes(event.key)) {
         event.preventDefault();
         clickableOpportunity.click();
@@ -2420,6 +2472,9 @@ Cordiali saluti,
         case "mark-applied":
           await markAsApplied(id || state.selectedJobId, trigger);
           break;
+        case "mark-rejected":
+          await markAsRejected(id || state.selectedJobId, trigger);
+          break;
         case "repair-applications":
           await repairMissingApplications(trigger);
           break;
@@ -2449,6 +2504,9 @@ Cordiali saluti,
           break;
         case "copy-copilot-field":
           await copyCopilotField(trigger.dataset.field);
+          break;
+        case "set-copilot-language":
+          setCopilotLanguage(trigger.dataset.language);
           break;
         case "feedback":
           await saveFeedback(id, trigger.dataset.feedback, trigger);
@@ -2623,6 +2681,17 @@ Cordiali saluti,
     $("copilotCoverLetter").value = suggestedCoverLetter(job, language);
     $("copilotCoverLetterSource").textContent = "Basata sul modello principale di Margherita, adattata all’annuncio e completata secondo le linee guida.";
     showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
+  }
+
+  function setCopilotLanguage(language) {
+    if (!["it", "en"].includes(language) || !$("copilotLanguage")) return;
+    $("copilotLanguage").value = language;
+    document.querySelectorAll("[data-action='set-copilot-language']").forEach((button) => {
+      const active = button.dataset.language === language;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    regenerateCopilotTexts();
   }
 
   async function copyCopilotField(fieldId) {
@@ -2811,13 +2880,47 @@ Cordiali saluti,
     openDialog({
       eyebrow: "RIMUOVI OPPORTUNITÀ",
       title: `Rimuovere ${jobTitle(job)}?`,
-      body: `<p class="dialog-copy">L’opportunità sparirà dalla dashboard e dalla lista. Lo storico rimarrà nel database.</p>
-        <form data-dialog-form="remove-opportunity" data-record-id="${escapeAttribute(job.id)}"><div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--danger" type="submit">${icon("trash")}Cancella</button></div></form>`
+      body: `<p class="dialog-copy">L’opportunità sparirà dalla dashboard. Indicando il motivo aiuti il ranking a proporti posizioni più pertinenti.</p>
+        <form class="form-stack" data-dialog-form="remove-opportunity" data-record-id="${escapeAttribute(job.id)}">
+          <fieldset class="preference-questionnaire"><legend>Perché non ti interessa?</legend>
+            <label><input type="radio" name="reason" value="role" required /> Ruolo non in linea</label>
+            <label><input type="radio" name="reason" value="industry" /> Industria non interessante</label>
+            <label><input type="radio" name="reason" value="location" /> Località o modalità di lavoro</label>
+            <label><input type="radio" name="reason" value="salary" /> RAL / stipendio</label>
+            <label><input type="radio" name="reason" value="seniority" /> Livello o requisiti</label>
+            <label><input type="radio" name="reason" value="company" /> Azienda non di interesse</label>
+            <label><input type="radio" name="reason" value="other" /> Altro</label>
+          </fieldset>
+          <label class="field"><span>Dettaglio facoltativo</span><textarea name="notes" rows="3" placeholder="Cosa vorresti vedere al suo posto?"></textarea></label>
+          <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--danger" type="submit">${icon("trash")}Cancella e impara</button></div>
+        </form>`
     });
   }
 
   async function submitRemoveOpportunity(form) {
     const jobId = form.dataset.recordId;
+    const job = getJobById(jobId);
+    const values = new FormData(form);
+    if (job) rememberRejectedOpportunity(job, String(values.get("reason") || "other"), String(values.get("notes") || "").trim());
+    const existingFeedback = feedbackForJob(jobId);
+    const feedbackPayload = {};
+    setMapped(feedbackPayload, "feedback", "jobId", jobId);
+    setMapped(feedbackPayload, "feedback", "value", "DISLIKE");
+    try {
+      if (existingFeedback) await updateRecord("feedback", existingFeedback.id, feedbackPayload);
+      else await insertRecord("feedback", feedbackPayload);
+    } catch (feedbackError) {
+      console.warn("Dislike feedback could not be persisted; local learning was retained", feedbackError);
+    }
+    const application = getApplicationForJob(jobId);
+    if (application) {
+      const previousNotes = String(valueOf(application, "applications", "notes", "")).trim();
+      const marker = "[ARCHIVIATA: NON IN LINEA]";
+      const applicationPatch = {};
+      setMapped(applicationPatch, "applications", "status", "closed");
+      setMapped(applicationPatch, "applications", "notes", previousNotes.includes(marker) ? previousNotes : `${previousNotes}${previousNotes ? "\n\n" : ""}${marker}`);
+      await writeApplicationRecord("update", application.id, applicationPatch, "CLOSED");
+    }
     await updateRecord("jobs", jobId, {
       [fieldName("jobs", "status")]: "CLOSED",
       [fieldName("jobs", "saved")]: false
@@ -2825,6 +2928,34 @@ Cordiali saluti,
     closeDialog();
     renderAll();
     showToast("L’opportunità è stata rimossa dalla dashboard.", "success", "Opportunità cancellata");
+  }
+
+  async function markAsRejected(jobId, button) {
+    const job = getJobById(jobId);
+    if (!job || !ensureWritable()) return;
+    setBusy(button, true, "Registrazione…");
+    try {
+      const application = getApplicationForJob(job.id);
+      const marker = "[ESITO: RIFIUTATA]";
+      const previousNotes = String(valueOf(application, "applications", "notes", "")).trim();
+      const payload = {};
+      setMapped(payload, "applications", "jobId", job.id);
+      setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
+      setMapped(payload, "applications", "status", "rejected");
+      setMapped(payload, "applications", "progress", 100);
+      setMapped(payload, "applications", "notes", previousNotes.includes(marker) ? previousNotes : `${previousNotes}${previousNotes ? "\n\n" : ""}${marker}`);
+      try {
+        if (application) await writeApplicationRecord("update", application.id, payload, "CLOSED");
+        else await writeApplicationRecord("insert", null, payload, "CLOSED");
+      } catch (error) {
+        throw new Error(`Non è stato possibile registrare l’esito. ${humanizeError(error)}`);
+      }
+      await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: "CLOSED" });
+      renderAll();
+      showToast("La candidatura è stata registrata come rifiutata in tutte le pagine.", "success", "Esito salvato");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   function appliedApplicationPayload(job, application) {

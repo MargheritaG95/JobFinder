@@ -2191,6 +2191,27 @@ textarea::placeholder {
 .copilot-company-overview strong { font-size: 0.7rem; }
 .copilot-company-overview p { margin: 6px 0 0; color: #526b91; font-size: 0.67rem; line-height: 1.58; }
 
+.copilot-role-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.copilot-role-facts > div {
+  display: grid;
+  min-height: 72px;
+  align-content: center;
+  gap: 5px;
+  padding: 11px;
+  border: 1px solid #dce7f8;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #f7faff, #fff);
+}
+
+.copilot-role-facts span { color: var(--muted); font-size: 0.58rem; font-weight: 650; }
+.copilot-role-facts strong { font-size: 0.66rem; line-height: 1.35; }
+
 .copilot-form {
   padding: 28px;
 }
@@ -2237,7 +2258,11 @@ textarea::placeholder {
 }
 
 .copilot-role-brief h3 { margin: 3px 0 8px; font-size: 0.92rem; }
-.copilot-role-brief > p:last-child { margin: 0; color: #526b91; font-size: 0.69rem; line-height: 1.62; }
+#copilotRoleBrief { margin: 0; color: #526b91; font-size: 0.69rem; line-height: 1.62; }
+.copilot-role-brief h4 { margin: 18px 0 9px; padding-top: 15px; border-top: 1px solid #dce7f8; font-size: 0.74rem; }
+.copilot-responsibility-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.copilot-responsibility-list li { position: relative; padding-left: 20px; color: #405b82; font-size: 0.66rem; line-height: 1.5; }
+.copilot-responsibility-list li::before { position: absolute; top: 0.18em; left: 0; display: grid; width: 14px; height: 14px; place-items: center; border-radius: 50%; color: #fff; background: var(--blue-600); content: "✓"; font-size: 0.5rem; font-weight: 900; }
 
 .copilot-insight-grid { display: grid; gap: 10px; margin: 18px 0; }
 .copilot-insight-grid .field--accent { margin: 0; }
@@ -2545,6 +2570,7 @@ textarea::placeholder {
   .kpi-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); }
   .company-grid, .resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filter-bar { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
+  .copilot-layout { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 1020px) {
@@ -2609,6 +2635,7 @@ textarea::placeholder {
   .hero-stat { justify-content: flex-start; }
 
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .copilot-role-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-card { min-height: 128px; padding: 15px; }
   .kpi-card:last-child { grid-column: span 2; }
   .kpi-card > strong { font-size: 1.55rem; }

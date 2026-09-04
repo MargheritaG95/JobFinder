@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260904.31" />
+    <link rel="stylesheet" href="styles.css?v=20260904.33" />
   </head>
   <body>
     <noscript>
@@ -253,7 +253,13 @@
                 <h1>Bentornata, <span id="greetingName">ci siamo</span> 👋</h1>
                 <p>Ecco il tuo overview di oggi.</p>
               </div>
-              <div class="hero-actions">
+              <div class="hero-actions dashboard-hero-actions">
+                <label class="dashboard-range" for="dashboardRangeFilter">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>
+                  <select id="dashboardRangeFilter" aria-label="Periodo KPI dashboard">
+                    <option value="7">Ultimi 7 giorni</option><option value="30" selected>Ultimi 30 giorni</option><option value="90">Ultimi 90 giorni</option><option value="all">Tutto il periodo</option>
+                  </select>
+                </label>
                 <span id="lastSyncLabel" class="last-sync">Aggiornato ora</span>
                 <button id="dashboardRefreshButton" class="button button--secondary" type="button" data-action="refresh">
                   <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>Aggiorna
@@ -266,37 +272,13 @@
               <span>I dati mostrati sono dimostrativi e non vengono scritti su Supabase.</span>
             </div>
 
-            <div class="kpi-grid">
-              <article class="kpi-card kpi-card--blue">
-                <span class="kpi-icon"><svg class="icon"><use href="#icon-sparkles"></use></svg></span>
-                <span class="kpi-label">OPPORTUNITÀ ALTO FIT</span>
-                <strong id="kpiHighFit">0</strong>
-                <small id="kpiHighFitMeta">Fit ≥ 8/10</small>
-              </article>
-              <article class="kpi-card kpi-card--violet">
-                <span class="kpi-icon"><svg class="icon"><use href="#icon-file"></use></svg></span>
-                <span class="kpi-label">APPLICATION IN CORSO</span>
-                <strong id="kpiApplications">0</strong>
-                <small id="kpiApplicationsMeta">Preparazione e invio</small>
-              </article>
-              <article class="kpi-card kpi-card--amber">
-                <span class="kpi-icon"><svg class="icon"><use href="#icon-calendar"></use></svg></span>
-                <span class="kpi-label">COLLOQUI</span>
-                <strong id="kpiInterviews">0</strong>
-                <small id="kpiInterviewsMeta">In pipeline</small>
-              </article>
-              <article class="kpi-card kpi-card--green">
-                <span class="kpi-icon"><svg class="icon"><use href="#icon-award"></use></svg></span>
-                <span class="kpi-label">OFFERTE</span>
-                <strong id="kpiOffers">0</strong>
-                <small id="kpiOffersMeta">Ricevute</small>
-              </article>
-              <article class="kpi-card kpi-card--rose">
-                <span class="kpi-icon"><svg class="icon"><use href="#icon-building"></use></svg></span>
-                <span class="kpi-label">AZIENDE TARGET</span>
-                <strong id="kpiCompanies">0</strong>
-                <small id="kpiCompaniesMeta">Tier A, B e C</small>
-              </article>
+            <div class="kpi-grid" aria-label="Riepilogo candidature">
+              <button class="kpi-card kpi-card--blue" type="button" data-action="open-dashboard-kpi" data-kpi="sent"><span class="kpi-icon"><svg class="icon"><use href="#icon-check"></use></svg></span><span class="kpi-label">INVIATE</span><strong id="kpiSent">0</strong><small id="kpiSentMeta">Nel periodo</small><span id="kpiSentDelta" class="kpi-delta kpi-delta--neutral">— rispetto a ieri</span></button>
+              <button class="kpi-card kpi-card--amber" type="button" data-action="open-dashboard-kpi" data-kpi="to-send"><span class="kpi-icon"><svg class="icon"><use href="#icon-clock"></use></svg></span><span class="kpi-label">DA MANDARE</span><strong id="kpiToSend">0</strong><small id="kpiToSendMeta">Applica dopo</small><span id="kpiToSendDelta" class="kpi-delta kpi-delta--neutral">— rispetto a ieri</span></button>
+              <button class="kpi-card kpi-card--violet" type="button" data-action="open-dashboard-kpi" data-kpi="to-review"><span class="kpi-icon"><svg class="icon"><use href="#icon-search"></use></svg></span><span class="kpi-label">DA VALUTARE</span><strong id="kpiToReview">0</strong><small id="kpiToReviewMeta">Nuove opportunità</small><span id="kpiToReviewDelta" class="kpi-delta kpi-delta--neutral">— rispetto a ieri</span></button>
+              <button class="kpi-card kpi-card--green" type="button" data-action="open-dashboard-kpi" data-kpi="interviews"><span class="kpi-icon"><svg class="icon"><use href="#icon-calendar"></use></svg></span><span class="kpi-label">COLLOQUI</span><strong id="kpiInterviews">0</strong><small id="kpiInterviewsMeta">Nel periodo</small><span id="kpiInterviewsDelta" class="kpi-delta kpi-delta--neutral">— rispetto a ieri</span></button>
+              <button class="kpi-card kpi-card--slate" type="button" data-action="open-dashboard-kpi" data-kpi="waiting"><span class="kpi-icon"><svg class="icon"><use href="#icon-clock"></use></svg></span><span class="kpi-label">IN ATTESA</span><strong id="kpiWaiting">0</strong><small id="kpiWaitingMeta">Risposta azienda</small><span id="kpiWaitingDelta" class="kpi-delta kpi-delta--neutral">— rispetto a ieri</span></button>
+              <button class="kpi-card kpi-card--rose" type="button" data-action="open-dashboard-kpi" data-kpi="followups"><span class="kpi-icon"><svg class="icon"><use href="#icon-message"></use></svg></span><span class="kpi-label">FOLLOW-UP</span><strong id="kpiFollowups">0</strong><small id="kpiFollowupsMeta">Da completare</small><span id="kpiFollowupsDelta" class="kpi-delta kpi-delta--neutral">— rispetto a ieri</span></button>
             </div>
 
             <div class="dashboard-grid">
@@ -349,6 +331,7 @@
               </div>
             </div>
 
+            <div id="opportunityKpiFilterNotice" class="kpi-filter-notice is-hidden"></div>
             <section class="filter-bar" aria-label="Filtri opportunità">
               <label class="compact-field">
                 <span>Fit minimo</span>
@@ -397,6 +380,7 @@
               </div>
               <div class="hero-stat"><strong id="applicationHeroCount">0</strong><span>candidature</span></div>
             </div>
+            <div id="applicationKpiFilterNotice" class="kpi-filter-notice is-hidden"></div>
             <div id="applicationSummary" class="mini-kpi-row"></div>
             <div id="applicationsList" class="table-card"></div>
           </section>
@@ -426,6 +410,7 @@
                 <svg class="icon"><use href="#icon-plus"></use></svg>Nuovo follow-up
               </button>
             </div>
+            <div id="followupKpiFilterNotice" class="kpi-filter-notice is-hidden"></div>
             <div id="followupSummary" class="mini-kpi-row"></div>
             <div id="followupsList" class="followup-list"></div>
           </section>
@@ -726,6 +711,6 @@
 
     <script src="config.js?v=20260904.29" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260904.31" defer></script>
+    <script src="app.js?v=20260904.33" defer></script>
   </body>
 </html>

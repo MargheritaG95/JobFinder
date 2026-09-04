@@ -108,6 +108,8 @@ Cordiali saluti,
     route: "dashboard",
     selectedJobId: null,
     selectedApplicationId: null,
+    dashboardRangeDays: "30",
+    dashboardFilter: null,
     draggedPipelineJobId: null,
     pendingJobActions: new Set(),
     demo: false,
@@ -1432,34 +1434,83 @@ Cordiali saluti,
     $("lastSyncLabel").textContent = state.lastSync ? `Aggiornato ${formatDateTime(state.lastSync)}` : "Non ancora sincronizzato";
   }
 
+  function recordMoment(record, entity, keys) {
+    for (const key of keys) {
+      const raw = valueOf(record, entity, key, "") || record?.[key] || "";
+      const moment = new Date(raw);
+      if (raw && !Number.isNaN(moment.getTime())) return moment;
+    }
+    return null;
+  }
+
+  function entryMoment(entry) {
+    return recordMoment(entry.application, "applications", ["updatedAt", "appliedAt", "createdAt", "updated_at", "applied_at", "created_at"])
+      || recordMoment(entry.job, "jobs", ["updatedAt", "createdAt", "updated_at", "created_at"]);
+  }
+
+  function dashboardRangeStart() {
+    if (state.dashboardRangeDays === "all") return null;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - Math.max(1, asNumber(state.dashboardRangeDays, 30)) + 1);
+    return start;
+  }
+
+  function isInDashboardRange(moment) {
+    const start = dashboardRangeStart();
+    return !start || Boolean(moment && moment.getTime() >= start.getTime());
+  }
+
+  function sameLocalDay(moment, offset = 0) {
+    if (!moment) return false;
+    const target = new Date();
+    target.setDate(target.getDate() + offset);
+    return moment.getFullYear() === target.getFullYear() && moment.getMonth() === target.getMonth() && moment.getDate() === target.getDate();
+  }
+
+  function dailyDelta(items, getMoment) {
+    return items.filter((item) => sameLocalDay(getMoment(item))).length - items.filter((item) => sameLocalDay(getMoment(item), -1)).length;
+  }
+
+  function renderKpiDelta(id, delta) {
+    const node = $(id);
+    if (!node) return;
+    node.className = `kpi-delta kpi-delta--${delta > 0 ? "positive" : delta < 0 ? "negative" : "neutral"}`;
+    node.textContent = delta > 0 ? `↑ ${delta} rispetto a ieri` : delta < 0 ? `↓ ${Math.abs(delta)} rispetto a ieri` : "— invariato da ieri";
+  }
+
+  function dashboardMetricData() {
+    const jobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
+    const entries = applicationRegisterEntries();
+    const followupsAll = state.data.followups.filter((item) => !Boolean(valueOf(item, "followups", "completed", false)));
+    const jobMoment = (job) => recordMoment(job, "jobs", ["updatedAt", "createdAt", "updated_at", "created_at"]);
+    const followupMoment = (item) => recordMoment(item, "followups", ["updatedAt", "createdAt", "dueDate", "updated_at", "created_at", "due_date"]);
+    const sentAll = entries.filter((entry) => ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER"].includes(entry.status));
+    const toSendAll = jobs.filter((job) => opportunityStage(job) === "to-apply");
+    const toReviewAll = jobs.filter((job) => opportunityStage(job) === "review");
+    const interviewsAll = entries.filter((entry) => entry.status === "INTERVIEW");
+    const waitingAll = entries.filter((entry) => entry.status === "APPLIED");
+    const inRange = (items, getMoment) => items.filter((item) => isInDashboardRange(getMoment(item)));
+    return {
+      sent: inRange(sentAll, entryMoment), toSend: inRange(toSendAll, jobMoment), toReview: inRange(toReviewAll, jobMoment),
+      interviews: inRange(interviewsAll, entryMoment), waiting: inRange(waitingAll, entryMoment), followups: inRange(followupsAll, followupMoment),
+      deltas: { sent: dailyDelta(sentAll, entryMoment), toSend: dailyDelta(toSendAll, jobMoment), toReview: dailyDelta(toReviewAll, jobMoment), interviews: dailyDelta(interviewsAll, entryMoment), waiting: dailyDelta(waitingAll, entryMoment), followups: dailyDelta(followupsAll, followupMoment) }
+    };
+  }
+
   function renderDashboard() {
     const jobs = [...state.data.jobs];
-    const applications = [...state.data.applications];
-    const highFit = jobs.filter((job) => jobFit(job) >= 8 && jobStatus(job) !== "CLOSED");
-    const activeApplications = applicationRegisterEntries().filter((entry) => !["CLOSED", "REJECTED", "WITHDRAWN"].includes(entry.status));
-    const interviewIds = new Set();
-    const offerIds = new Set();
-    jobs.forEach((job) => {
-      if (jobStatus(job) === "INTERVIEW") interviewIds.add(`job:${job.id}`);
-      if (jobStatus(job) === "OFFER") offerIds.add(`job:${job.id}`);
+    const metrics = dashboardMetricData();
+    [["Sent", "sent"], ["ToSend", "toSend"], ["ToReview", "toReview"], ["Interviews", "interviews"], ["Waiting", "waiting"], ["Followups", "followups"]].forEach(([id, key]) => {
+      $(`kpi${id}`).textContent = String(metrics[key].length);
+      renderKpiDelta(`kpi${id}Delta`, metrics.deltas[key]);
     });
-    applications.forEach((application) => {
-      const linkedJob = valueOf(application, "applications", "jobId", "");
-      const status = normalizeStatus(valueOf(application, "applications", "status", ""), "");
-      if (status === "INTERVIEW") interviewIds.add(linkedJob ? `job:${linkedJob}` : `app:${application.id}`);
-      if (status === "OFFER") offerIds.add(linkedJob ? `job:${linkedJob}` : `app:${application.id}`);
-    });
-
-    $("kpiHighFit").textContent = String(highFit.length);
-    $("kpiApplications").textContent = String(activeApplications.length);
-    $("kpiInterviews").textContent = String(interviewIds.size);
-    $("kpiOffers").textContent = String(offerIds.size);
-    $("kpiCompanies").textContent = String(state.data.companies.length);
-    $("kpiHighFitMeta").textContent = highFit.length ? `${highFit.filter((job) => jobFit(job) >= 9).length} con fit ≥ 9` : "Fit ≥ 8/10";
-    $("kpiApplicationsMeta").textContent = activeApplications.length === 1 ? "1 candidatura attiva" : `${activeApplications.length} candidature attive`;
-    $("kpiInterviewsMeta").textContent = interviewIds.size ? "Da preparare e seguire" : "Nessun colloquio aperto";
-    $("kpiOffersMeta").textContent = offerIds.size ? "Congratulazioni!" : "Nessuna offerta aperta";
-    $("kpiCompaniesMeta").textContent = `${state.data.companies.filter((company) => normalizeStatus(valueOf(company, "companies", "tier", ""), "") === "A").length} Tier A`;
+    $("kpiSentMeta").textContent = `${metrics.sent.filter((entry) => sameLocalDay(entryMoment(entry))).length} oggi`;
+    $("kpiToSendMeta").textContent = "Applica dopo";
+    $("kpiToReviewMeta").textContent = "Nuove opportunità";
+    $("kpiInterviewsMeta").textContent = metrics.interviews.length ? "Da preparare" : "Nessun colloquio";
+    $("kpiWaitingMeta").textContent = "Risposta azienda";
+    $("kpiFollowupsMeta").textContent = "Da completare";
 
     const visibleJobs = jobs.filter((job) => jobStatus(job) !== "CLOSED");
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
@@ -1546,6 +1597,14 @@ Cordiali saluti,
     if ([...select.options].some((option) => option.value === previous)) select.value = previous;
   }
 
+  function renderKpiFilterNotice(id, route) {
+    const notice = $(id);
+    if (!notice) return;
+    const visible = state.dashboardFilter?.route === route;
+    notice.classList.toggle("is-hidden", !visible);
+    notice.innerHTML = visible ? `<span>Vista filtrata: <strong>${escapeHtml(state.dashboardFilter.label)}</strong></span><button type="button" data-action="clear-dashboard-kpi-filter">Mostra tutto</button>` : "";
+  }
+
   function renderOpportunityFilters() {
     const statuses = [...new Set(state.data.jobs.map(jobStatus))].sort();
     const priorities = [...new Set(state.data.jobs.map(jobPriority))].sort();
@@ -1563,18 +1622,24 @@ Cordiali saluti,
     const priority = $("opportunityPriorityFilter")?.value || "";
     const company = $("opportunityCompanyFilter")?.value || "";
     const location = $("opportunityLocationFilter")?.value || "";
-    return state.data.jobs
+    let jobs = state.data.jobs
       .filter((job) => jobStatus(job) !== "CLOSED")
       .filter((job) => jobFit(job) >= minFit)
       .filter((job) => !status || jobStatus(job) === status)
       .filter((job) => !priority || jobPriority(job) === priority)
       .filter((job) => !company || companyNameForJob(job) === company)
-      .filter((job) => !location || valueOf(job, "jobs", "location", "") === location)
-      .sort((a, b) => jobFit(b) - jobFit(a));
+      .filter((job) => !location || valueOf(job, "jobs", "location", "") === location);
+    if (state.dashboardFilter?.route === "opportunities") {
+      const selected = state.dashboardFilter.key === "to-send" ? dashboardMetricData().toSend : dashboardMetricData().toReview;
+      const ids = new Set(selected.map((job) => String(job.id)));
+      jobs = jobs.filter((job) => ids.has(String(job.id)));
+    }
+    return jobs.sort((a, b) => jobFit(b) - jobFit(a));
   }
 
   function renderOpportunities(options = {}) {
     if (!options.preserveFilters) renderOpportunityFilters();
+    renderKpiFilterNotice("opportunityKpiFilterNotice", "opportunities");
     const jobs = filteredJobs();
     $("opportunityHeroCount").textContent = String(state.data.jobs.length);
     $("opportunityResultCount").textContent = `${jobs.length} ${jobs.length === 1 ? "risultato" : "risultati"}`;
@@ -1753,11 +1818,19 @@ Cordiali saluti,
   }
 
   function renderApplications() {
-    const entries = applicationRegisterEntries().sort((a, b) => {
+    let entries = applicationRegisterEntries();
+    if (state.dashboardFilter?.route === "applications") {
+      const selected = { sent: dashboardMetricData().sent, interviews: dashboardMetricData().interviews, waiting: dashboardMetricData().waiting }[state.dashboardFilter.key] || [];
+      const identity = (entry) => String(entry.application?.id ? `app:${entry.application.id}` : `job:${entry.job?.id || ""}`);
+      const ids = new Set(selected.map(identity));
+      entries = entries.filter((entry) => ids.has(identity(entry)));
+    }
+    entries.sort((a, b) => {
       const dateA = new Date(valueOf(a.application, "applications", "appliedAt", a.application?.created_at || 0)).getTime() || 0;
       const dateB = new Date(valueOf(b.application, "applications", "appliedAt", b.application?.created_at || 0)).getTime() || 0;
       return dateB - dateA;
     });
+    renderKpiFilterNotice("applicationKpiFilterNotice", "applications");
     const sent = entries.filter((entry) => ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER"].includes(entry.status)).length;
     const missing = entries.filter((entry) => entry.missingRecord).length;
     const withoutFollowup = entries.filter((entry) => entry.status === "APPLIED" && !followupForEntry(entry)).length;
@@ -1883,7 +1956,12 @@ Cordiali saluti,
   }
 
   function renderFollowups() {
-    const followups = [...state.data.followups].sort((a, b) => {
+    let followups = [...state.data.followups];
+    if (state.dashboardFilter?.route === "followups") {
+      const ids = new Set(dashboardMetricData().followups.map((item) => String(item.id)));
+      followups = followups.filter((item) => ids.has(String(item.id)));
+    }
+    followups.sort((a, b) => {
       const completeA = Boolean(valueOf(a, "followups", "completed", false));
       const completeB = Boolean(valueOf(b, "followups", "completed", false));
       if (completeA !== completeB) return Number(completeA) - Number(completeB);
@@ -2161,6 +2239,7 @@ Cordiali saluti,
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", String(active));
     });
+    renderKpiFilterNotice("followupKpiFilterNotice", "followups");
     const company = companyNameForJob(job);
     $("copilotCompanyLogo").innerHTML = companyLogoContent(job);
     $("copilotRole").textContent = jobTitle(job);
@@ -2317,6 +2396,11 @@ Cordiali saluti,
     $("closeSidebarButton")?.addEventListener("click", closeSidebar);
     $("sidebarBackdrop")?.addEventListener("click", closeSidebar);
     $("clearOpportunityFiltersButton")?.addEventListener("click", clearOpportunityFilters);
+    $("dashboardRangeFilter")?.addEventListener("change", (event) => {
+      state.dashboardRangeDays = event.target.value;
+      state.dashboardFilter = null;
+      renderDashboard();
+    });
     [
       "opportunityFitFilter",
       "opportunityStatusFilter",
@@ -2495,6 +2579,32 @@ Cordiali saluti,
     }
   }
 
+  function openDashboardKpi(key) {
+    const definitions = {
+      sent: { route: "applications", label: "Candidature inviate" }, "to-send": { route: "opportunities", label: "Da mandare" },
+      "to-review": { route: "opportunities", label: "Da valutare" }, interviews: { route: "applications", label: "Colloqui" },
+      waiting: { route: "applications", label: "In attesa di risposta" }, followups: { route: "followups", label: "Follow-up da completare" }
+    };
+    const definition = definitions[key];
+    if (!definition) return;
+    state.dashboardFilter = { key, ...definition };
+    if (definition.route === "opportunities") {
+      renderOpportunityFilters();
+      $("opportunityFitFilter").value = "0";
+      renderOpportunities({ preserveFilters: true });
+    } else if (definition.route === "applications") renderApplications();
+    else renderFollowups();
+    navigate(definition.route);
+  }
+
+  function clearDashboardKpiFilter() {
+    const route = state.dashboardFilter?.route || state.route;
+    state.dashboardFilter = null;
+    if (route === "opportunities") renderOpportunities();
+    if (route === "applications") renderApplications();
+    if (route === "followups") renderFollowups();
+  }
+
   function clearOpportunityFilters() {
     $("opportunityFitFilter").value = "0";
     $("opportunityStatusFilter").value = "";
@@ -2508,6 +2618,7 @@ Cordiali saluti,
     const routeTrigger = event.target.closest("[data-route]");
     if (routeTrigger) {
       event.preventDefault();
+      if (state.dashboardFilter) clearDashboardKpiFilter();
       navigate(routeTrigger.dataset.route);
       return;
     }
@@ -2522,6 +2633,12 @@ Cordiali saluti,
     const id = trigger.dataset.id;
     try {
       switch (action) {
+        case "open-dashboard-kpi":
+          openDashboardKpi(trigger.dataset.kpi);
+          break;
+        case "clear-dashboard-kpi-filter":
+          clearDashboardKpiFilter();
+          break;
         case "refresh":
           await loadAllData();
           break;

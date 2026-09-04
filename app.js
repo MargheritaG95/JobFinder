@@ -2349,6 +2349,12 @@ Cordiali saluti,
         case "copy-filled-template":
           await copyFilledCopilotTemplate();
           break;
+        case "regenerate-copilot":
+          regenerateCopilotTexts();
+          break;
+        case "copy-copilot-field":
+          await copyCopilotField(trigger.dataset.field);
+          break;
         case "feedback":
           await saveFeedback(id, trigger.dataset.feedback, trigger);
           break;
@@ -2522,6 +2528,22 @@ Cordiali saluti,
     $("copilotCoverLetter").value = suggestedCoverLetter(job, language);
     $("copilotCoverLetterSource").textContent = "Basata sul modello principale di Margherita, adattata all’annuncio e completata secondo le linee guida.";
     showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
+  }
+
+  async function copyCopilotField(fieldId) {
+    const allowedFields = new Set(["copilotRecruiterNote", "copilotCoverLetter"]);
+    const field = allowedFields.has(fieldId) ? $(fieldId) : null;
+    const content = field?.value?.trim();
+    if (!content) {
+      showToast("Non c’è ancora un testo da copiare.", "warning", "Contenuto vuoto");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(content);
+      showToast("Testo copiato negli appunti.", "success", "Pronto da incollare");
+    } catch (_error) {
+      openDialog({ eyebrow: "TESTO PRONTO", title: "Copia il contenuto", body: `<textarea class="kit-preview" rows="16" readonly>${escapeHtml(content)}</textarea><div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Chiudi</button></div>` });
+    }
   }
 
   function renderTemplates() {

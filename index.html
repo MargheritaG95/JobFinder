@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260904.29" />
+    <link rel="stylesheet" href="styles.css?v=20260904.30" />
   </head>
   <body>
     <noscript>
@@ -312,9 +312,13 @@
                   <div class="dashboard-section-heading"><h3>Nuove da valutare</h3><span id="newOpportunityCount">0</span></div>
                   <div id="newOpportunities" class="opportunity-stack"></div>
                 </div>
-                <div class="dashboard-opportunity-section dashboard-opportunity-section--evaluated">
-                  <div class="dashboard-section-heading"><h3>Già valutate</h3><span id="evaluatedOpportunityCount">0</span></div>
-                  <div id="evaluatedOpportunities" class="opportunity-stack"></div>
+                <div class="dashboard-opportunity-section dashboard-opportunity-section--to-apply">
+                  <div class="dashboard-section-heading"><div><p class="section-kicker">PROSSIMO PASSO</p><h3>Da applicare</h3></div><span id="toApplyOpportunityCount">0</span></div>
+                  <div id="toApplyOpportunities" class="opportunity-stack"></div>
+                </div>
+                <div class="dashboard-opportunity-section dashboard-opportunity-section--applied">
+                  <div class="dashboard-section-heading"><div><p class="section-kicker">TRACKING</p><h3>Candidature inviate</h3></div><span id="appliedOpportunityCount">0</span></div>
+                  <div id="appliedOpportunities" class="opportunity-stack"></div>
                 </div>
               </section>
 
@@ -361,7 +365,7 @@
               <label class="compact-field"><span>Location</span><select id="opportunityLocationFilter"><option value="">Tutte</option></select></label>
               <button id="clearOpportunityFiltersButton" class="button button--ghost" type="button">Azzera filtri</button>
             </section>
-            <div class="result-line"><strong id="opportunityResultCount">0 risultati</strong><span>Ordinati per Fit Score decrescente</span></div>
+            <div class="result-line"><strong id="opportunityResultCount">0 risultati</strong><span>Organizzati per prossima azione</span></div>
             <div id="opportunitiesList" class="opportunities-grid"></div>
           </section>
 
@@ -722,6 +726,6 @@
 
     <script src="config.js?v=20260904.29" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260904.29" defer></script>
+    <script src="app.js?v=20260904.30" defer></script>
   </body>
 </html>

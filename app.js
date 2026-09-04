@@ -1030,6 +1030,10 @@ Cordiali saluti,
     return normalizeStatus(valueOf(job, "jobs", "priority", "NORMAL"), "NORMAL");
   }
 
+  function isPriorityJob(job) {
+    return ["HIGH", "URGENT", "ALTA"].includes(jobPriority(job));
+  }
+
   function feedbackForJob(jobId) {
     const jobColumn = fieldName("feedback", "jobId");
     return state.data.feedback.find((feedback) => String(feedback[jobColumn]) === String(jobId)) || null;
@@ -1346,6 +1350,11 @@ Cordiali saluti,
     return `<button class="icon-button save-button ${saved ? "is-saved" : ""}" type="button" data-action="toggle-save" data-id="${escapeAttribute(job.id)}" aria-label="${saved ? "Rimuovi dai salvati" : "Salva opportunità"}" aria-pressed="${saved}">${icon("heart")}</button>`;
   }
 
+  function priorityStarButton(job, compact = false) {
+    const active = isPriorityJob(job);
+    return `<button class="priority-star-button ${active ? "is-active" : ""}" type="button" data-action="toggle-priority" data-id="${escapeAttribute(job.id)}" aria-pressed="${active}" aria-label="${active ? "Rimuovi priorità" : "Segna come prioritaria"}"><span aria-hidden="true">${active ? "★" : "☆"}</span>${compact ? "" : "Priorità"}</button>`;
+  }
+
   function applicationActionButtons(job, options = {}) {
     const saved = Boolean(valueOf(job, "jobs", "saved", false));
     const compact = Boolean(options.compact);
@@ -1459,7 +1468,7 @@ Cordiali saluti,
         <div class="opportunity-copy">
           <h3>${escapeHtml(jobTitle(job))}</h3>
           <p>${escapeHtml(company)} · ${escapeHtml(location)}</p>
-          <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${feedbackButtons(job.id, true, true)}</div>
+          <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${priorityStarButton(job, true)}${feedbackButtons(job.id, true, true)}</div>
         </div>
         ${choice ? `<div class="top-opportunity__decision">${choice}</div>` : ""}
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
@@ -1548,7 +1557,7 @@ Cordiali saluti,
           <div class="opportunity-copy">
             <h3>${escapeHtml(jobTitle(job))}</h3>
             <p>${escapeHtml(company)}</p>
-            <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityBadge(jobPriority(job))}${easyApplyBadge(job)}</div>
+            <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityStarButton(job)}${easyApplyBadge(job)}</div>
           </div>
           ${decision ? `<div class="opportunity-card__primary-action">${decision}</div>` : ""}
           <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
@@ -1676,7 +1685,7 @@ Cordiali saluti,
     return `
       <article class="kanban-card kanban-card--clickable" draggable="true" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" data-pipeline-job-id="${escapeAttribute(job.id)}" data-pipeline-status="${status}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}. Trascina per cambiare il ranking nella colonna.">
         <div class="kanban-card__drag-handle" title="Trascina per ordinare">⋮⋮ <span>Trascina per ordinare</span></div>
-        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></div>
+        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="kanban-card__signals">${isPriorityJob(job) ? `<span class="pipeline-priority-star" title="Opportunità prioritaria" aria-label="Opportunità prioritaria">★</span>` : ""}<span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></span></div>
         <h3>${escapeHtml(jobTitle(job))}</h3>
         <p>${escapeHtml(companyNameForJob(job))} · ${escapeHtml(valueOf(job, "jobs", "location", "—"))}</p>
         <div class="kanban-card__footer">
@@ -2108,7 +2117,13 @@ Cordiali saluti,
     $("copilotRole").textContent = jobTitle(job);
     $("copilotCompany").textContent = company;
     $("copilotFitScore").textContent = jobFit(job).toFixed(1);
-    $("copilotPriority").textContent = titleCase(jobPriority(job));
+    const priorityButton = $("copilotPriorityButton");
+    if (priorityButton) {
+      const active = isPriorityJob(job);
+      priorityButton.classList.toggle("is-active", active);
+      priorityButton.setAttribute("aria-pressed", String(active));
+      priorityButton.innerHTML = `<span aria-hidden="true">${active ? "★" : "☆"}</span>Priorità`;
+    }
     $("copilotStatus").textContent = jobStatus(job);
     $("copilotLocation").textContent = valueOf(job, "jobs", "location", "Non indicata");
     $("copilotIndustry").textContent = companyIndustry(job);
@@ -2133,7 +2148,7 @@ Cordiali saluti,
     const saveState = $("copilotSaveState");
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : localDraft.savedAt ? "Bozza salvata su questo dispositivo" : "Nuova application";
     saveState.classList.toggle("status-pill--neutral", !application);
-    $("prepareApplicationButton").innerHTML = application ? `${icon("check")}Aggiorna application` : `${icon("sparkles")}Prepara application`;
+    $("prepareApplicationButton").innerHTML = `${icon("file")}Salva bozza`;
     $("copilotSaveForLaterButton").innerHTML = `${icon("clock")}${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}`;
     const rejectedButton = $("copilotRejectedButton");
     rejectedButton.disabled = !hasAppliedToJob(job) || rejectedState(job);
@@ -2466,6 +2481,9 @@ Cordiali saluti,
         case "toggle-save":
           await toggleSavedJob(id, trigger);
           break;
+        case "toggle-priority":
+          await toggleJobPriority(id || state.selectedJobId, trigger);
+          break;
         case "save-for-later":
           await saveForLater(id || state.selectedJobId, trigger);
           break;
@@ -2504,6 +2522,9 @@ Cordiali saluti,
           break;
         case "copy-copilot-field":
           await copyCopilotField(trigger.dataset.field);
+          break;
+        case "edit-copilot-content":
+          openCopilotContentEditor(trigger.dataset.field);
           break;
         case "set-copilot-language":
           setCopilotLanguage(trigger.dataset.language);
@@ -2632,6 +2653,20 @@ Cordiali saluti,
     }
   }
 
+  async function toggleJobPriority(jobId, button) {
+    const job = getJobById(jobId);
+    if (!job || !ensureWritable()) return;
+    const next = isPriorityJob(job) ? "NORMAL" : "HIGH";
+    setBusy(button, true, "");
+    try {
+      await updateRecord("jobs", job.id, { [fieldName("jobs", "priority")]: next });
+      renderAll();
+      showToast(next === "HIGH" ? "La stellina è ora visibile anche nella Pipeline." : "Priorità rimossa in tutte le pagine.", "success", "Priorità aggiornata");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   function handlePipelineDragStart(event) {
     const card = event.target.closest?.("[data-pipeline-job-id]");
     if (!card) return;
@@ -2708,6 +2743,38 @@ Cordiali saluti,
     } catch (_error) {
       openDialog({ eyebrow: "TESTO PRONTO", title: "Copia il contenuto", body: `<textarea class="kit-preview" rows="16" readonly>${escapeHtml(content)}</textarea><div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Chiudi</button></div>` });
     }
+  }
+
+  function openCopilotContentEditor(fieldId) {
+    const allowed = { copilotRecruiterNote: "Messaggio recruiter", copilotCoverLetter: "Cover letter" };
+    const field = allowed[fieldId] ? $(fieldId) : null;
+    if (!field) return;
+    const templateOptions = state.data.answerBank.map((item) => `<option value="${escapeAttribute(item.id)}">${escapeHtml(valueOf(item, "answerBank", "title", "Template"))}</option>`).join("");
+    openDialog({
+      eyebrow: "PERSONALIZZAZIONE",
+      title: `Personalizza ${allowed[fieldId].toLowerCase()}`,
+      body: `<p class="dialog-copy">Le modifiche saranno visibili subito nella candidatura.</p>
+        <form class="form-stack" data-dialog-form="copilot-content" data-field-id="${fieldId}">
+          <div class="form-grid form-grid--two">
+            <label class="field"><span>Template</span><select name="template"><option value="">Struttura attuale</option>${templateOptions}</select></label>
+            <label class="field"><span>Tono di voce</span><select name="tone"><option>Professionale</option><option>Diretto</option><option>Caldo e personale</option><option>Executive</option></select></label>
+            <label class="field"><span>Lunghezza</span><select name="length"><option value="short">Breve</option><option value="medium" selected>Media</option><option value="long">Dettagliata</option></select></label>
+            <label class="field"><span>Lingua</span><select name="language"><option value="it">Italiano</option><option value="en">English</option></select></label>
+          </div>
+          <label class="field"><span>Anteprima</span><textarea name="content" rows="14" required>${escapeHtml(field.value)}</textarea></label>
+          <div class="notice notice--info">Il testo utilizza il CV selezionato e i dati dell’annuncio.</div>
+          <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--primary" type="submit">Salva e chiudi</button></div>
+        </form>`
+    });
+  }
+
+  async function submitCopilotContentEditor(form) {
+    const field = $(form.dataset.fieldId);
+    if (!field) return;
+    field.value = String(new FormData(form).get("content") || "").trim();
+    closeDialog();
+    await saveApplicationFromCopilot({ preventDefault() {} });
+    showToast("Il contenuto è stato aggiornato e salvato nella candidatura.", "success", "Modifiche salvate");
   }
 
   function renderTemplates() {
@@ -3405,6 +3472,9 @@ Cordiali saluti,
           break;
         case "remove-opportunity":
           await submitRemoveOpportunity(form);
+          break;
+        case "copilot-content":
+          await submitCopilotContentEditor(form);
           break;
         default:
           throw new Error(`Form non gestito: ${type}`);

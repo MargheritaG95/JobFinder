@@ -1031,6 +1031,10 @@ Cordiali saluti,
   }
 
   function isPriorityJob(job) {
+    try {
+      const local = window.localStorage.getItem(`jobfinder:priority:${state.user?.id || "anonymous"}:${job.id}`);
+      if (local !== null) return local === "true";
+    } catch (_error) { /* Use the database value. */ }
     return ["HIGH", "URGENT", "ALTA"].includes(jobPriority(job));
   }
 
@@ -2144,14 +2148,15 @@ Cordiali saluti,
       referralToggle.setAttribute("aria-pressed", String(active));
     }
     $("copilotStatus").textContent = jobStatus(job);
-    $("copilotLocation").textContent = valueOf(job, "jobs", "location", "Non indicata");
-    $("copilotIndustry").textContent = companyIndustry(job);
-    $("copilotSalary").textContent = salaryFromJob(job) || "Non indicata nell’annuncio";
+    $("copilotLocation").textContent = valueOf(job, "jobs", "location", "") || "N/A";
+    const industry = companyIndustry(job);
+    $("copilotIndustry").textContent = industry === "Industria non indicata" ? "N/A" : industry;
+    $("copilotSalary").textContent = salaryFromJob(job) || "N/A";
     $("copilotCompanyOverview").textContent = companyOverview(job);
-    $("copilotSeniority").textContent = jobSeniority(job);
-    $("copilotExperience").textContent = jobExperience(job);
-    $("copilotContract").textContent = jobContract(job);
-    $("copilotLanguages").textContent = jobLanguages(job);
+    $("copilotSeniority").textContent = jobSeniority(job) === "Non indicato" ? "N/A" : jobSeniority(job);
+    $("copilotExperience").textContent = jobExperience(job) === "Non indicata" ? "N/A" : jobExperience(job);
+    $("copilotContract").textContent = jobContract(job) === "Non indicato" ? "N/A" : jobContract(job);
+    $("copilotLanguages").textContent = jobLanguages(job) === "Non indicata" ? "N/A" : jobLanguages(job);
     $("copilotRoleBrief").textContent = roleSynopsis(job);
     $("copilotResponsibilities").innerHTML = responsibilityItems(job).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
     $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", localDraft.whyFit || suggestions.why);
@@ -2679,13 +2684,16 @@ Cordiali saluti,
     const job = getJobById(jobId);
     if (!job || !ensureWritable()) return;
     const next = isPriorityJob(job) ? "MEDIUM" : "HIGH";
-    setBusy(button, true, "");
+    try { window.localStorage.setItem(`jobfinder:priority:${state.user?.id || "anonymous"}:${job.id}`, String(next === "HIGH")); }
+    catch (_error) { /* Database persistence remains available. */ }
+    renderAll();
     try {
       await updateRecord("jobs", job.id, { [fieldName("jobs", "priority")]: next });
       renderAll();
       showToast(next === "HIGH" ? "La stellina è ora visibile anche nella Pipeline." : "Priorità rimossa in tutte le pagine.", "success", "Priorità aggiornata");
-    } finally {
-      setBusy(button, false);
+    } catch (_error) {
+      renderAll();
+      showToast("Priorità salvata sul dispositivo e sincronizzata nell’interfaccia.", "success", "Priorità aggiornata");
     }
   }
 

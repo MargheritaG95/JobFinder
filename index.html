@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260904.23" />
+    <link rel="stylesheet" href="styles.css?v=20260904.25" />
   </head>
   <body>
     <noscript>
@@ -374,7 +374,7 @@
               </div>
               <div class="hero-actions">
                 <button class="button button--primary" type="button" data-action="download-pipeline-report">
-                  <svg class="icon"><use href="#icon-download"></use></svg>Scarica report
+                  <svg class="icon"><use href="#icon-download"></use></svg>Scarica Excel
                 </button>
                 <button id="pipelineRefreshButton" class="button button--secondary" type="button" data-action="refresh">
                   <svg class="icon"><use href="#icon-refresh"></use></svg>Aggiorna
@@ -597,10 +597,10 @@
                 </dl>
                 <div class="copilot-company-overview"><strong>Cosa fa l’azienda</strong><p id="copilotCompanyOverview">Informazioni non disponibili.</p></div>
                 <div class="copilot-role-facts" aria-label="Informazioni essenziali sul ruolo">
-                  <div><span>Livello</span><strong id="copilotSeniority">Non indicato</strong></div>
-                  <div><span>Esperienza</span><strong id="copilotExperience">Non indicata</strong></div>
-                  <div><span>Contratto</span><strong id="copilotContract">Non indicato</strong></div>
-                  <div><span>Lingua</span><strong id="copilotLanguages">Non indicata</strong></div>
+                  <div><i><svg class="icon"><use href="#icon-briefcase"></use></svg></i><span>Livello<strong id="copilotSeniority">Non indicato</strong></span></div>
+                  <div><i><svg class="icon"><use href="#icon-award"></use></svg></i><span>Anni di esperienza<strong id="copilotExperience">Non indicata</strong></span></div>
+                  <div><i><svg class="icon"><use href="#icon-briefcase"></use></svg></i><span>Tipo di contratto<strong id="copilotContract">Non indicato</strong></span></div>
+                  <div><i><svg class="icon"><use href="#icon-message"></use></svg></i><span>Lingua<strong id="copilotLanguages">Non indicata</strong></span></div>
                 </div>
                 <section class="copilot-role-brief" aria-labelledby="copilotRoleBriefTitle">
                   <p class="eyebrow">RUOLO E RESPONSABILITÀ</p>
@@ -630,15 +630,18 @@
 
               <form id="copilotForm" class="copilot-form" novalidate>
                 <div class="panel-heading">
-                  <div><p class="eyebrow">PREPARAZIONE PERSONALIZZATA</p><h2>La tua application</h2></div>
+                  <div><p class="eyebrow">PREPARAZIONE PERSONALIZZATA</p><h2>Application Copilot</h2><p class="copilot-heading-copy">Materiali personalizzati e pronti da usare per questa candidatura.</p></div>
                   <div class="copilot-heading-actions">
-                    <label class="copilot-language-compact" title="Cambiando lingua vengono rigenerati tutti i testi">
-                      <span>Lingua</span>
-                      <select id="copilotLanguage" aria-label="Lingua dei testi">
+                    <div class="copilot-language-compact" title="Cambiando lingua vengono rigenerati tutti i testi">
+                      <div class="language-segmented" role="group" aria-label="Lingua dei testi">
+                        <button type="button" data-action="set-copilot-language" data-language="it" aria-pressed="true">IT</button>
+                        <button type="button" data-action="set-copilot-language" data-language="en" aria-pressed="false">EN</button>
+                      </div>
+                      <select id="copilotLanguage" class="visually-hidden" aria-label="Lingua dei testi">
                         <option value="it">IT</option>
                         <option value="en">EN</option>
                       </select>
-                    </label>
+                    </div>
                     <span id="copilotSaveState" class="status-pill status-pill--neutral">Non salvata</span>
                   </div>
                 </div>
@@ -701,11 +704,17 @@
                   <button id="copilotMarkAppliedButton" class="button button--success" type="button" data-action="mark-applied">
                     <svg class="icon"><use href="#icon-check"></use></svg>Ho applicato
                   </button>
+                  <button id="copilotRejectedButton" class="button button--danger" type="button" data-action="mark-rejected">
+                    Rifiutata
+                  </button>
                   <button id="copilotCopyKitButton" class="button button--secondary" type="button" data-action="copy-application-kit">
                     <svg class="icon"><use href="#icon-copy"></use></svg>Copia kit
                   </button>
                   <button id="prepareApplicationButton" class="button button--primary" type="submit">
                     <svg class="icon"><use href="#icon-sparkles"></use></svg>Prepara application
+                  </button>
+                  <button id="copilotRemoveOpportunityButton" class="button button--danger-ghost" type="button" data-action="remove-opportunity">
+                    <svg class="icon"><use href="#icon-trash"></use></svg>Cancella
                   </button>
                 </div>
               </form>
@@ -768,8 +777,8 @@
       <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260904.23" defer></script>
+    <script src="config.js?v=20260904.25" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260904.23" defer></script>
+    <script src="app.js?v=20260904.25" defer></script>
   </body>
 </html>

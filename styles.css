@@ -641,6 +641,22 @@ textarea::placeholder {
   gap: 7px;
 }
 
+.opportunity-company-brief {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 13px 14px;
+  border: 1px solid #e2e8f1;
+  border-radius: 11px;
+  background: #f8fafc;
+}
+
+.opportunity-company-brief__logo { width: 42px; height: 42px; }
+.opportunity-company-brief strong { font-size: 0.69rem; }
+.opportunity-company-brief p { margin: 4px 0 0; color: var(--muted); font-size: 0.65rem; line-height: 1.5; }
+
 .opportunity-card__role-summary > strong {
   color: #364258;
   font-size: 0.62rem;
@@ -1715,7 +1731,25 @@ textarea::placeholder {
   border-radius: 11px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(15, 31, 55, 0.04);
+  cursor: grab;
+  transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease, transform 160ms ease;
 }
+
+.kanban-card:active { cursor: grabbing; }
+.kanban-card.is-dragging { opacity: 0.42; transform: scale(0.98); }
+.kanban-card.is-drag-target { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(47, 101, 236, 0.13); }
+
+.kanban-card__drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: -3px 0 8px;
+  color: var(--muted-2);
+  font-size: 0.56rem;
+  letter-spacing: 0.02em;
+}
+
+.kanban-card__drag-handle span { letter-spacing: 0; }
 
 .kanban-card__top {
   display: flex;
@@ -2139,6 +2173,17 @@ textarea::placeholder {
 .meta-list dt { color: var(--muted); font-size: 0.63rem; }
 .meta-list dd { margin: 0; font-size: 0.65rem; font-weight: 700; text-align: right; }
 
+.copilot-company-overview {
+  margin: 15px 0;
+  padding: 12px;
+  border: 1px solid var(--blue-100);
+  border-radius: 10px;
+  background: var(--blue-50);
+}
+
+.copilot-company-overview strong { font-size: 0.66rem; }
+.copilot-company-overview p { margin: 5px 0 0; color: #526b91; font-size: 0.62rem; line-height: 1.5; }
+
 .copilot-form {
   padding: 25px;
 }
@@ -2258,6 +2303,7 @@ textarea::placeholder {
 .notice strong { white-space: nowrap; }
 .notice--warning { border: 1px solid #ffe1af; color: #784a06; background: #fff8ea; }
 .notice--info { border: 1px solid var(--blue-100); color: #375c95; background: var(--blue-50); }
+.notice--success { border: 1px solid #a7e5ca; color: #126747; background: #effbf6; }
 
 /* Dialog */
 .app-dialog {

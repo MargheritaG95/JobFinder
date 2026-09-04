@@ -108,12 +108,15 @@ Cordiali saluti,
     route: "dashboard",
     selectedJobId: null,
     selectedApplicationId: null,
+    draggedPipelineJobId: null,
     pendingJobActions: new Set(),
     demo: false,
     loadingData: false,
     sessionInitializing: false,
     sessionUserId: null,
     sessionExpiredHandled: false,
+    applicationRepairAttempted: false,
+    applicationRepairError: "",
     errors: {},
     optionalErrors: {},
     lastSync: null,
@@ -705,6 +708,8 @@ Cordiali saluti,
     state.lastSync = null;
     state.errors = {};
     state.optionalErrors = {};
+    state.applicationRepairAttempted = false;
+    state.applicationRepairError = "";
     DATA_ENTITIES.forEach((entity) => { state.data[entity] = []; });
   }
 
@@ -733,6 +738,19 @@ Cordiali saluti,
 
     results.forEach(([entity, rows]) => { state.data[entity] = rows; });
     state.profile = state.data.profiles[0] || null;
+    if (!state.applicationRepairAttempted && !state.errors.applications) {
+      state.applicationRepairAttempted = true;
+      const missingJobs = applicationRegisterEntries().filter((entry) => entry.missingRecord && entry.job).map((entry) => entry.job);
+      const repairErrors = [];
+      for (const job of missingJobs) {
+        try {
+          await writeApplicationRecord("insert", null, appliedApplicationPayload(job, null), "APPLIED");
+        } catch (error) {
+          repairErrors.push(humanizeError(error, "la creazione dell’application"));
+        }
+      }
+      state.applicationRepairError = repairErrors[0] || "";
+    }
     state.lastSync = new Date();
     state.loadingData = false;
     setRefreshState(false);
@@ -945,7 +963,7 @@ Cordiali saluti,
   function applicationStatusCandidates(status) {
     const normalized = normalizeStatus(status, "DRAFT");
     const aliases = {
-      DRAFT: ["draft", "in_progress", "DRAFT"], APPLIED: ["applied", "submitted", "APPLIED"],
+      DRAFT: ["DRAFT", "draft", "in_progress"], APPLIED: ["APPLIED", "SUBMITTED", "applied", "submitted", "DRAFT", "draft"],
       CONTACTED: ["contacted", "screening", "CONTACTED"], INTERVIEW: ["interview", "interviewing", "INTERVIEW"],
       OFFER: ["offer", "offered", "OFFER"], CLOSED: ["closed", "rejected", "withdrawn", "CLOSED"]
     };
@@ -1050,9 +1068,22 @@ Cordiali saluti,
   function companyLogoContent(job) {
     const companyName = companyNameForJob(job);
     const company = getCompanyById(valueOf(job, "jobs", "companyId", ""));
-    const candidateUrl = safeExternalUrl(valueOf(company, "companies", "website", ""));
+    const explicitLogo = safeExternalUrl(valueOf(company, "companies", "logoUrl", ""));
+    const companyWebsite = safeExternalUrl(valueOf(company, "companies", "website", ""));
+    const jobUrl = safeExternalUrl(valueOf(job, "jobs", "url", ""));
+    let candidateUrl = companyWebsite;
+    if (!candidateUrl && jobUrl) {
+      try {
+        const hostname = new URL(jobUrl).hostname.toLowerCase();
+        if (!/(?:linkedin|jobteaser|greenhouse|lever|indeed)\./.test(hostname)) candidateUrl = jobUrl;
+      } catch (_error) {
+        // Keep the initials fallback.
+      }
+    }
     let logo = "";
-    if (candidateUrl) {
+    if (explicitLogo) {
+      logo = `<img src="${escapeAttribute(explicitLogo)}" alt="Logo ${escapeAttribute(companyName)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'" />`;
+    } else if (candidateUrl) {
       try {
         const domain = new URL(candidateUrl).hostname;
         const logoUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
@@ -1062,6 +1093,21 @@ Cordiali saluti,
       }
     }
     return `${logo}<span>${escapeHtml(initials(companyName))}</span>`;
+  }
+
+  function companyIndustry(job) {
+    const company = getCompanyById(valueOf(job, "jobs", "companyId", ""));
+    return valueOf(company, "companies", "sector", valueOf(job, "jobs", "industry", "Industria non indicata"));
+  }
+
+  function companyOverview(job) {
+    const company = getCompanyById(valueOf(job, "jobs", "companyId", ""));
+    const notes = String(valueOf(company, "companies", "notes", "")).trim();
+    if (notes) return notes;
+    const industry = companyIndustry(job);
+    return industry && industry !== "Industria non indicata"
+      ? `${companyNameForJob(job)} opera nel settore ${industry}. Aggiungi una descrizione più specifica dalla sezione Aziende Target.`
+      : `Aggiungi settore, sito e descrizione di ${companyNameForJob(job)} dalla sezione Aziende Target.`;
   }
 
   function appliedStateMarkup() {
@@ -1250,7 +1296,17 @@ Cordiali saluti,
       || Boolean(feedbackValueForJob(job.id));
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
     const newJobs = visibleJobs.filter((job) => !isEvaluated(job)).sort(byNewest).slice(0, 6);
-    const evaluatedJobs = visibleJobs.filter(isEvaluated).sort(byNewest).slice(0, 6);
+    const evaluatedAt = (job) => {
+      const application = getApplicationForJob(job.id);
+      const timestamp = valueOf(application, "applications", "appliedAt", "")
+        || valueOf(job, "jobs", "updatedAt", "")
+        || valueOf(job, "jobs", "createdAt", 0);
+      return new Date(timestamp).getTime() || 0;
+    };
+    const evaluatedJobs = visibleJobs.filter(isEvaluated).sort((a, b) => {
+      const appliedFirst = Number(hasAppliedToJob(b)) - Number(hasAppliedToJob(a));
+      return appliedFirst || evaluatedAt(b) - evaluatedAt(a) || jobFit(b) - jobFit(a);
+    }).slice(0, 6);
     $("newOpportunityCount").textContent = String(newJobs.length);
     $("evaluatedOpportunityCount").textContent = String(evaluatedJobs.length);
     $("newOpportunities").innerHTML = newJobs.length
@@ -1373,6 +1429,10 @@ Cordiali saluti,
           <span>${icon("link")}${escapeHtml(source)}</span>
           ${salaryMarkup(job)}
         </div>
+        <div class="opportunity-company-brief">
+          <span class="opportunity-company-brief__logo company-logo">${companyLogoContent(job)}</span>
+          <div><strong>${escapeHtml(companyIndustry(job))}</strong><p>${escapeHtml(companyOverview(job))}</p></div>
+        </div>
         <div class="opportunity-card__role-summary"><strong>Responsabilità principali</strong><p class="opportunity-card__description">${escapeHtml(roleSummary(job))}</p></div>
         <div class="opportunity-card__footer">
           <div class="opportunity-card__action-row">
@@ -1389,13 +1449,85 @@ Cordiali saluti,
     `;
   }
 
+  function pipelineOrderKey() {
+    return `jobfinder:pipeline-order:${state.user?.id || "anonymous"}`;
+  }
+
+  function pipelineOrder() {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(pipelineOrderKey()) || "{}");
+      return saved && typeof saved === "object" ? saved : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  function sortPipelineJobs(jobs, status) {
+    const order = pipelineOrder()[status] || [];
+    const position = new Map(order.map((id, index) => [String(id), index]));
+    return [...jobs].sort((a, b) => {
+      const aIndex = position.has(String(a.id)) ? position.get(String(a.id)) : Number.MAX_SAFE_INTEGER;
+      const bIndex = position.has(String(b.id)) ? position.get(String(b.id)) : Number.MAX_SAFE_INTEGER;
+      return aIndex - bIndex || jobFit(b) - jobFit(a);
+    });
+  }
+
+  function savePipelineOrder(status, orderedIds) {
+    const allOrders = pipelineOrder();
+    allOrders[status] = orderedIds.map(String);
+    window.localStorage.setItem(pipelineOrderKey(), JSON.stringify(allOrders));
+  }
+
+  function reorderPipelineCard(sourceId, targetId, status, placeAfter = false) {
+    if (targetId && String(sourceId) === String(targetId)) return;
+    const jobs = sortPipelineJobs(state.data.jobs.filter((job) => jobStatus(job) === status), status);
+    const ids = jobs.map((job) => String(job.id)).filter((id) => id !== String(sourceId));
+    const targetIndex = targetId ? ids.indexOf(String(targetId)) : ids.length;
+    ids.splice(targetIndex < 0 ? ids.length : targetIndex + (placeAfter ? 1 : 0), 0, String(sourceId));
+    savePipelineOrder(status, ids);
+    renderPipeline();
+    showToast("Ranking personale aggiornato e salvato in questo browser.", "success", "Pipeline riordinata");
+  }
+
+  function csvCell(value) {
+    const text = String(value ?? "");
+    const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text;
+    return `"${safeText.replaceAll('"', '""')}"`;
+  }
+
+  function downloadPipelineReport() {
+    const entries = applicationRegisterEntries().filter((entry) => entry.job);
+    if (!entries.length) {
+      showToast("Non ci sono candidature da includere nel report.", "warning", "Report non creato");
+      return;
+    }
+    const header = ["Ranking", "Azienda", "Industria", "Posizione", "Stato", "Data candidatura", "RAL / stipendio", "Fonte", "Link opportunità"];
+    const rankedJobs = PIPELINE_STATES.flatMap((status) => sortPipelineJobs(state.data.jobs.filter((job) => jobStatus(job) === status), status));
+    const rank = new Map(rankedJobs.map((job, index) => [String(job.id), index + 1]));
+    const rows = entries.sort((a, b) => (rank.get(String(a.job.id)) || Number.MAX_SAFE_INTEGER) - (rank.get(String(b.job.id)) || Number.MAX_SAFE_INTEGER)).map(({ application, job }) => [
+      rank.get(String(job.id)) || "", companyNameForJob(job), companyIndustry(job), jobTitle(job), jobStatus(job),
+      valueOf(application, "applications", "appliedAt", "") ? formatDate(valueOf(application, "applications", "appliedAt", "")) : "",
+      salaryFromJob(job) || "Non indicata", valueOf(job, "jobs", "source", ""), valueOf(job, "jobs", "url", "")
+    ]);
+    const csv = `\uFEFF${[header, ...rows].map((row) => row.map(csvCell).join(";")).join("\r\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `jobfinder-pipeline-${todayIso()}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast(`${rows.length} candidature incluse nel file.`, "success", "Report scaricato");
+  }
+
   function renderPipeline() {
     $("pipelineBoard").innerHTML = PIPELINE_STATES.map((status, index) => {
-      const jobs = state.data.jobs.filter((job) => jobStatus(job) === status).sort((a, b) => jobFit(b) - jobFit(a));
+      const jobs = sortPipelineJobs(state.data.jobs.filter((job) => jobStatus(job) === status), status);
       return `
-        <section class="kanban-column" style="--column-color:${PIPELINE_COLORS[status]}">
+        <section class="kanban-column" data-pipeline-status="${status}" style="--column-color:${PIPELINE_COLORS[status]}">
           <header class="kanban-column__heading"><strong>${status}</strong><span class="kanban-count">${jobs.length}</span></header>
-          <div class="kanban-cards">
+          <div class="kanban-cards" data-pipeline-status="${status}">
             ${jobs.length ? jobs.map((job) => renderKanbanCard(job, index)).join("") : `<div class="kanban-empty">Nessuna opportunità</div>`}
           </div>
         </section>
@@ -1410,8 +1542,9 @@ Cordiali saluti,
       ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>`
       : `<button class="button button--secondary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Prepara candidatura</button>`;
     return `
-      <article class="kanban-card">
-        <div class="kanban-card__top"><span class="company-logo">${escapeHtml(initials(companyNameForJob(job)))}</span><span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></div>
+      <article class="kanban-card" draggable="true" data-pipeline-job-id="${escapeAttribute(job.id)}" data-pipeline-status="${status}" aria-label="${escapeAttribute(jobTitle(job))}. Trascina per cambiare il ranking nella colonna.">
+        <div class="kanban-card__drag-handle" title="Trascina per ordinare">⋮⋮ <span>Trascina per ordinare</span></div>
+        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></div>
         <h3>${escapeHtml(jobTitle(job))}</h3>
         <p>${escapeHtml(companyNameForJob(job))} · ${escapeHtml(valueOf(job, "jobs", "location", "—"))}</p>
         <div class="kanban-card__footer">
@@ -1451,7 +1584,7 @@ Cordiali saluti,
     }
     $("applicationsList").innerHTML = `
       ${errorNotice}
-      ${missing ? `<div class="notice notice--warning application-data-warning"><strong>${missing} ${missing === 1 ? "candidatura da riallineare" : "candidature da riallineare"}</strong><span>Questi sono record creati prima della correzione. Puoi ripararli insieme senza modificare gli annunci.</span><button class="button button--warning" type="button" data-action="repair-applications">Ripara tutti</button></div>` : ""}
+      ${missing ? `<div class="notice notice--warning application-data-warning"><strong>${missing} ${missing === 1 ? "candidatura non sincronizzata" : "candidature non sincronizzate"}</strong><span>${escapeHtml(state.applicationRepairError || "La riparazione automatica non è riuscita. Riprova oppure verifica le policy INSERT e SELECT della tabella applications.")}</span><button class="button button--warning" type="button" data-action="repair-applications">Riprova</button></div>` : ""}
       <table class="data-table">
         <thead><tr><th>Azienda / ruolo</th><th>Status</th><th>Data invio</th><th>Materiali</th><th>Prossima azione</th><th></th></tr></thead>
         <tbody>${entries.map(renderApplicationRow).join("")}</tbody>
@@ -1839,7 +1972,9 @@ Cordiali saluti,
     $("copilotPriority").textContent = titleCase(jobPriority(job));
     $("copilotStatus").textContent = jobStatus(job);
     $("copilotLocation").textContent = valueOf(job, "jobs", "location", "Non indicata");
+    $("copilotIndustry").textContent = companyIndustry(job);
     $("copilotSalary").textContent = salaryFromJob(job) || "Non indicata nell’annuncio";
+    $("copilotCompanyOverview").textContent = companyOverview(job);
     $("copilotRoleBrief").textContent = responsibilitySummary(job, 620);
     $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", localDraft.whyFit || suggestions.why);
     $("copilotGaps").value = valueOf(application, "applications", "gaps", localDraft.gaps || suggestions.gaps);
@@ -1983,6 +2118,10 @@ Cordiali saluti,
       if (event.target === $("appDialog")) closeDialog();
     });
     document.addEventListener("click", handleDelegatedClick);
+    document.addEventListener("dragstart", handlePipelineDragStart);
+    document.addEventListener("dragover", handlePipelineDragOver);
+    document.addEventListener("drop", handlePipelineDrop);
+    document.addEventListener("dragend", clearPipelineDragState);
     document.addEventListener("keydown", (event) => {
       const clickableOpportunity = event.target.closest?.(".top-opportunity--clickable, .opportunity-card--clickable");
       if (clickableOpportunity && event.target === clickableOpportunity && ["Enter", " "].includes(event.key)) {
@@ -2189,6 +2328,9 @@ Cordiali saluti,
         case "repair-applications":
           await repairMissingApplications(trigger);
           break;
+        case "download-pipeline-report":
+          downloadPipelineReport();
+          break;
         case "open-job":
           openJob(id || state.selectedJobId);
           break;
@@ -2331,6 +2473,43 @@ Cordiali saluti,
     }
   }
 
+  function handlePipelineDragStart(event) {
+    const card = event.target.closest?.("[data-pipeline-job-id]");
+    if (!card) return;
+    state.draggedPipelineJobId = card.dataset.pipelineJobId;
+    card.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", state.draggedPipelineJobId);
+  }
+
+  function handlePipelineDragOver(event) {
+    if (!state.draggedPipelineJobId) return;
+    const container = event.target.closest?.(".kanban-cards");
+    const source = document.querySelector(`[data-pipeline-job-id="${CSS.escape(String(state.draggedPipelineJobId))}"]`);
+    if (!container || !source || container.dataset.pipelineStatus !== source.dataset.pipelineStatus) return;
+    event.preventDefault();
+    document.querySelectorAll(".kanban-card.is-drag-target").forEach((card) => card.classList.remove("is-drag-target"));
+    event.target.closest?.(".kanban-card")?.classList.add("is-drag-target");
+  }
+
+  function handlePipelineDrop(event) {
+    if (!state.draggedPipelineJobId) return;
+    const container = event.target.closest?.(".kanban-cards");
+    const source = document.querySelector(`[data-pipeline-job-id="${CSS.escape(String(state.draggedPipelineJobId))}"]`);
+    if (!container || !source || container.dataset.pipelineStatus !== source.dataset.pipelineStatus) return;
+    event.preventDefault();
+    const target = event.target.closest?.(".kanban-card");
+    const rect = target?.getBoundingClientRect();
+    const placeAfter = Boolean(rect && event.clientY > rect.top + rect.height / 2);
+    reorderPipelineCard(state.draggedPipelineJobId, target?.dataset.pipelineJobId || "", container.dataset.pipelineStatus, placeAfter);
+    clearPipelineDragState();
+  }
+
+  function clearPipelineDragState() {
+    state.draggedPipelineJobId = null;
+    document.querySelectorAll(".kanban-card.is-dragging, .kanban-card.is-drag-target").forEach((card) => card.classList.remove("is-dragging", "is-drag-target"));
+  }
+
   function regenerateCopilotTexts() {
     const job = getJobById(state.selectedJobId);
     if (!job) return;
@@ -2380,6 +2559,11 @@ Cordiali saluti,
             <label class="field"><span>Ruolo</span><input name="title" required placeholder="Customer Success Manager" /></label>
             <label class="field"><span>Azienda</span><input name="company" required placeholder="Nome azienda" /></label>
           </div>
+          <div class="form-grid form-grid--two">
+            <label class="field"><span>Industria</span><input name="industry" placeholder="Technology, Automotive, Energy…" /></label>
+            <label class="field"><span>Sito aziendale</span><input name="company_website" type="url" placeholder="https://azienda.com" /></label>
+          </div>
+          <label class="field"><span>Cosa fa l’azienda</span><textarea name="company_description" rows="3" placeholder="Prodotti, servizi, clienti e mercato principale…"></textarea></label>
           <div class="form-grid form-grid--two">
             <label class="field"><span>Località / modalità</span><input name="location" placeholder="Milano · Hybrid" /></label>
             <label class="field"><span>Fonte</span><select name="source"><option>Career site</option><option>LinkedIn alert</option><option>LinkedIn Easy Apply</option><option>JobTeaser</option><option>Lever</option><option>Greenhouse</option><option>Altro</option></select></label>
@@ -2578,7 +2762,7 @@ Cordiali saluti,
       renderAll();
       clearLocalCopilotDraft(job.id);
       showToast("Candidatura registrata come inviata", "success", "Application aggiornata");
-      openFollowupPrompt(savedApplication);
+      openFollowupPrompt(savedApplication, job);
     } finally {
       state.pendingJobActions.delete(actionKey);
       setBusy(button, false);
@@ -2607,11 +2791,13 @@ Cordiali saluti,
     else showToast(`${repaired} candidature riallineate in tutte le pagine.`, "success", "Dati sincronizzati");
   }
 
-  function openFollowupPrompt(application) {
+  function openFollowupPrompt(application, job) {
     openDialog({
-      eyebrow: "PROSSIMO PASSO",
-      title: "Vuoi impostare un follow-up?",
-      body: `<p class="dialog-copy">Puoi pianificare un promemoria senza creare nulla automaticamente.</p>
+      eyebrow: "CANDIDATURA REGISTRATA",
+      title: "Hai applicato!",
+      body: `<div class="notice notice--success"><strong>${escapeHtml(jobTitle(job))}</strong> presso ${escapeHtml(jobCompany(job))} risulta ora applicata.</div>
+        <p class="dialog-copy">Lo stato è stato aggiornato in Dashboard, Opportunità, Pipeline e Le mie Application. La posizione è ora la prima tra quelle già valutate.</p>
+        <p class="dialog-copy"><strong>Vuoi impostare anche un follow-up?</strong></p>
         <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Non ora</button><button class="button button--primary" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}">${icon("clock")}Crea follow-up</button></div>`
     });
   }
@@ -2816,7 +3002,7 @@ Cordiali saluti,
             <label class="field"><span>Tier</span><select name="tier">${["A", "B", "C"].map((tier) => optionMarkup(tier, `Tier ${tier}`, valueOf(company, "companies", "tier", "B"))).join("")}</select></label>
           </div>
           <label class="field"><span>Website</span><input name="website" inputmode="url" value="${escapeAttribute(valueOf(company, "companies", "website", ""))}" placeholder="https://azienda.com" /></label>
-          <label class="field"><span>Note</span><textarea name="notes" rows="5" placeholder="Perché è un target, persone da contattare, segnali da monitorare…">${escapeHtml(valueOf(company, "companies", "notes", ""))}</textarea></label>
+          <label class="field"><span>Cosa fa l’azienda</span><textarea name="notes" rows="5" placeholder="Prodotti, servizi, clienti e mercato principale…">${escapeHtml(valueOf(company, "companies", "notes", ""))}</textarea></label>
           <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--primary" type="submit">${icon("check")}${isEdit ? "Salva modifiche" : "Aggiungi azienda"}</button></div>
         </form>
       `
@@ -2839,7 +3025,7 @@ Cordiali saluti,
           <div><dt>Settore</dt><dd>${escapeHtml(valueOf(company, "companies", "sector", "Non indicato"))}</dd></div>
           <div><dt>Tier</dt><dd>${escapeHtml(valueOf(company, "companies", "tier", "C"))}</dd></div>
           <div><dt>Website</dt><dd>${website ? `<button class="text-button" type="button" data-action="open-url" data-url="${escapeAttribute(website)}">${escapeHtml(website)} ${icon("external")}</button>` : "Non indicato"}</dd></div>
-          <div><dt>Note</dt><dd>${escapeHtml(valueOf(company, "companies", "notes", "Nessuna nota."))}</dd></div>
+          <div><dt>Cosa fa l’azienda</dt><dd>${escapeHtml(valueOf(company, "companies", "notes", "Descrizione non disponibile."))}</dd></div>
           <div><dt>Opportunità</dt><dd>${associatedJobs.length ? associatedJobs.map((job) => `<button class="text-button dialog-job-link" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">${escapeHtml(jobTitle(job))} · ${jobFit(job).toFixed(1)}/10 ${icon("arrow-right")}</button>`).join("") : "Nessuna opportunità associata."}</dd></div>
         </dl>
         <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Chiudi</button><button class="button button--primary" type="button" data-action="edit-company" data-id="${escapeAttribute(company.id)}">${icon("edit")}Modifica azienda</button></div>
@@ -3037,6 +3223,10 @@ Cordiali saluti,
     const title = String(values.get("title") || "").trim();
     const company = String(values.get("company") || "").trim();
     const location = String(values.get("location") || "").trim();
+    const industry = String(values.get("industry") || "").trim();
+    const companyDescription = String(values.get("company_description") || "").trim();
+    const companyWebsite = normalizedWebsite(values.get("company_website"));
+    if (values.get("company_website") && !companyWebsite) throw new Error("Inserisci un sito aziendale http/https valido.");
     let source = String(values.get("source") || "Career site").trim();
     const description = String(values.get("description") || "").trim();
     if (/jobteaser\.(?:com|fr|it|de|co\.uk)/i.test(url)) source = "JobTeaser";
@@ -3056,9 +3246,30 @@ Cordiali saluti,
       return;
     }
     const analysis = analyzeOpportunity({ title, company, location, description });
+    let companyRecord = state.data.companies.find((item) => valueOf(item, "companies", "name", "").trim().toLowerCase() === company.toLowerCase()) || null;
+    try {
+      if (!companyRecord) {
+        const companyPayload = {};
+        setMapped(companyPayload, "companies", "name", company);
+        setMapped(companyPayload, "companies", "sector", industry || null);
+        setMapped(companyPayload, "companies", "tier", "B");
+        setMapped(companyPayload, "companies", "website", companyWebsite || null);
+        setMapped(companyPayload, "companies", "notes", companyDescription || null);
+        companyRecord = await insertRecord("companies", companyPayload);
+      } else if (industry || companyDescription || companyWebsite) {
+        const companyPatch = {};
+        if (industry) setMapped(companyPatch, "companies", "sector", industry);
+        if (companyDescription) setMapped(companyPatch, "companies", "notes", companyDescription);
+        if (companyWebsite) setMapped(companyPatch, "companies", "website", companyWebsite);
+        companyRecord = await updateRecord("companies", companyRecord.id, companyPatch);
+      }
+    } catch (companyError) {
+      console.warn("Company enrichment could not be saved", companyError);
+    }
     const payload = {};
     setMapped(payload, "jobs", "title", title);
     setMapped(payload, "jobs", "companyName", company);
+    setMapped(payload, "jobs", "companyId", companyRecord?.id || null);
     setMapped(payload, "jobs", "location", location || null);
     setMapped(payload, "jobs", "fitScore", analysis.score);
     setMapped(payload, "jobs", "status", "NEW");

@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260902.19" />
+    <link rel="stylesheet" href="styles.css?v=20260904.21" />
   </head>
   <body>
     <noscript>
@@ -372,9 +372,14 @@
                 <h1>Pipeline</h1>
                 <p>Fai avanzare ogni opportunità: ogni cambio viene salvato su Supabase.</p>
               </div>
-              <button id="pipelineRefreshButton" class="button button--secondary" type="button" data-action="refresh">
-                <svg class="icon"><use href="#icon-refresh"></use></svg>Aggiorna
-              </button>
+              <div class="hero-actions">
+                <button class="button button--primary" type="button" data-action="download-pipeline-report">
+                  <svg class="icon"><use href="#icon-download"></use></svg>Scarica report
+                </button>
+                <button id="pipelineRefreshButton" class="button button--secondary" type="button" data-action="refresh">
+                  <svg class="icon"><use href="#icon-refresh"></use></svg>Aggiorna
+                </button>
+              </div>
             </div>
             <div id="pipelineBoard" class="kanban-board" aria-label="Pipeline opportunità"></div>
           </section>
@@ -586,8 +591,10 @@
                   <div><dt>Priorità</dt><dd id="copilotPriority">—</dd></div>
                   <div><dt>Stato</dt><dd id="copilotStatus">—</dd></div>
                   <div><dt>Location</dt><dd id="copilotLocation">—</dd></div>
+                  <div><dt>Industria</dt><dd id="copilotIndustry">—</dd></div>
                   <div><dt>RAL / stipendio</dt><dd id="copilotSalary">Non indicata</dd></div>
                 </dl>
+                <div class="copilot-company-overview"><strong>Cosa fa l’azienda</strong><p id="copilotCompanyOverview">Informazioni non disponibili.</p></div>
                 <button id="openJobButton" class="button button--secondary button--wide" type="button" data-action="open-job">
                   <svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio
                 </button>
@@ -747,10 +754,11 @@
       <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
       <symbol id="icon-edit" viewBox="0 0 24 24"><path d="m4 16-1 5 5-1L19 9l-4-4zM13 7l4 4"/></symbol>
       <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260902.19" defer></script>
+    <script src="config.js?v=20260904.21" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260902.19" defer></script>
+    <script src="app.js?v=20260904.21" defer></script>
   </body>
 </html>

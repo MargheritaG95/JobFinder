@@ -1095,9 +1095,36 @@ Cordiali saluti,
     return `${logo}<span>${escapeHtml(initials(companyName))}</span>`;
   }
 
+  function industryFromText(text) {
+    const normalized = String(text || "").toLowerCase();
+    const sectors = [
+      [/automotive|mobility|vehicle|mobilità|veicoli/, "Automotive & Mobility"],
+      [/artificial intelligence|machine learning|\bai\b|software|cloud|saas|cybersecurity/, "Technology & AI"],
+      [/bank|banking|insurance|fintech|financial|assicuraz/, "Financial Services"],
+      [/energy|energia|renewable|utility|utilities|oil|gas/, "Energy & Utilities"],
+      [/pharma|healthcare|medical|biotech|salute/, "Healthcare & Life Sciences"],
+      [/retail|e-commerce|ecommerce|consumer goods/, "Retail & Consumer"],
+      [/consulting|consulenza|advisory/, "Consulting"],
+      [/telecom|telco|telecommunications/, "Telecommunications"],
+      [/manufacturing|industrial|engineering|infrastructure/, "Industrial & Infrastructure"]
+    ];
+    return sectors.find(([pattern]) => pattern.test(normalized))?.[1] || "";
+  }
+
   function companyIndustry(job) {
     const company = getCompanyById(valueOf(job, "jobs", "companyId", ""));
-    return valueOf(company, "companies", "sector", valueOf(job, "jobs", "industry", "Industria non indicata"));
+    const saved = valueOf(company, "companies", "sector", valueOf(job, "jobs", "industry", ""));
+    return saved || industryFromText(`${jobTitle(job)} ${jobDescriptionText(job)}`) || "Industria non indicata";
+  }
+
+  function companySummaryFromText(companyName, description, industry = "") {
+    const sentence = String(description || "").split(/(?<=[.!?])\s+/).find((item) =>
+      item.length > 35 && item.length < 260 && /(?:company|azienda|leader|provid|offr|svilupp|specializ|operat|mission|customers|clienti)/i.test(item)
+    );
+    if (sentence) return sentence.trim();
+    return industry
+      ? `${companyName} è un’azienda attiva nel settore ${industry}, dove sviluppa prodotti, servizi o soluzioni per i propri clienti.`
+      : "";
   }
 
   function companyOverview(job) {
@@ -1105,9 +1132,12 @@ Cordiali saluti,
     const notes = String(valueOf(company, "companies", "notes", "")).trim();
     if (notes) return notes;
     const industry = companyIndustry(job);
-    return industry && industry !== "Industria non indicata"
-      ? `${companyNameForJob(job)} opera nel settore ${industry}. Aggiungi una descrizione più specifica dalla sezione Aziende Target.`
-      : `Aggiungi settore, sito e descrizione di ${companyNameForJob(job)} dalla sezione Aziende Target.`;
+    const description = jobDescriptionText(job);
+    const extracted = companySummaryFromText(companyNameForJob(job), description, industry === "Industria non indicata" ? "" : industry);
+    if (extracted) return extracted;
+    return industry !== "Industria non indicata"
+      ? `${companyNameForJob(job)} è un’azienda attiva nel settore ${industry}, dove sviluppa prodotti, servizi o soluzioni per i propri clienti.`
+      : `${companyNameForJob(job)} propone questa opportunità per rafforzare il team e contribuire alle priorità descritte nell’annuncio.`;
   }
 
   function appliedStateMarkup() {
@@ -1151,6 +1181,66 @@ Cordiali saluti,
   function salaryMarkup(job) {
     const salary = salaryFromJob(job);
     return salary ? `<span class="opportunity-salary">${icon("briefcase")}RAL / stipendio: ${escapeHtml(salary)}</span>` : "";
+  }
+
+  function jobSeniority(job) {
+    const text = `${jobTitle(job)} ${jobDescriptionText(job)}`;
+    if (/\b(intern|internship|stage|tirocinio)\b/i.test(text)) return "Internship";
+    if (/\b(junior|entry.level|graduate)\b/i.test(text)) return "Junior";
+    if (/\b(head|director|vp|vice president|executive)\b/i.test(text)) return "Leadership";
+    if (/\b(senior|lead|principal|manager)\b/i.test(text)) return "Senior";
+    if (/\b(mid.level|intermediate|specialist)\b/i.test(text)) return "Mid-level";
+    return "Non indicato";
+  }
+
+  function jobExperience(job) {
+    const text = jobDescriptionText(job);
+    const range = text.match(/(?:at least|minimum|minimo|almeno|oltre)?\s*(\d{1,2})\s*(?:[-–—]|to|a)\s*(\d{1,2})\+?\s*(?:years?|anni)\s+(?:of\s+)?(?:experience|esperienza)/i);
+    if (range) return `${range[1]}–${range[2]} anni`;
+    const single = text.match(/(?:at least|minimum|minimo|almeno|oltre)?\s*(\d{1,2})\+?\s*(?:years?|anni)\s+(?:of\s+)?(?:experience|esperienza)/i)
+      || text.match(/(?:experience|esperienza)(?:\s+(?:of|di))?\s*(\d{1,2})\+?\s*(?:years?|anni)/i);
+    return single ? `${single[1]}${/\+/.test(single[0]) ? "+" : ""} anni` : "Non indicata";
+  }
+
+  function jobContract(job) {
+    const text = jobDescriptionText(job);
+    const types = [
+      [/tempo indeterminato|permanent contract|permanent position/, "Tempo indeterminato"],
+      [/tempo determinato|fixed.term|temporary contract/, "Tempo determinato"],
+      [/full.time|full time|tempo pieno/, "Full-time"],
+      [/part.time|part time/, "Part-time"],
+      [/internship|stage|tirocinio/, "Stage"],
+      [/freelance|contractor|consulenza/, "Freelance / contratto"]
+    ];
+    return types.find(([pattern]) => pattern.test(text))?.[1] || "Non indicato";
+  }
+
+  function jobLanguages(job) {
+    const text = jobDescriptionText(job);
+    const languages = [
+      [/\bitalian(?:o|a)?\b/i, "Italiano"], [/\benglish|inglese\b/i, "Inglese"],
+      [/\bfrench|francese\b/i, "Francese"], [/\bspanish|spagnolo\b/i, "Spagnolo"],
+      [/\bgerman|tedesco\b/i, "Tedesco"]
+    ].filter(([pattern]) => pattern.test(text)).map(([, label]) => label);
+    return languages.length ? languages.slice(0, 3).join(" · ") : "Non indicata";
+  }
+
+  function roleSynopsis(job) {
+    const description = jobDescriptionText(job);
+    if (!description) return inferredRoleSummary(job);
+    const sentences = description.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.length > 35);
+    const intro = sentences.filter((sentence) => /(?:role|position|ruolo|opportunit|team|you will|sarai|cerchiamo|looking for)/i.test(sentence)).slice(0, 2).join(" ");
+    const selected = intro || sentences.slice(0, 2).join(" ") || inferredRoleSummary(job);
+    return selected.length > 520 ? `${selected.slice(0, 519).trimEnd()}…` : selected;
+  }
+
+  function responsibilityItems(job) {
+    const description = jobDescriptionText(job);
+    const sentences = description.split(/(?<=[.!?;])\s+|\n+/).map((item) => item.replace(/^[•\-–—\s]+/, "").trim()).filter((item) => item.length > 20);
+    const pattern = /responsabil|attivit|what you.ll do|duties|manage|lead|develop|deliver|support|coordinate|gestir|guidar|svilupp|coordin|realizz|implement|analizz|define|drive/i;
+    const items = sentences.filter((item) => pattern.test(item)).slice(0, 5);
+    if (items.length) return items.map((item) => item.length > 190 ? `${item.slice(0, 189).trimEnd()}…` : item);
+    return inferredRoleSummary(job).split(/;|\.(?:\s+|$)/).map((item) => item.trim()).filter(Boolean).slice(0, 4);
   }
 
   function responsibilitySummary(job, limit = 260) {
@@ -1975,7 +2065,12 @@ Cordiali saluti,
     $("copilotIndustry").textContent = companyIndustry(job);
     $("copilotSalary").textContent = salaryFromJob(job) || "Non indicata nell’annuncio";
     $("copilotCompanyOverview").textContent = companyOverview(job);
-    $("copilotRoleBrief").textContent = responsibilitySummary(job, 620);
+    $("copilotSeniority").textContent = jobSeniority(job);
+    $("copilotExperience").textContent = jobExperience(job);
+    $("copilotContract").textContent = jobContract(job);
+    $("copilotLanguages").textContent = jobLanguages(job);
+    $("copilotRoleBrief").textContent = roleSynopsis(job);
+    $("copilotResponsibilities").innerHTML = responsibilityItems(job).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
     $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", localDraft.whyFit || suggestions.why);
     $("copilotGaps").value = valueOf(application, "applications", "gaps", localDraft.gaps || suggestions.gaps);
     $("copilotAngle").value = valueOf(application, "applications", "angle", localDraft.angle || suggestions.angle);
@@ -2574,7 +2669,7 @@ Cordiali saluti,
       eyebrow: "DISCOVER & PRIORITIZE",
       title: "Importa e valuta un annuncio",
       body: `
-        <p class="dialog-copy">Incolla il link e il testo dell’annuncio da LinkedIn, JobTeaser o dal sito aziendale. JobFinder evita duplicati, calcola il fit e riconosce automaticamente fonte, Easy Apply e RAL/stipendio quando presenti.</p>
+        <p class="dialog-copy">Incolla il link e il testo completo raccolto da LinkedIn, JobTeaser o dal sito aziendale. JobFinder evita duplicati e riconosce automaticamente fonte, Easy Apply, RAL, industria, seniority, esperienza, contratto, lingue e responsabilità quando sono realmente presenti.</p>
         <form class="form-stack" data-dialog-form="opportunity-import" novalidate>
           <label class="field"><span>URL annuncio</span><input name="url" type="url" required placeholder="https://azienda.com/jobs/…" /></label>
           <div class="form-grid form-grid--two">
@@ -2582,10 +2677,10 @@ Cordiali saluti,
             <label class="field"><span>Azienda</span><input name="company" required placeholder="Nome azienda" /></label>
           </div>
           <div class="form-grid form-grid--two">
-            <label class="field"><span>Industria</span><input name="industry" placeholder="Technology, Automotive, Energy…" /></label>
+            <label class="field"><span>Industria <small>(opzionale: viene dedotta dal testo)</small></span><input name="industry" placeholder="Technology, Automotive, Energy…" /></label>
             <label class="field"><span>Sito aziendale</span><input name="company_website" type="url" placeholder="https://azienda.com" /></label>
           </div>
-          <label class="field"><span>Cosa fa l’azienda</span><textarea name="company_description" rows="3" placeholder="Prodotti, servizi, clienti e mercato principale…"></textarea></label>
+          <label class="field"><span>Cosa fa l’azienda <small>(opzionale: viene dedotto dal testo)</small></span><textarea name="company_description" rows="3" placeholder="Prodotti, servizi, clienti e mercato principale…"></textarea></label>
           <div class="form-grid form-grid--two">
             <label class="field"><span>Località / modalità</span><input name="location" placeholder="Milano · Hybrid" /></label>
             <label class="field"><span>Fonte</span><select name="source"><option>Career site</option><option>LinkedIn alert</option><option>LinkedIn Easy Apply</option><option>JobTeaser</option><option>Lever</option><option>Greenhouse</option><option>Altro</option></select></label>
@@ -3245,12 +3340,14 @@ Cordiali saluti,
     const title = String(values.get("title") || "").trim();
     const company = String(values.get("company") || "").trim();
     const location = String(values.get("location") || "").trim();
-    const industry = String(values.get("industry") || "").trim();
-    const companyDescription = String(values.get("company_description") || "").trim();
+    const suppliedIndustry = String(values.get("industry") || "").trim();
+    let companyDescription = String(values.get("company_description") || "").trim();
     const companyWebsite = normalizedWebsite(values.get("company_website"));
     if (values.get("company_website") && !companyWebsite) throw new Error("Inserisci un sito aziendale http/https valido.");
     let source = String(values.get("source") || "Career site").trim();
     const description = String(values.get("description") || "").trim();
+    const industry = suppliedIndustry || industryFromText(`${title} ${description}`);
+    companyDescription ||= companySummaryFromText(company, description, industry);
     if (/jobteaser\.(?:com|fr|it|de|co\.uk)/i.test(url)) source = "JobTeaser";
     else if (/linkedin\.com/i.test(url) && !/linkedin/i.test(source)) source = "LinkedIn alert";
     if (/easy\s*apply/i.test(description) && /linkedin/i.test(`${source} ${url}`)) source = "LinkedIn Easy Apply";

@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260904.22" />
+    <link rel="stylesheet" href="styles.css?v=20260904.23" />
   </head>
   <body>
     <noscript>
@@ -596,10 +596,18 @@
                   <div><dt>RAL / stipendio</dt><dd id="copilotSalary">Non indicata</dd></div>
                 </dl>
                 <div class="copilot-company-overview"><strong>Cosa fa l’azienda</strong><p id="copilotCompanyOverview">Informazioni non disponibili.</p></div>
+                <div class="copilot-role-facts" aria-label="Informazioni essenziali sul ruolo">
+                  <div><span>Livello</span><strong id="copilotSeniority">Non indicato</strong></div>
+                  <div><span>Esperienza</span><strong id="copilotExperience">Non indicata</strong></div>
+                  <div><span>Contratto</span><strong id="copilotContract">Non indicato</strong></div>
+                  <div><span>Lingua</span><strong id="copilotLanguages">Non indicata</strong></div>
+                </div>
                 <section class="copilot-role-brief" aria-labelledby="copilotRoleBriefTitle">
                   <p class="eyebrow">RUOLO E RESPONSABILITÀ</p>
-                  <h3 id="copilotRoleBriefTitle">Cosa prevede questa opportunità</h3>
+                  <h3 id="copilotRoleBriefTitle">Sintesi del ruolo</h3>
                   <p id="copilotRoleBrief">Seleziona un’opportunità per visualizzare la descrizione del ruolo.</p>
+                  <h4>Responsabilità principali</h4>
+                  <ul id="copilotResponsibilities" class="copilot-responsibility-list"></ul>
                 </section>
                 <div class="copilot-insight-grid">
                   <label class="field field--accent field--success">
@@ -760,8 +768,8 @@
       <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260904.22" defer></script>
+    <script src="config.js?v=20260904.23" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260904.22" defer></script>
+    <script src="app.js?v=20260904.23" defer></script>
   </body>
 </html>

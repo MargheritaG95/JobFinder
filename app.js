@@ -1386,6 +1386,23 @@ Cordiali saluti,
     `;
   }
 
+  function isJobToApply(job) {
+    if (hasAppliedToJob(job)) return false;
+    return Boolean(valueOf(job, "jobs", "saved", false))
+      || ["APPLY", "DRAFT"].includes(jobStatus(job))
+      || feedbackValueForJob(job.id) === "LIKE";
+  }
+
+  function opportunityStage(job) {
+    if (hasAppliedToJob(job)) return "applied";
+    if (isJobToApply(job)) return "to-apply";
+    return "review";
+  }
+
+  function priorityThenFit(a, b) {
+    return Number(isPriorityJob(b)) - Number(isPriorityJob(a)) || jobFit(b) - jobFit(a);
+  }
+
   function renderAll() {
     renderDashboard();
     renderOpportunities();
@@ -1445,12 +1462,8 @@ Cordiali saluti,
     $("kpiCompaniesMeta").textContent = `${state.data.companies.filter((company) => normalizeStatus(valueOf(company, "companies", "tier", ""), "") === "A").length} Tier A`;
 
     const visibleJobs = jobs.filter((job) => jobStatus(job) !== "CLOSED");
-    const isEvaluated = (job) => hasAppliedToJob(job)
-      || Boolean(valueOf(job, "jobs", "saved", false))
-      || jobStatus(job) !== "NEW"
-      || Boolean(feedbackValueForJob(job.id));
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
-    const newJobs = visibleJobs.filter((job) => !isEvaluated(job)).sort(byNewest).slice(0, 6);
+    const newJobs = visibleJobs.filter((job) => opportunityStage(job) === "review").sort(byNewest).slice(0, 6);
     const evaluatedAt = (job) => {
       const application = getApplicationForJob(job.id);
       const timestamp = valueOf(application, "applications", "appliedAt", "")
@@ -1458,23 +1471,27 @@ Cordiali saluti,
         || valueOf(job, "jobs", "createdAt", 0);
       return new Date(timestamp).getTime() || 0;
     };
-    const evaluatedJobs = visibleJobs.filter(isEvaluated).sort((a, b) => {
-      const appliedFirst = Number(hasAppliedToJob(b)) - Number(hasAppliedToJob(a));
-      return appliedFirst || evaluatedAt(b) - evaluatedAt(a) || jobFit(b) - jobFit(a);
+    const toApplyJobs = visibleJobs.filter((job) => opportunityStage(job) === "to-apply").sort(priorityThenFit).slice(0, 6);
+    const appliedJobs = visibleJobs.filter((job) => opportunityStage(job) === "applied").sort((a, b) => {
+      return Number(isPriorityJob(b)) - Number(isPriorityJob(a)) || evaluatedAt(b) - evaluatedAt(a) || jobFit(b) - jobFit(a);
     }).slice(0, 6);
     $("newOpportunityCount").textContent = String(newJobs.length);
-    $("evaluatedOpportunityCount").textContent = String(evaluatedJobs.length);
+    $("toApplyOpportunityCount").textContent = String(toApplyJobs.length);
+    $("appliedOpportunityCount").textContent = String(appliedJobs.length);
     $("newOpportunities").innerHTML = newJobs.length
-      ? newJobs.map(renderTopOpportunity).join("")
+      ? newJobs.map((job) => renderTopOpportunity(job, "review")).join("")
       : emptyState("Nessuna nuova opportunità", "Le nuove posizioni importate compariranno qui prima della valutazione.", { route: "opportunities", label: "Apri opportunità", icon: "search" });
-    $("evaluatedOpportunities").innerHTML = evaluatedJobs.length
-      ? evaluatedJobs.map(renderTopOpportunity).join("")
-      : emptyState("Nessuna opportunità valutata", "Quando scegli di applicare ora, più tardi o registri una candidatura, la posizione passerà qui.");
+    $("toApplyOpportunities").innerHTML = toApplyJobs.length
+      ? toApplyJobs.map((job) => renderTopOpportunity(job, "to-apply")).join("")
+      : emptyState("Nessuna candidatura da preparare", "Le opportunità che salvi, apprezzi o scegli di applicare dopo compariranno qui.");
+    $("appliedOpportunities").innerHTML = appliedJobs.length
+      ? appliedJobs.map((job) => renderTopOpportunity(job, "applied")).join("")
+      : emptyState("Nessuna candidatura inviata", "Quando premi “Ho applicato”, la posizione comparirà qui e le prioritarie saranno mostrate per prime.");
 
     renderAttentionList();
   }
 
-  function renderTopOpportunity(job) {
+  function renderTopOpportunity(job, stage = opportunityStage(job)) {
     const company = companyNameForJob(job);
     const fit = jobFit(job);
     const location = valueOf(job, "jobs", "location", "Location non indicata");
@@ -1490,6 +1507,10 @@ Cordiali saluti,
         </div>
         ${choice ? `<div class="top-opportunity__decision">${choice}</div>` : ""}
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
+        <div class="top-opportunity__quick-actions">
+          ${stage === "review" ? `<button class="button button--primary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">${icon("sparkles")}Applica ora</button><button class="button button--secondary" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}Applica dopo</button>` : ""}
+          ${stage === "to-apply" ? `<button class="button button--primary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">${icon("sparkles")}Prepara candidatura</button><button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Ho applicato</button>` : ""}
+        </div>
         <button class="button button--danger-ghost top-opportunity__remove" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>
       </article>
     `;
@@ -1557,8 +1578,19 @@ Cordiali saluti,
     const jobs = filteredJobs();
     $("opportunityHeroCount").textContent = String(state.data.jobs.length);
     $("opportunityResultCount").textContent = `${jobs.length} ${jobs.length === 1 ? "risultato" : "risultati"}`;
+    const groups = [
+      { stage: "review", title: "Da valutare", copy: "Nuove opportunità: scegli se ti interessano, applica ora, salvale per dopo oppure cancellale.", icon: "search" },
+      { stage: "to-apply", title: "Da applicare", copy: "Posizioni che hai scelto: le prioritarie e con Fit Score più alto sono mostrate per prime.", icon: "clock" },
+      { stage: "applied", title: "Candidature inviate", copy: "Application già inviate, ordinate con le prioritarie in evidenza.", icon: "check" }
+    ];
     $("opportunitiesList").innerHTML = jobs.length
-      ? jobs.map(renderOpportunityCard).join("")
+      ? groups.map((group) => {
+          const groupedJobs = jobs.filter((job) => opportunityStage(job) === group.stage).sort(group.stage === "review" ? ((a, b) => jobFit(b) - jobFit(a)) : priorityThenFit);
+          return `<section class="opportunity-flow-group opportunity-flow-group--${group.stage}">
+            <header class="opportunity-flow-group__heading"><span class="opportunity-flow-group__icon">${icon(group.icon)}</span><div><h2>${group.title}</h2><p>${group.copy}</p></div><strong>${groupedJobs.length}</strong></header>
+            <div class="opportunities-grid">${groupedJobs.length ? groupedJobs.map(renderOpportunityCard).join("") : `<div class="opportunity-flow-group__empty">Nessuna opportunità in questa fase.</div>`}</div>
+          </section>`;
+        }).join("")
       : emptyState("Nessuna opportunità trovata", state.data.jobs.length ? "Prova ad abbassare il Fit minimo o ad azzerare i filtri." : "La tabella jobs è vuota. Le nuove opportunità compariranno qui automaticamente.", state.data.jobs.length ? { name: "clear-filters", label: "Azzera filtri", icon: "refresh" } : null);
   }
 

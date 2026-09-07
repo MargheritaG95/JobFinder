@@ -833,16 +833,18 @@ Cordiali saluti,
     return data;
   }
 
-  async function deleteRecord(entity, id) {
+  async function deleteRecord(entity, id, options = {}) {
     if (!ensureWritable()) return false;
     let query = state.client.from(tableName(entity)).delete().eq("id", id);
     const owner = ownerColumn(entity);
     if (owner) query = query.eq(owner, state.user.id);
-    const { error } = await query;
+    if (options.verify) query = query.select("id").maybeSingle();
+    const { data, error } = await query;
     if (error) {
       await handleSessionError(error);
       throw error;
     }
+    if (options.verify && !data) throw new Error("Supabase non ha eliminato l’opportunità. Verifica la sessione e la policy DELETE della tabella jobs.");
     state.data[entity] = state.data[entity].filter((item) => String(item.id) !== String(id));
     return true;
   }
@@ -3363,7 +3365,7 @@ Cordiali saluti,
     if (!job) throw new Error("L’opportunità non è più disponibile.");
     const values = new FormData(form);
     rememberRejectedOpportunity(job, String(values.get("reason") || "other"), String(values.get("notes") || "").trim());
-    await deleteRecord("jobs", job.id);
+    await deleteRecord("jobs", job.id, { verify: true });
     await loadAllData({ quiet: true });
     closeDialog();
     renderAll();

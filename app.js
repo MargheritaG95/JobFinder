@@ -1965,6 +1965,7 @@ Cordiali saluti,
         <p>${escapeHtml(companyNameForJob(job))} · ${escapeHtml(valueOf(job, "jobs", "location", "—"))}</p>
         <div class="kanban-card__footer">
           ${status === "CLOSED" ? `<span class="badge ${rejectedState(job) ? "badge--danger" : ""}">${rejectedState(job) ? "RIFIUTATA" : "CHIUSA"}</span>` : nextAction}
+          ${application ? `<button class="text-button" type="button" data-action="application-status" data-id="${escapeAttribute(application.id)}">Cambia stato</button>` : ""}
           ${application && status === "APPLIED" ? `<button class="text-button" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}">Follow-up</button>` : ""}
         </div>
       </article>
@@ -2059,7 +2060,9 @@ Cordiali saluti,
         <td><div class="row-actions">
           ${missingRecord ? `<button class="button button--warning" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">Registra ora</button>` : ""}
           ${job ? `<button class="button button--secondary" type="button" data-action="copy-application-kit" data-id="${escapeAttribute(job.id)}">Copia kit</button><button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
-          ${application ? `<button class="icon-button" type="button" data-action="application-status" data-id="${escapeAttribute(application.id)}" aria-label="Aggiorna stato" title="Aggiorna stato">${icon("columns")}</button><button class="icon-button" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}" aria-label="Crea follow-up" title="Crea follow-up">${icon("clock")}</button>` : ""}
+          ${application ? `<button class="button button--secondary" type="button" data-action="application-status" data-id="${escapeAttribute(application.id)}">${icon("columns")}Cambia stato</button><button class="icon-button" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}" aria-label="Crea follow-up" title="Crea follow-up">${icon("clock")}</button>` : ""}
+          ${job && application && !rejectedState(job) ? `<button class="button button--danger-ghost" type="button" data-action="mark-rejected" data-id="${escapeAttribute(job.id)}">Rifiutata</button>` : ""}
+          ${job ? `<button class="icon-button icon-button--danger" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}" aria-label="Cancella opportunità" title="Cancella opportunità">${icon("trash")}</button>` : ""}
         </div></td>
       </tr>
     `;
@@ -3357,38 +3360,14 @@ Cordiali saluti,
   async function submitRemoveOpportunity(form) {
     const jobId = form.dataset.recordId;
     const job = getJobById(jobId);
-    const values = new FormData(form);
-    if (job) rememberRejectedOpportunity(job, String(values.get("reason") || "other"), String(values.get("notes") || "").trim());
-    const existingFeedback = feedbackForJob(jobId);
-    const feedbackPayload = {};
-    setMapped(feedbackPayload, "feedback", "jobId", jobId);
-    setMapped(feedbackPayload, "feedback", "value", "DISLIKE");
-    try {
-      if (existingFeedback) await updateRecord("feedback", existingFeedback.id, feedbackPayload);
-      else await insertRecord("feedback", feedbackPayload);
-    } catch (feedbackError) {
-      console.warn("Dislike feedback could not be persisted; local learning was retained", feedbackError);
-    }
-    const application = getApplicationForJob(jobId);
-    if (application) {
-      const previousNotes = String(valueOf(application, "applications", "notes", "")).trim();
-      const marker = "[ARCHIVIATA: NON IN LINEA]";
-      const applicationPatch = {};
-      setMapped(applicationPatch, "applications", "status", "closed");
-      setMapped(applicationPatch, "applications", "notes", previousNotes.includes(marker) ? previousNotes : `${previousNotes}${previousNotes ? "\n\n" : ""}${marker}`);
-      try {
-        await writeApplicationRecord("update", application.id, applicationPatch, "CLOSED");
-      } catch (error) {
-        if (!isApplicationStatusConstraintError(error)) throw error;
-        delete applicationPatch[fieldName("applications", "status")];
-        await updateRecord("applications", application.id, applicationPatch);
-      }
-    }
     if (!job) throw new Error("L’opportunità non è più disponibile.");
-    await updateJobClosedRecord(job);
+    const values = new FormData(form);
+    rememberRejectedOpportunity(job, String(values.get("reason") || "other"), String(values.get("notes") || "").trim());
+    await deleteRecord("jobs", job.id);
+    await loadAllData({ quiet: true });
     closeDialog();
     renderAll();
-    showToast("L’opportunità è stata rimossa dalla dashboard.", "success", "Opportunità cancellata");
+    showToast("L’opportunità e i record collegati sono stati eliminati. Non comparirà nella pipeline Closed.", "success", "Opportunità eliminata");
   }
 
   async function markAsRejected(jobId, button) {

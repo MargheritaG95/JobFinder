@@ -1296,7 +1296,7 @@ Cordiali saluti,
   }
 
   function salaryFromJob(job) {
-    const direct = job?.salary || job?.salary_range || job?.compensation || job?.pay_range;
+    const direct = valueOf(job, "jobs", "salary", "") || job?.salary || job?.salary_range || job?.compensation || job?.pay_range;
     if (direct) return String(direct).replace(/\s+/g, " ").trim();
     if (job?.salary_min || job?.salary_max) {
       const currency = job?.salary_currency || job?.currency || "€";
@@ -1319,7 +1319,7 @@ Cordiali saluti,
   }
 
   function jobSeniority(job) {
-    const direct = job?.seniority || job?.seniority_level || job?.experience_level;
+    const direct = valueOf(job, "jobs", "seniority", "") || job?.seniority || job?.seniority_level || job?.experience_level;
     if (direct) return titleCase(direct);
     const text = `${jobTitle(job)} ${jobDescriptionText(job)}`;
     if (/\b(intern|internship|stage|tirocinio)\b/i.test(text)) return "Internship";
@@ -1331,7 +1331,7 @@ Cordiali saluti,
   }
 
   function jobExperience(job) {
-    const direct = job?.years_experience || job?.experience_required || job?.experience;
+    const direct = valueOf(job, "jobs", "experience", "") || job?.years_experience || job?.experience_required || job?.experience;
     if (direct && String(direct).length < 80) return String(direct).trim();
     const text = jobDescriptionText(job);
     const range = text.match(/(?:at least|minimum(?: of)?|minimo|almeno|oltre)?\s*(\d{1,2})\s*(?:[-–—]|to|a)\s*(\d{1,2})\+?\s*(?:years?|yrs?|anni)(?:\s+(?:of\s+)?(?:relevant |professional )?(?:experience|esperienza))?/i);
@@ -1342,7 +1342,7 @@ Cordiali saluti,
   }
 
   function jobContract(job) {
-    const direct = job?.employment_type || job?.contract_type || job?.job_type;
+    const direct = valueOf(job, "jobs", "employmentType", "") || job?.employment_type || job?.contract_type || job?.job_type;
     if (direct) return titleCase(direct);
     const text = `${jobTitle(job)} ${jobDescriptionText(job)}`;
     const types = [
@@ -1357,7 +1357,7 @@ Cordiali saluti,
   }
 
   function jobLanguages(job) {
-    const direct = job?.languages || job?.language_requirements || job?.language;
+    const direct = valueOf(job, "jobs", "languages", null) || job?.languages || job?.language_requirements || job?.language;
     if (direct) return toList(direct).slice(0, 4).join(" · ");
     const text = jobDescriptionText(job);
     const languages = [
@@ -1385,6 +1385,8 @@ Cordiali saluti,
   }
 
   function responsibilityItems(job) {
+    const structured = toList(valueOf(job, "jobs", "responsibilities", []));
+    if (structured.length) return structured.slice(0, 6);
     const section = postingSection(job,
       ["responsibilities", "key responsibilities", "what you(?:'|’)ll do", "what you will do", "your role", "the role", "responsabilità", "responsabilità principali", "cosa farai", "attività"],
       ["requirements?", "qualifications?", "skills", "what you bring", "your profile", "requisiti", "competenze", "chi cerchiamo", "benefits?", "what we offer", "cosa offriamo", "about us", "chi siamo"]);
@@ -3931,6 +3933,13 @@ Cordiali saluti,
       return;
     }
     const analysis = analyzeOpportunity({ title, company, location, description });
+    const extractedJob = { title, company_name: company, location, description, industry };
+    const extractedSalary = salaryFromJob(extractedJob);
+    const extractedSeniority = jobSeniority(extractedJob);
+    const extractedExperience = jobExperience(extractedJob);
+    const extractedContract = jobContract(extractedJob);
+    const extractedLanguages = jobLanguages(extractedJob);
+    const extractedResponsibilities = responsibilityItems(extractedJob);
     let companyRecord = state.data.companies.find((item) => valueOf(item, "companies", "name", "").trim().toLowerCase() === company.toLowerCase()) || null;
     try {
       if (!companyRecord) {
@@ -3965,6 +3974,17 @@ Cordiali saluti,
     setMapped(payload, "jobs", "whyFit", analysis.why);
     setMapped(payload, "jobs", "gaps", analysis.gaps);
     setMapped(payload, "jobs", "angle", analysis.angle);
+    setMapped(payload, "jobs", "description", description);
+    setMapped(payload, "jobs", "industry", industry || null);
+    setMapped(payload, "jobs", "salary", extractedSalary || null);
+    setMapped(payload, "jobs", "seniority", extractedSeniority === "Non indicato" ? null : extractedSeniority);
+    setMapped(payload, "jobs", "experience", extractedExperience === "Non indicata" ? null : extractedExperience);
+    setMapped(payload, "jobs", "employmentType", extractedContract === "Non indicato" ? null : extractedContract);
+    setMapped(payload, "jobs", "languages", extractedLanguages === "Non indicata" ? [] : extractedLanguages.split(" · "));
+    setMapped(payload, "jobs", "companyDescription", companyDescription || null);
+    setMapped(payload, "jobs", "responsibilities", extractedResponsibilities);
+    setMapped(payload, "jobs", "scrapeStatus", description.length >= 500 ? "complete" : "partial");
+    setMapped(payload, "jobs", "scrapedAt", new Date().toISOString());
     const created = await insertRecord("jobs", payload);
     try {
       window.localStorage.setItem(`jobfinder:job-description:${state.user?.id || "anonymous"}:${created.id}`, description);

@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260907.41" />
+    <link rel="stylesheet" href="styles.css?v=20260907.45" />
   </head>
   <body>
     <noscript>
@@ -261,8 +261,8 @@
                   </select>
                 </label>
                 <span id="lastSyncLabel" class="last-sync">Aggiornato ora</span>
-                <button id="dashboardRefreshButton" class="button button--secondary" type="button" data-action="refresh">
-                  <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>Aggiorna
+                <button id="dashboardRefreshButton" class="button button--secondary" type="button" data-action="refresh-opportunities">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>Nuove proposte
                 </button>
               </div>
             </div>
@@ -512,6 +512,16 @@
                   <i aria-hidden="true"></i>
                 </label>
               </div>
+              <section class="preference-delivery-card">
+                <div>
+                  <p class="eyebrow">CONSEGNA GIORNALIERA</p>
+                  <h2>Quando vuoi ricevere le nuove opportunità?</h2>
+                  <p class="muted">Dall'orario scelto, alla prima apertura della dashboard JobFinder mostra una nuova selezione basata su ruoli, settori, località, modalità di lavoro e Fit Score minimo.</p>
+                </div>
+                <label class="field preference-time-field"><span>Orario</span><input id="preferenceDeliveryTime" type="time" value="09:00" /></label>
+                <label class="field preference-count-field"><span>Numero di proposte</span><input id="preferenceDailyCount" type="number" min="1" max="20" value="6" /></label>
+                <button class="button button--secondary" type="button" data-action="refresh-opportunities"><svg class="icon"><use href="#icon-refresh"></use></svg>Cambia proposte ora</button>
+              </section>
               <div class="form-actions">
                 <span id="preferencesUpdatedAt" class="muted"></span>
                 <button id="savePreferencesButton" class="button button--primary" type="submit">
@@ -706,8 +716,8 @@
       <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
     </svg>
 
-    <script src="config.js?v=20260907.42" defer></script>
+    <script src="config.js?v=20260907.45" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260907.42" defer></script>
+    <script src="app.js?v=20260907.45" defer></script>
   </body>
 </html>

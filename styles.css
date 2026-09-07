@@ -2922,3 +2922,25 @@ textarea::placeholder {
     transition-duration: 0.01ms !important;
   }
 }
+.preference-delivery-card {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 150px 170px auto;
+  gap: 18px;
+  align-items: end;
+  margin-top: 24px;
+  padding: 22px;
+  border: 1px solid #cfe0ff;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #f5f9ff 0%, #eef5ff 100%);
+}
+.preference-delivery-card h2 { margin: 3px 0 6px; font-size: 1.15rem; }
+.preference-delivery-card p { margin: 0; }
+.preference-delivery-card input { min-height: 48px; }
+@media (max-width: 900px) {
+  .preference-delivery-card { grid-template-columns: 1fr 1fr; }
+  .preference-delivery-card > div, .preference-delivery-card .button { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .preference-delivery-card { grid-template-columns: 1fr; padding: 16px; }
+  .preference-delivery-card > * { grid-column: 1 !important; }
+}

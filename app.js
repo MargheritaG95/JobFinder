@@ -1235,6 +1235,13 @@ Cordiali saluti,
     return `<button class="button button--danger-ghost" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>`;
   }
 
+  function opportunityStateOptionsMarkup(job) {
+    return `
+      <button class="button top-opportunity__state-option top-opportunity__state-option--applied" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Applicato</button>
+      <button class="button top-opportunity__state-option top-opportunity__state-option--later" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}Applica Dopo</button>
+      <button class="button top-opportunity__state-option top-opportunity__state-option--remove" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>`;
+  }
+
   function jobDescriptionText(job) {
     let importedDescription = "";
     try {
@@ -1413,8 +1420,7 @@ Cordiali saluti,
   function isJobToApply(job) {
     if (hasAppliedToJob(job)) return false;
     return Boolean(valueOf(job, "jobs", "saved", false))
-      || ["APPLY", "DRAFT"].includes(jobStatus(job))
-      || feedbackValueForJob(job.id) === "LIKE";
+      || ["APPLY", "DRAFT"].includes(jobStatus(job));
   }
 
   function opportunityStage(job) {
@@ -1571,10 +1577,7 @@ Cordiali saluti,
     const choice = opportunityChoiceMarkup(job, "Applica Dopo");
     const dashboardStatus = ["NEW", "APPLY", "APPLIED"].includes(jobStatus(job)) ? "" : statusBadge(jobStatus(job));
     const editingState = state.dashboardStateEditors.has(String(job.id));
-    const stateOptions = `
-      <button class="button top-opportunity__state-option top-opportunity__state-option--applied" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Applicato</button>
-      <button class="button top-opportunity__state-option top-opportunity__state-option--later" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}Applica Dopo</button>
-      <button class="button top-opportunity__state-option top-opportunity__state-option--remove" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>`;
+    const stateOptions = opportunityStateOptionsMarkup(job);
     const stageActions = stage === "review" || editingState
       ? stateOptions
       : `<div class="top-opportunity__selected-state">${choice}<button class="top-opportunity__change-state" type="button" data-action="edit-dashboard-state" data-id="${escapeAttribute(job.id)}">Cambia stato</button></div>`;
@@ -1690,17 +1693,22 @@ Cordiali saluti,
     const location = valueOf(job, "jobs", "location", "Location non indicata");
     const source = valueOf(job, "jobs", "source", "Source non indicata");
     const decision = opportunityChoiceMarkup(job);
+    const editingState = state.dashboardStateEditors.has(String(job.id));
+    const statusControls = !decision || editingState
+      ? opportunityStateOptionsMarkup(job)
+      : `<div class="top-opportunity__selected-state">${decision}<button class="top-opportunity__change-state" type="button" data-action="edit-dashboard-state" data-id="${escapeAttribute(job.id)}">Cambia stato</button></div>`;
+    const secondaryStatus = ["NEW", "APPLY", "APPLIED"].includes(jobStatus(job)) ? "" : statusBadge(jobStatus(job));
     return `
       <article class="opportunity-card opportunity-card--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
-        <div class="opportunity-card__top ${decision ? "opportunity-card__top--decided" : ""}">
+        <div class="opportunity-card__top ${decision && !editingState ? "opportunity-card__top--decided" : ""}">
           <div class="company-logo">${companyLogoContent(job)}</div>
           <div class="opportunity-copy">
             <h3>${escapeHtml(jobTitle(job))}</h3>
             <p>${escapeHtml(company)}</p>
-            <div class="opportunity-copy__badges">${highFitBadge(fit)}${statusBadge(jobStatus(job))}${priorityStarButton(job)}${referralButton(job)}${easyApplyBadge(job)}</div>
+            <div class="opportunity-copy__badges">${highFitBadge(fit)}${secondaryStatus}${priorityStarButton(job)}${referralButton(job)}${easyApplyBadge(job)}</div>
           </div>
-          ${decision ? `<div class="opportunity-card__primary-action">${decision}</div>` : ""}
-          <div class="opportunity-card__score-actions"><div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>${removeOpportunityButton(job)}</div>
+          <div class="opportunity-card__primary-action ${editingState ? "is-editing" : ""}">${statusControls}</div>
+          <div class="opportunity-card__score-actions"><div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div></div>
         </div>
         <div class="opportunity-card__meta">
           <span>${icon("building")}${escapeHtml(location)}</span>
@@ -1717,7 +1725,6 @@ Cordiali saluti,
             <button class="button button--secondary" type="button" data-action="open-job" data-id="${escapeAttribute(job.id)}">${icon("external")}Apri annuncio</button>
             <div class="opportunity-card__action-row-right">
               ${["APPLIED", "CONTACTED", "INTERVIEW"].includes(jobStatus(job)) ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>` : ""}
-              ${hasAppliedToJob(job) ? "" : `<button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}<span>Ho applicato</span></button>`}
             </div>
           </div>
           <div class="opportunity-card__feedback"><span>Questa opportunità è utile?</span>${feedbackButtons(job.id)}</div>
@@ -2679,7 +2686,8 @@ Cordiali saluti,
           break;
         case "edit-dashboard-state":
           state.dashboardStateEditors.add(String(id));
-          renderDashboard();
+          if (state.route === "opportunities") renderOpportunities({ preserveFilters: true });
+          else renderDashboard();
           break;
         case "toggle-save":
           await toggleSavedJob(id, trigger);

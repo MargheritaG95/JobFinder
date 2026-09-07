@@ -1180,15 +1180,20 @@ Cordiali saluti,
   function industryFromText(text) {
     const normalized = String(text || "").toLowerCase();
     const sectors = [
-      [/automotive|mobility|vehicle|mobilità|veicoli/, "Automotive & Mobility"],
-      [/artificial intelligence|machine learning|\bai\b|software|cloud|saas|cybersecurity/, "Technology & AI"],
+      [/\bbyd\b|automotive|mobility|vehicle|mobilità|veicoli|dealer|dealership|remarketing|electric car|electric vehicle|bev\b/, "Automotive & Mobility"],
+      [/artificial intelligence|machine learning|\bai\b|software|cloud|saas|cybersecurity|digital platform|information technology/, "Technology & AI"],
       [/bank|banking|insurance|fintech|financial|assicuraz/, "Financial Services"],
       [/energy|energia|renewable|utility|utilities|oil|gas/, "Energy & Utilities"],
       [/pharma|healthcare|medical|biotech|salute/, "Healthcare & Life Sciences"],
-      [/retail|e-commerce|ecommerce|consumer goods/, "Retail & Consumer"],
+      [/retail|e-commerce|ecommerce|consumer goods|fmcg|fashion|luxury/, "Retail & Consumer"],
       [/consulting|consulenza|advisory/, "Consulting"],
       [/telecom|telco|telecommunications/, "Telecommunications"],
-      [/manufacturing|industrial|engineering|infrastructure/, "Industrial & Infrastructure"]
+      [/manufacturing|industrial|engineering|infrastructure|automation|smart building/, "Industrial & Infrastructure"],
+      [/logistics|supply chain|transportation|shipping|freight/, "Logistics & Transportation"],
+      [/media|advertising|marketing agency|entertainment|gaming|video game/, "Media & Entertainment"],
+      [/travel|hospitality|hotel|tourism|airline/, "Travel & Hospitality"],
+      [/education|university|learning platform|edtech/, "Education"],
+      [/food|beverage|agriculture|agri.?food/, "Food & Agriculture"]
     ];
     return sectors.find(([pattern]) => pattern.test(normalized))?.[1] || "";
   }
@@ -1200,26 +1205,37 @@ Cordiali saluti,
   }
 
   function companySummaryFromText(companyName, description, industry = "") {
-    const sentence = String(description || "").split(/(?<=[.!?])\s+/).find((item) =>
-      item.length > 35 && item.length < 260 && /(?:company|azienda|leader|provid|offr|svilupp|specializ|operat|mission|customers|clienti)/i.test(item)
-    );
-    if (sentence) return sentence.trim();
+    const text = String(description || "").replace(/\r/g, "");
+    const aboutSection = text.match(/(?:^|\n)\s*(?:about (?:us|the company|our company)|chi siamo|l['’]azienda|company overview)\s*[:\-]?\s*\n?([\s\S]{40,700}?)(?=\n\s*(?:the role|about the role|position|job description|responsibil|what you|requirements?|qualifications?|il ruolo|la posizione)\b|$)/i)?.[1];
+    const candidates = String(aboutSection || text).split(/(?<=[.!?])\s+|\n+/).map((item) => item.trim()).filter(Boolean);
+    const sentence = candidates.find((item) => item.length > 45 && item.length < 360 && /(?:company|azienda|leader|provid|offr|svilupp|specializ|operat|mission|customers|clienti|global|market|prodott|serviz)/i.test(item));
+    if (sentence) return sentence.replace(/^(?:about us|chi siamo|company overview)\s*[:\-]?\s*/i, "").trim();
     return industry
-      ? `${companyName} è un’azienda attiva nel settore ${industry}, dove sviluppa prodotti, servizi o soluzioni per i propri clienti.`
+      ? `${companyName} opera nel settore ${industry}. Per una descrizione più specifica, importa anche la sezione “About the company” dell’annuncio.`
       : "";
   }
 
   function companyOverview(job) {
     const company = getCompanyById(valueOf(job, "jobs", "companyId", ""));
-    const notes = String(valueOf(company, "companies", "notes", "")).trim();
-    if (notes) return notes;
+    const notes = String(valueOf(company, "companies", "notes", "") || company?.description || company?.company_description || job?.company_description || job?.company_overview || "").trim();
+    const genericNotes = /propone questa opportunità per rafforzare il team|azienda attiva nel settore .+ sviluppa prodotti, servizi o soluzioni/i.test(notes);
+    if (notes && !genericNotes) return notes;
     const industry = companyIndustry(job);
     const description = jobDescriptionText(job);
     const extracted = companySummaryFromText(companyNameForJob(job), description, industry === "Industria non indicata" ? "" : industry);
     if (extracted) return extracted;
+    const companyName = companyNameForJob(job);
+    if (/\bBYD(?: Europe)?\b/i.test(companyName)) return "BYD Europe è la divisione europea di BYD, gruppo tecnologico e produttore di veicoli elettrificati, attivo nella mobilità a basse emissioni e nei servizi collegati al mercato automotive.";
+    const industryContexts = {
+      "Automotive & Mobility": "opera nella filiera automotive e della mobilità, tra prodotti, distribuzione, servizi commerciali e supporto al ciclo di vita dei veicoli.",
+      "Technology & AI": "sviluppa tecnologie, software o servizi digitali destinati a migliorare processi, dati e attività dei propri clienti.",
+      "Financial Services": "opera nei servizi finanziari, bancari o assicurativi, combinando gestione del rischio, relazione con i clienti e soluzioni digitali.",
+      "Industrial & Infrastructure": "opera in ambito industriale e infrastrutturale, progettando o gestendo soluzioni tecnologiche, impianti e servizi per organizzazioni e territori."
+    };
+    if (industryContexts[industry]) return `${companyName} ${industryContexts[industry]}`;
     return industry !== "Industria non indicata"
-      ? `${companyNameForJob(job)} è un’azienda attiva nel settore ${industry}, dove sviluppa prodotti, servizi o soluzioni per i propri clienti.`
-      : `${companyNameForJob(job)} propone questa opportunità per rafforzare il team e contribuire alle priorità descritte nell’annuncio.`;
+      ? `${companyName} opera nel settore ${industry}; importa la sezione “About the company” per visualizzare prodotti, clienti e mercato specifici.`
+      : `L’annuncio non contiene una descrizione verificabile di ${companyName}. Importa anche la sezione “About the company” per completare automaticamente questo riepilogo.`;
   }
 
   function appliedStateMarkup() {
@@ -1257,17 +1273,35 @@ Cordiali saluti,
     return `<div class="copilot-state-controls__selected">${selected}<button class="top-opportunity__change-state" type="button" data-action="edit-dashboard-state" data-id="${escapeAttribute(job.id)}">Cambia stato</button></div>`;
   }
 
-  function jobDescriptionText(job) {
+  function rawJobDescriptionText(job) {
     let importedDescription = "";
     try {
       importedDescription = window.localStorage.getItem(`jobfinder:job-description:${state.user?.id || "anonymous"}:${job.id}`) || "";
     } catch (_error) {
       // Continue with database fields or a factual fallback.
     }
-    return String(valueOf(job, "jobs", "description", "") || importedDescription).replace(/\s+/g, " ").trim();
+    return String(valueOf(job, "jobs", "description", "") || job?.job_description || job?.description_text || job?.raw_description || job?.content || importedDescription).replace(/\r/g, "").trim();
+  }
+
+  function jobDescriptionText(job) {
+    return rawJobDescriptionText(job).replace(/\s+/g, " ").trim();
+  }
+
+  function postingSection(job, headings, stopHeadings) {
+    const text = rawJobDescriptionText(job);
+    if (!text) return "";
+    const start = headings.join("|");
+    const stop = stopHeadings.join("|");
+    return text.match(new RegExp(`(?:^|\\n)\\s*(?:${start})\\s*[:\\-]?\\s*\\n([\\s\\S]*?)(?=\\n\\s*(?:${stop})\\s*[:\\-]?\\s*(?:\\n|$)|$)`, "i"))?.[1]?.trim() || "";
   }
 
   function salaryFromJob(job) {
+    const direct = job?.salary || job?.salary_range || job?.compensation || job?.pay_range;
+    if (direct) return String(direct).replace(/\s+/g, " ").trim();
+    if (job?.salary_min || job?.salary_max) {
+      const currency = job?.salary_currency || job?.currency || "€";
+      return `${currency} ${job?.salary_min || "?"}–${job?.salary_max || "?"}`;
+    }
     const description = jobDescriptionText(job);
     if (!description) return "";
     const patterns = [
@@ -1285,6 +1319,8 @@ Cordiali saluti,
   }
 
   function jobSeniority(job) {
+    const direct = job?.seniority || job?.seniority_level || job?.experience_level;
+    if (direct) return titleCase(direct);
     const text = `${jobTitle(job)} ${jobDescriptionText(job)}`;
     if (/\b(intern|internship|stage|tirocinio)\b/i.test(text)) return "Internship";
     if (/\b(junior|entry.level|graduate)\b/i.test(text)) return "Junior";
@@ -1295,20 +1331,24 @@ Cordiali saluti,
   }
 
   function jobExperience(job) {
+    const direct = job?.years_experience || job?.experience_required || job?.experience;
+    if (direct && String(direct).length < 80) return String(direct).trim();
     const text = jobDescriptionText(job);
-    const range = text.match(/(?:at least|minimum|minimo|almeno|oltre)?\s*(\d{1,2})\s*(?:[-–—]|to|a)\s*(\d{1,2})\+?\s*(?:years?|anni)\s+(?:of\s+)?(?:experience|esperienza)/i);
+    const range = text.match(/(?:at least|minimum(?: of)?|minimo|almeno|oltre)?\s*(\d{1,2})\s*(?:[-–—]|to|a)\s*(\d{1,2})\+?\s*(?:years?|yrs?|anni)(?:\s+(?:of\s+)?(?:relevant |professional )?(?:experience|esperienza))?/i);
     if (range) return `${range[1]}–${range[2]} anni`;
-    const single = text.match(/(?:at least|minimum|minimo|almeno|oltre)?\s*(\d{1,2})\+?\s*(?:years?|anni)\s+(?:of\s+)?(?:experience|esperienza)/i)
+    const single = text.match(/(?:at least|minimum(?: of)?|minimo|almeno|oltre|more than|over)?\s*(\d{1,2})\s*\+?\s*(?:years?|yrs?|anni)(?:\s+(?:of\s+)?(?:relevant |professional )?(?:experience|esperienza))?/i)
       || text.match(/(?:experience|esperienza)(?:\s+(?:of|di))?\s*(\d{1,2})\+?\s*(?:years?|anni)/i);
     return single ? `${single[1]}${/\+/.test(single[0]) ? "+" : ""} anni` : "Non indicata";
   }
 
   function jobContract(job) {
-    const text = jobDescriptionText(job);
+    const direct = job?.employment_type || job?.contract_type || job?.job_type;
+    if (direct) return titleCase(direct);
+    const text = `${jobTitle(job)} ${jobDescriptionText(job)}`;
     const types = [
       [/tempo indeterminato|permanent contract|permanent position/, "Tempo indeterminato"],
       [/tempo determinato|fixed.term|temporary contract/, "Tempo determinato"],
-      [/full.time|full time|tempo pieno/, "Full-time"],
+      [/full[\s-]?time|tempo pieno|40\s*hours?/, "Full-time"],
       [/part.time|part time/, "Part-time"],
       [/internship|stage|tirocinio/, "Stage"],
       [/freelance|contractor|consulenza/, "Freelance / contratto"]
@@ -1317,12 +1357,21 @@ Cordiali saluti,
   }
 
   function jobLanguages(job) {
+    const direct = job?.languages || job?.language_requirements || job?.language;
+    if (direct) return toList(direct).slice(0, 4).join(" · ");
     const text = jobDescriptionText(job);
     const languages = [
       [/\bitalian(?:o|a)?\b/i, "Italiano"], [/\benglish|inglese\b/i, "Inglese"],
       [/\bfrench|francese\b/i, "Francese"], [/\bspanish|spagnolo\b/i, "Spagnolo"],
-      [/\bgerman|tedesco\b/i, "Tedesco"]
-    ].filter(([pattern]) => pattern.test(text)).map(([, label]) => label);
+      [/\bgerman|tedesco\b/i, "Tedesco"], [/\bdutch|olandese\b/i, "Olandese"],
+      [/\bportuguese|portoghese\b/i, "Portoghese"]
+    ].filter(([pattern]) => pattern.test(text)).map(([pattern, label]) => {
+      const hit = text.match(pattern);
+      const nearby = hit ? text.slice(Math.max(0, hit.index - 35), hit.index + hit[0].length + 45) : "";
+      const level = nearby.match(/\b(?:A1|A2|B1|B2|C1|C2)\b/i)?.[0]?.toUpperCase();
+      const fluency = /native|madrelingua/i.test(nearby) ? "madrelingua" : /fluent|fluente/i.test(nearby) ? "fluente" : "";
+      return `${label}${level ? ` (${level})` : fluency ? ` (${fluency})` : ""}`;
+    });
     return languages.length ? languages.slice(0, 3).join(" · ") : "Non indicata";
   }
 
@@ -1336,8 +1385,11 @@ Cordiali saluti,
   }
 
   function responsibilityItems(job) {
-    const description = jobDescriptionText(job);
-    const sentences = description.split(/(?<=[.!?;])\s+|\n+/).map((item) => item.replace(/^[•\-–—\s]+/, "").trim()).filter((item) => item.length > 20);
+    const section = postingSection(job,
+      ["responsibilities", "key responsibilities", "what you(?:'|’)ll do", "what you will do", "your role", "the role", "responsabilità", "responsabilità principali", "cosa farai", "attività"],
+      ["requirements?", "qualifications?", "skills", "what you bring", "your profile", "requisiti", "competenze", "chi cerchiamo", "benefits?", "what we offer", "cosa offriamo", "about us", "chi siamo"]);
+    const description = section || rawJobDescriptionText(job);
+    const sentences = description.split(/\n+|(?<=[.!?;])\s+/).map((item) => item.replace(/^[•●▪◦✓✔\-–—\s]+/, "").trim()).filter((item) => item.length > 20);
     const pattern = /responsabil|attivit|what you.ll do|duties|manage|lead|develop|deliver|support|coordinate|gestir|guidar|svilupp|coordin|realizz|implement|analizz|define|drive/i;
     const items = sentences.filter((item) => pattern.test(item)).slice(0, 5);
     if (items.length) return items.map((item) => item.length > 190 ? `${item.slice(0, 189).trimEnd()}…` : item);
@@ -1367,6 +1419,8 @@ Cordiali saluti,
       [/business analy|data analy|insight/, "Analizzare dati, processi e requisiti di business; produrre insight e raccomandazioni; definire indicatori e supportare stakeholder e decisioni con evidenze misurabili."],
       [/strategy|strategic/, "Supportare la definizione della strategia, analizzare mercato e opportunità, tradurre le priorità in iniziative operative e comunicare raccomandazioni chiare agli stakeholder."],
       [/sales operations|revops|revenue operations/, "Ottimizzare processi commerciali, pipeline e strumenti; definire metriche e reporting; coordinare sales, marketing e customer success per migliorare prevedibilità ed efficacia."],
+      [/business operations|operations specialist|operations manager/, "Analizzare e migliorare processi operativi, coordinare stakeholder e iniziative trasversali, costruire reporting e indicatori e trasformare le priorità di business in piani eseguibili."],
+      [/remarketing/, "Gestire strategie e processi di remarketing, analizzare performance e valore residuo, coordinare partner e canali commerciali e ottimizzare rotazione, pricing e risultati del portafoglio veicoli."],
       [/artificial intelligence|\bai\b|machine learning/, "Individuare e prioritizzare casi d’uso AI, tradurre obiettivi di business in requisiti, coordinare stakeholder tecnici e funzionali e misurare adozione, rischio e valore generato."],
       [/marketing/, "Pianificare e realizzare iniziative di marketing, coordinare contenuti e canali, analizzare pubblico e performance e ottimizzare le attività rispetto agli obiettivi di business."]
     ];

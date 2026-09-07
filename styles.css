@@ -2944,3 +2944,5 @@ textarea::placeholder {
   .preference-delivery-card { grid-template-columns: 1fr; padding: 16px; }
   .preference-delivery-card > * { grid-column: 1 !important; }
 }
+.icon-button--danger { color: #c43d4d; border-color: #f0b8bf; background: #fff8f9; }
+.icon-button--danger:hover { background: #fff0f2; border-color: #d96572; }

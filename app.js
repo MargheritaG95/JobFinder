@@ -1242,6 +1242,17 @@ Cordiali saluti,
       <button class="button top-opportunity__state-option top-opportunity__state-option--remove" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>`;
   }
 
+  function copilotStateControlsMarkup(job) {
+    const editing = state.dashboardStateEditors.has(String(job.id));
+    const status = jobStatus(job);
+    if (status === "NEW" || editing) {
+      return `<div class="copilot-state-controls__options">${opportunityStateOptionsMarkup(job)}</div>`;
+    }
+    const selected = opportunityChoiceMarkup(job, "Applica Dopo")
+      || `<span class="opportunity-choice">${icon("clock")}Applica Dopo</span>`;
+    return `<div class="copilot-state-controls__selected">${selected}<button class="top-opportunity__change-state" type="button" data-action="edit-dashboard-state" data-id="${escapeAttribute(job.id)}">Cambia stato</button></div>`;
+  }
+
   function jobDescriptionText(job) {
     let importedDescription = "";
     try {
@@ -2317,9 +2328,9 @@ Cordiali saluti,
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : localDraft.savedAt ? "Bozza salvata su questo dispositivo" : "Nuova application";
     saveState.classList.toggle("status-pill--neutral", !application);
     $("prepareApplicationButton").innerHTML = `${icon("file")}Salva bozza`;
-    $("copilotSaveForLaterButton").innerHTML = `${icon("clock")}${Boolean(valueOf(job, "jobs", "saved", false)) ? "Salvata per dopo" : "Applica più tardi"}`;
+    $("copilotStateControls").innerHTML = copilotStateControlsMarkup(job);
     const rejectedButton = $("copilotRejectedButton");
-    rejectedButton.disabled = !hasAppliedToJob(job) || rejectedState(job);
+    rejectedButton.disabled = rejectedState(job);
     rejectedButton.textContent = rejectedState(job) ? "Rifiutata registrata" : "Rifiutata";
   }
 
@@ -2686,7 +2697,8 @@ Cordiali saluti,
           break;
         case "edit-dashboard-state":
           state.dashboardStateEditors.add(String(id));
-          if (state.route === "opportunities") renderOpportunities({ preserveFilters: true });
+          if (state.route === "copilot") renderCopilot();
+          else if (state.route === "opportunities") renderOpportunities({ preserveFilters: true });
           else renderDashboard();
           break;
         case "toggle-save":
@@ -3128,19 +3140,40 @@ Cordiali saluti,
     const actionKey = String(job.id);
     if (state.pendingJobActions.has(actionKey)) return;
     state.pendingJobActions.add(actionKey);
+    const application = getApplicationForJob(job.id);
     const previousJob = recordPatch("jobs", job, ["saved", "status"]);
-    const jobPatch = { [fieldName("jobs", "saved")]: true };
-    if (jobStatus(job) === "NEW") jobPatch[fieldName("jobs", "status")] = "APPLY";
+    const previousApplication = application ? recordPatch("applications", application, ["status", "progress", "appliedAt", "preparationStatus", "notes"]) : null;
+    const jobPatch = {
+      [fieldName("jobs", "saved")]: true,
+      [fieldName("jobs", "status")]: "APPLY"
+    };
     setBusy(button, true, "Salvataggio…");
+    let applicationUpdated = false;
     let jobUpdated = false;
     try {
+      if (application) {
+        const notes = String(valueOf(application, "applications", "notes", ""))
+          .replace(/\n*\[ESITO: RIFIUTATA\]\s*/g, "\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+        const applicationPatch = {};
+        setMapped(applicationPatch, "applications", "progress", 20);
+        setMapped(applicationPatch, "applications", "appliedAt", null);
+        setMapped(applicationPatch, "applications", "preparationStatus", "draft");
+        setMapped(applicationPatch, "applications", "notes", notes || null);
+        await writeApplicationRecord("update", application.id, applicationPatch, "DRAFT");
+        applicationUpdated = true;
+      }
       await updateRecord("jobs", job.id, jobPatch);
       jobUpdated = true;
       renderAll();
       showToast("Salvata per applicare più tardi", "success", "Opportunità salvata");
     } catch (error) {
-      if (jobUpdated) {
-        try { await updateRecord("jobs", job.id, previousJob); } catch (_rollbackError) { await loadAllData({ quiet: true }); }
+      if (jobUpdated || applicationUpdated) {
+        try {
+          if (jobUpdated) await updateRecord("jobs", job.id, previousJob);
+          if (applicationUpdated) await updateRecord("applications", application.id, previousApplication);
+        } catch (_rollbackError) { await loadAllData({ quiet: true }); }
       }
       throw error;
     } finally {
@@ -3217,10 +3250,8 @@ Cordiali saluti,
       setMapped(applicationPatch, "applications", "notes", previousNotes.includes(marker) ? previousNotes : `${previousNotes}${previousNotes ? "\n\n" : ""}${marker}`);
       await writeApplicationRecord("update", application.id, applicationPatch, "CLOSED");
     }
-    await updateRecord("jobs", jobId, {
-      [fieldName("jobs", "status")]: "CLOSED",
-      [fieldName("jobs", "saved")]: false
-    });
+    if (!job) throw new Error("L’opportunità non è più disponibile.");
+    await updateJobClosedRecord(job);
     closeDialog();
     renderAll();
     showToast("L’opportunità è stata rimossa dalla dashboard.", "success", "Opportunità cancellata");

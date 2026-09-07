@@ -110,6 +110,7 @@ Cordiali saluti,
     selectedApplicationId: null,
     dashboardRangeDays: "30",
     dashboardFilter: null,
+    dashboardStateEditors: new Set(),
     draggedPipelineJobId: null,
     pendingJobActions: new Set(),
     demo: false,
@@ -1546,13 +1547,16 @@ Cordiali saluti,
     const company = companyNameForJob(job);
     const fit = jobFit(job);
     const location = valueOf(job, "jobs", "location", "Location non indicata");
-    const choice = opportunityChoiceMarkup(job, "Applica dopo");
+    const choice = opportunityChoiceMarkup(job, "Applica Dopo");
     const dashboardStatus = ["NEW", "APPLY", "APPLIED"].includes(jobStatus(job)) ? "" : statusBadge(jobStatus(job));
-    const stageActions = stage === "review"
-      ? `<button class="button button--success" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">${icon("sparkles")}Applica ora</button><button class="button button--warning" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}Applica dopo</button>`
-      : stage === "to-apply"
-        ? `${choice}<button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Ho applicato</button>`
-        : choice;
+    const editingState = state.dashboardStateEditors.has(String(job.id));
+    const stateOptions = `
+      <button class="button top-opportunity__state-option top-opportunity__state-option--applied" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Applicato</button>
+      <button class="button top-opportunity__state-option top-opportunity__state-option--later" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}Applica Dopo</button>
+      <button class="button top-opportunity__state-option top-opportunity__state-option--remove" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button>`;
+    const stageActions = stage === "review" || editingState
+      ? stateOptions
+      : `<div class="top-opportunity__selected-state">${choice}<button class="top-opportunity__change-state" type="button" data-action="edit-dashboard-state" data-id="${escapeAttribute(job.id)}">Cambia stato</button></div>`;
     return `
       <article class="top-opportunity top-opportunity--${stage} top-opportunity--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
         <div class="company-logo">${companyLogoContent(job)}</div>
@@ -1561,7 +1565,7 @@ Cordiali saluti,
           <p>${escapeHtml(company)} · ${escapeHtml(location)}</p>
           <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${priorityStarButton(job, true)}${referralButton(job, true)}${feedbackButtons(job.id, true, true)}</div>
         </div>
-        <div class="top-opportunity__quick-actions">${stageActions}<button class="button button--danger" type="button" data-action="remove-opportunity" data-id="${escapeAttribute(job.id)}">${icon("trash")}Cancella</button></div>
+        <div class="top-opportunity__quick-actions ${editingState ? "is-editing" : ""}">${stageActions}</div>
         <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
       </article>
     `;
@@ -2651,6 +2655,10 @@ Cordiali saluti,
         case "remove-opportunity":
           openRemoveOpportunityDialog(id);
           break;
+        case "edit-dashboard-state":
+          state.dashboardStateEditors.add(String(id));
+          renderDashboard();
+          break;
         case "toggle-save":
           await toggleSavedJob(id, trigger);
           break;
@@ -2661,9 +2669,11 @@ Cordiali saluti,
           toggleJobReferral(id || state.selectedJobId);
           break;
         case "save-for-later":
+          state.dashboardStateEditors.delete(String(id || state.selectedJobId));
           await saveForLater(id || state.selectedJobId, trigger);
           break;
         case "mark-applied":
+          state.dashboardStateEditors.delete(String(id || state.selectedJobId));
           await markAsApplied(id || state.selectedJobId, trigger);
           break;
         case "mark-rejected":

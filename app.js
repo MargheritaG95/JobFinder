@@ -1227,6 +1227,7 @@ Cordiali saluti,
   }
 
   function opportunityChoiceMarkup(job, laterLabel = "Applica più tardi") {
+    if (rejectedState(job)) return `<span class="rejected-state">${icon("close")}Rifiutata</span>`;
     if (hasAppliedToJob(job)) return appliedStateMarkup();
     if (Boolean(valueOf(job, "jobs", "saved", false)) || jobStatus(job) === "APPLY") {
       return `<span class="opportunity-choice">${icon("clock")}${escapeHtml(laterLabel)}</span>`;
@@ -3336,6 +3337,13 @@ Cordiali saluti,
     setMapped(payload, "applications", "status", applicationStatusForDatabase("APPLIED"));
     setMapped(payload, "applications", "progress", 100);
     setMapped(payload, "applications", "preparationStatus", "submitted");
+    if (application) {
+      const cleanedNotes = String(valueOf(application, "applications", "notes", ""))
+        .replace(/\n*\[(?:ESITO: RIFIUTATA|ARCHIVIATA: NON IN LINEA)\]\s*/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      setMapped(payload, "applications", "notes", cleanedNotes || null);
+    }
     if (!application && Object.keys(localDraft).length) {
       setMapped(payload, "applications", "cvUsed", localDraft.cvUsed || null);
       setMapped(payload, "applications", "whyFit", localDraft.whyFit || null);

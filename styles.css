@@ -1311,6 +1311,8 @@ textarea::placeholder {
 .top-opportunity--applied .top-opportunity__quick-actions .button { min-width: 76px; min-height: 30px; padding: 5px 8px; font-size: .56rem; }
 .top-opportunity--applied .applied-state { color: #147454; background: #e5f8ef; }
 .top-opportunity--to-apply .opportunity-choice { color: #8a5908; background: #fff7df; }
+.rejected-state { display: inline-flex; align-items: center; gap: 6px; width: max-content; padding: 6px 9px; border-radius: 999px; color: #b63745; background: #fff0f2; font-size: .62rem; font-weight: 800; }
+.rejected-state .icon { width: 14px; height: 14px; }
 
 #opportunitiesList { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
 .opportunity-flow-group { overflow: hidden; padding: 17px; border: 2px solid #cbd6e7; border-radius: 18px; box-shadow: 0 10px 28px rgba(20, 43, 80, .08); }
@@ -2688,13 +2690,13 @@ textarea::placeholder {
 .copilot-context-card > .copilot-role-facts > div { min-height: 32px; }
 .copilot-context-card > .copilot-role-facts strong { min-height: 18px; font-weight: 800; }
 .copilot-context-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.copilot-context-block { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; padding: 20px 22px; }
+.copilot-context-block { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: start; gap: 14px; padding: 20px 22px; }
 .copilot-context-block + .copilot-context-block { border-left: 1px solid #e5eaf1; }
 .copilot-context-block > i { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 50%; color: var(--blue-600); background: #eaf2ff; }
 .copilot-context-block h3, .copilot-role-brief h3 { margin: 0 0 7px; font-size: .76rem; }
 .copilot-context-block h3, .copilot-strategy-heading h3, .copilot-content-card__heading b, .copilot-role-facts span { font-weight: 800; }
 .copilot-context-block p { margin: 0; color: #4f6280; font-size: .68rem; line-height: 1.55; }
-.copilot-context-card .copilot-role-brief { margin: 0; padding: 17px 22px; border: 0; border-top: 1px solid #e5eaf1; border-radius: 0; box-shadow: none; }
+.copilot-context-card .copilot-role-brief { margin: 0; padding: 17px 22px 17px 78px; border: 0; border-top: 1px solid #e5eaf1; border-radius: 0; box-shadow: none; }
 .copilot-context-card .copilot-responsibility-list { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
 .copilot-context-card .copilot-role-facts { margin: 0 0 11px; }
 .copilot-form { padding: 22px 24px; }
@@ -2738,8 +2740,11 @@ textarea::placeholder {
 .copilot-state-controls__selected { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; }
 .copilot-state-controls__selected { flex-direction: column; align-items: flex-start; gap: .3rem; }
 .copilot-secondary-actions { margin: 0; }
-.copilot-action-bar { display: flex; align-items: flex-start; flex-wrap: wrap; gap: .65rem; margin-top: 1.25rem; }
-.copilot-action-bar .form-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.copilot-action-bar { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin-top: 1.25rem; }
+.copilot-action-bar .form-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin: 0; padding: 0; border: 0; }
+.copilot-action-bar .button { min-height: 42px; }
+.followup-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 20px 0 10px; }
+.followup-list-toolbar h2 { margin: 0; color: var(--ink); font-size: .92rem; }
 .copilot-all-facts-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); margin: 10px 0 0 64px; border-top: 1px solid #dce5f1; border-bottom: 1px solid #dce5f1; }
 .copilot-all-facts-row .copilot-meta-inline,
 .copilot-all-facts-row .copilot-role-facts { display: contents; }
@@ -2836,6 +2841,8 @@ textarea::placeholder {
   .copilot-all-facts-row .copilot-role-facts > div:nth-child(even) { border-right: 0; }
   .copilot-action-bar, .copilot-action-bar .form-actions, .copilot-state-controls__options { width: 100%; }
   .copilot-action-bar .button { flex: 1 1 130px; }
+  .copilot-context-card .copilot-role-brief { padding-left: 22px; }
+  .followup-list-toolbar { align-items: stretch; flex-direction: column; }
   .meta-list .meta-list__wide { grid-template-columns: 1fr; align-items: start; }
   .copilot-heading-actions { width: 100%; justify-content: flex-start; margin: 12px 0 0; }
   .copilot-form .panel-heading { align-items: flex-start; flex-direction: column; }

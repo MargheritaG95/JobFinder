@@ -43,6 +43,8 @@
     workModes: ["Remote", "Hybrid"],
     minFit: 7,
     aiLearning: false,
+    deliveryTime: "09:00",
+    dailyCount: 6,
     motivations: "Automotive: L’automotive è da sempre una mia grande passione e oggi sto cercando concretamente di trasformarla in una direzione del mio percorso professionale.\nAI: Ho completato un master in intelligenza artificiale e desidero applicare questa preparazione a progetti concreti e di valore per il business.",
     profileSkills: "",
     profileCvText: "",
@@ -1095,6 +1097,8 @@ Cordiali saluti,
       workModes: toList(valueOf(record, "preferences", "workModes", [])),
       minFit: asNumber(valueOf(record, "preferences", "minFit", DEFAULT_PREFERENCES.minFit), DEFAULT_PREFERENCES.minFit),
       aiLearning: Boolean(valueOf(record, "preferences", "aiLearning", false)),
+      deliveryTime: String(valueOf(record, "preferences", "deliveryTime", DEFAULT_PREFERENCES.deliveryTime) || DEFAULT_PREFERENCES.deliveryTime).slice(0, 5),
+      dailyCount: Math.max(1, Math.min(20, asNumber(valueOf(record, "preferences", "dailyCount", DEFAULT_PREFERENCES.dailyCount), DEFAULT_PREFERENCES.dailyCount))),
       motivations: local.motivations || DEFAULT_PREFERENCES.motivations,
       profileSkills: local.profileSkills || DEFAULT_PREFERENCES.profileSkills,
       profileCvText: local.profileCvText || DEFAULT_PREFERENCES.profileCvText,
@@ -1613,7 +1617,9 @@ Cordiali saluti,
 
     const visibleJobs = jobs.filter((job) => jobStatus(job) !== "CLOSED");
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
-    const newJobs = visibleJobs.filter((job) => opportunityStage(job) === "review").sort(byNewest).slice(0, 6);
+    const preferences = currentPreferences();
+    runScheduledOpportunityDelivery(preferences);
+    const newJobs = dailyOpportunitySuggestions(visibleJobs, preferences, byNewest);
     const evaluatedAt = (job) => {
       const application = getApplicationForJob(job.id);
       const timestamp = valueOf(application, "applications", "appliedAt", "")
@@ -1702,6 +1708,57 @@ Cordiali saluti,
     const visible = state.dashboardFilter?.route === route;
     notice.classList.toggle("is-hidden", !visible);
     notice.innerHTML = visible ? `<span>Vista filtrata: <strong>${escapeHtml(state.dashboardFilter.label)}</strong></span><button type="button" data-action="clear-dashboard-kpi-filter">Mostra tutto</button>` : "";
+  }
+
+  function opportunityRefreshKey() {
+    return `jobfinder:opportunity-refresh:${state.user?.id || "anonymous"}`;
+  }
+
+  function opportunityRefreshState() {
+    try { return JSON.parse(window.localStorage.getItem(opportunityRefreshKey()) || "{}") || {}; }
+    catch (_error) { return {}; }
+  }
+
+  function preferenceMatchStrength(job, preferences = currentPreferences()) {
+    const text = normalizedTokens(`${jobTitle(job)} ${companyNameForJob(job)} ${companyIndustry(job)} ${valueOf(job, "jobs", "location", "")} ${jobDescriptionText(job)}`).join(" ");
+    const groups = [preferences.roles, preferences.sectors, preferences.locations, preferences.workModes]
+      .map((values) => toList(values).filter((value) => normalizedTokens(value).some((token) => text.includes(token))));
+    return groups.filter((matches) => matches.length).length;
+  }
+
+  function dailyOpportunitySuggestions(visibleJobs, preferences, byNewest) {
+    const refresh = opportunityRefreshState();
+    const excluded = new Set(toList(refresh.excludedIds).map(String));
+    const candidates = visibleJobs.filter((job) => opportunityStage(job) === "review")
+      .filter((job) => jobFit(job) >= preferences.minFit)
+      .filter((job) => preferenceMatchStrength(job, preferences) > 0)
+      .sort((a, b) => preferenceMatchStrength(b, preferences) - preferenceMatchStrength(a, preferences) || jobFit(b) - jobFit(a) || byNewest(a, b));
+    const available = candidates.filter((job) => !excluded.has(String(job.id)));
+    return (available.length ? available : candidates).slice(0, preferences.dailyCount);
+  }
+
+  function runScheduledOpportunityDelivery(preferences = currentPreferences()) {
+    const refresh = opportunityRefreshState();
+    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const [hour, minute] = String(preferences.deliveryTime || "09:00").split(":").map(Number);
+    const delivery = new Date(now); delivery.setHours(hour || 0, minute || 0, 0, 0);
+    if (now >= delivery && refresh.deliveryDate !== today) {
+      try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ deliveryDate: today, excludedIds: [] })); }
+      catch (_error) { /* The default ranking remains usable without browser storage. */ }
+    }
+  }
+
+  function refreshOpportunitySuggestions() {
+    const preferences = currentPreferences();
+    const visibleJobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
+    const current = dailyOpportunitySuggestions(visibleJobs, preferences, (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)));
+    const refresh = opportunityRefreshState();
+    const excludedIds = [...new Set([...toList(refresh.excludedIds).map(String), ...current.map((job) => String(job.id))])];
+    try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ ...refresh, deliveryDate: new Date().toISOString().slice(0, 10), excludedIds })); }
+    catch (_error) { showToast("Il browser non consente di memorizzare il nuovo gruppo di proposte.", "warning", "Refresh non salvato"); return; }
+    renderDashboard();
+    showToast("Le proposte non valutate sono state sostituite con le successive più compatibili.", "success", "Nuove opportunità pronte");
   }
 
   function renderOpportunityFilters() {
@@ -2149,6 +2206,8 @@ Cordiali saluti,
     $("preferenceMinFit").value = String(preferences.minFit);
     $("preferenceMinFitOutput").textContent = asNumber(preferences.minFit, 7).toFixed(1);
     $("preferenceAiLearning").checked = preferences.aiLearning;
+    $("preferenceDeliveryTime").value = preferences.deliveryTime;
+    $("preferenceDailyCount").value = String(preferences.dailyCount);
     const notice = $("preferencesSourceNotice");
     notice.classList.toggle("is-hidden", !preferences.isDefault);
     if (preferences.isDefault) {
@@ -2751,6 +2810,9 @@ Cordiali saluti,
           break;
         case "refresh":
           await loadAllData();
+          break;
+        case "refresh-opportunities":
+          refreshOpportunitySuggestions();
           break;
         case "apply-now":
           await startApplication(id, trigger);
@@ -3614,6 +3676,8 @@ Cordiali saluti,
     setMapped(payload, "preferences", "workModes", toList($("preferenceWorkModes").value));
     setMapped(payload, "preferences", "minFit", asNumber($("preferenceMinFit").value, 7));
     setMapped(payload, "preferences", "aiLearning", $("preferenceAiLearning").checked);
+    setMapped(payload, "preferences", "deliveryTime", $("preferenceDeliveryTime").value || "09:00");
+    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(20, asNumber($("preferenceDailyCount").value, 6))));
     const existing = state.data.preferences[0] || null;
     setBusy($("savePreferencesButton"), true, "Salvataggio…");
     try {
@@ -3933,6 +3997,8 @@ Cordiali saluti,
       return;
     }
     const analysis = analyzeOpportunity({ title, company, location, description });
+    const preferences = currentPreferences();
+    if (analysis.score < preferences.minFit) throw new Error(`Questa opportunità ha Fit ${analysis.score.toFixed(1)}/10, sotto il minimo ${preferences.minFit.toFixed(1)} impostato nelle Preferenze.`);
     const extractedJob = { title, company_name: company, location, description, industry };
     const extractedSalary = salaryFromJob(extractedJob);
     const extractedSeniority = jobSeniority(extractedJob);

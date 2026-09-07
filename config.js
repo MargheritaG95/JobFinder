@@ -126,6 +126,9 @@ window.JOBFINDER_CONFIG = {
         workModes: "work_modes",
         minFit: "min_fit_score",
         aiLearning: "ai_learning_enabled",
+        deliveryTime: "delivery_time",
+        dailyCount: "daily_opportunity_count",
+        lastDeliveryAt: "last_delivery_at",
         updatedAt: "updated_at"
       }
     }

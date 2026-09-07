@@ -1015,6 +1015,27 @@ Cordiali saluti,
     return message.includes("applications_status_check") || (String(error?.code || "") === "23514" && message.includes("status"));
   }
 
+  function isStatusConstraintError(error) {
+    const message = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+    return String(error?.code || "") === "23514" && message.includes("status");
+  }
+
+  async function updateJobClosedRecord(job) {
+    let lastError = null;
+    for (const candidate of ["CLOSED", "REJECTED"]) {
+      try {
+        return await updateRecord("jobs", job.id, {
+          [fieldName("jobs", "status")]: candidate,
+          [fieldName("jobs", "saved")]: false
+        });
+      } catch (error) {
+        lastError = error;
+        if (!isStatusConstraintError(error)) throw error;
+      }
+    }
+    throw lastError || new Error("Lo stato di chiusura non è compatibile con la tabella jobs.");
+  }
+
   async function writeApplicationRecord(mode, recordId, payload, logicalStatus) {
     let lastError = null;
     for (const candidate of applicationStatusCandidates(logicalStatus)) {
@@ -1779,11 +1800,12 @@ Cordiali saluti,
   }
 
   function renderPipeline() {
+    const pipelineLabels = { CLOSED: "Closed" };
     $("pipelineBoard").innerHTML = PIPELINE_STATES.map((status, index) => {
       const jobs = sortPipelineJobs(state.data.jobs.filter((job) => jobStatus(job) === status), status);
       return `
         <section class="kanban-column" data-pipeline-status="${status}" style="--column-color:${PIPELINE_COLORS[status]}">
-          <header class="kanban-column__heading"><strong>${status}</strong><span class="kanban-count">${jobs.length}</span></header>
+          <header class="kanban-column__heading"><strong>${pipelineLabels[status] || status}</strong><span class="kanban-count">${jobs.length}</span></header>
           <div class="kanban-cards" data-pipeline-status="${status}">
             ${jobs.length ? jobs.map((job) => renderKanbanCard(job, index)).join("") : `<div class="kanban-empty">Nessuna opportunità</div>`}
           </div>
@@ -3205,18 +3227,37 @@ Cordiali saluti,
       const marker = "[ESITO: RIFIUTATA]";
       const previousNotes = String(valueOf(application, "applications", "notes", "")).trim();
       const payload = {};
-      setMapped(payload, "applications", "jobId", job.id);
-      setMapped(payload, "applications", "companyId", valueOf(job, "jobs", "companyId", null));
-      setMapped(payload, "applications", "status", "rejected");
+      if (!application) {
+        setMapped(payload, "applications", "jobId", job.id);
+        const companyId = valueOf(job, "jobs", "companyId", null);
+        if (companyId) setMapped(payload, "applications", "companyId", companyId);
+      }
       setMapped(payload, "applications", "progress", 100);
       setMapped(payload, "applications", "notes", previousNotes.includes(marker) ? previousNotes : `${previousNotes}${previousNotes ? "\n\n" : ""}${marker}`);
+      const previousJob = recordPatch("jobs", job, ["status", "saved"]);
+      let savedApplication = null;
       try {
-        if (application) await writeApplicationRecord("update", application.id, payload, "CLOSED");
-        else await writeApplicationRecord("insert", null, payload, "CLOSED");
+        savedApplication = application
+          ? await writeApplicationRecord("update", application.id, payload, "CLOSED")
+          : await writeApplicationRecord("insert", null, payload, "CLOSED");
       } catch (error) {
         throw new Error(`Non è stato possibile registrare l’esito. ${humanizeError(error)}`);
       }
-      await updateRecord("jobs", job.id, { [fieldName("jobs", "status")]: "CLOSED" });
+      try {
+        await updateJobClosedRecord(job);
+      } catch (error) {
+        try {
+          if (application) {
+            await updateRecord("applications", application.id, recordPatch("applications", application, ["status", "progress", "notes"]));
+          } else if (savedApplication) {
+            await deleteRecord("applications", savedApplication.id);
+          }
+          await updateRecord("jobs", job.id, previousJob);
+        } catch (_rollbackError) {
+          await loadAllData({ quiet: true });
+        }
+        throw new Error(`L’esito non è stato salvato perché job e application non si sono sincronizzati. ${humanizeError(error)}`);
+      }
       renderAll();
       showToast("La candidatura è stata registrata come rifiutata in tutte le pagine.", "success", "Esito salvato");
     } finally {

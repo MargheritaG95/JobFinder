@@ -1297,6 +1297,16 @@ textarea::placeholder {
 .top-opportunity__quick-actions .button { min-width: 92px; min-height: 34px; justify-content: center; padding: 7px 10px; font-size: .6rem; box-shadow: none; }
 .top-opportunity__quick-actions .opportunity-choice,
 .top-opportunity__quick-actions .applied-state { min-height: 34px; padding-inline: 13px; border: 1px solid currentColor; font-weight: 850; box-shadow: 0 4px 12px rgba(20, 43, 80, .06); }
+.top-opportunity__selected-state { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.top-opportunity__change-state { padding: 0 2px; border: 0; background: transparent; color: #65748e; font: inherit; font-size: .58rem; font-weight: 700; cursor: pointer; }
+.top-opportunity__change-state:hover { color: var(--blue); text-decoration: underline; }
+.top-opportunity__state-option { background: #fff; box-shadow: none; }
+.top-opportunity__state-option--applied { color: #147454; border: 1px solid #65caa4; }
+.top-opportunity__state-option--later { color: #8a5908; border: 1px solid #e2af3f; }
+.top-opportunity__state-option--remove { color: #b63745; border: 1px solid #e28a94; }
+.top-opportunity__state-option--applied:hover { background: #e5f8ef; }
+.top-opportunity__state-option--later:hover { background: #fff7df; }
+.top-opportunity__state-option--remove:hover { background: #fff0f2; }
 .top-opportunity--to-apply .top-opportunity__quick-actions .button,
 .top-opportunity--applied .top-opportunity__quick-actions .button { min-width: 76px; min-height: 30px; padding: 5px 8px; font-size: .56rem; }
 .top-opportunity--applied .applied-state { color: #147454; background: #e5f8ef; }

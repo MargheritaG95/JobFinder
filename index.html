@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260907.37" />
+    <link rel="stylesheet" href="styles.css?v=20260907.38" />
   </head>
   <body>
     <noscript>
@@ -635,17 +635,9 @@
                   <span class="copilot-card-actions"><button class="text-button" type="button" data-action="copy-copilot-field" data-field="copilotCoverLetter">Copia</button><button class="text-button" type="button" data-action="regenerate-copilot">Rigenera</button></span>
                 </label>
                 </div>
-                <div class="form-actions">
-                  <button id="copilotSaveForLaterButton" class="button button--warning" type="button" data-action="save-for-later">
-                    <svg class="icon"><use href="#icon-clock"></use></svg>Applica più tardi
-                  </button>
-                  <button id="copilotMarkAppliedButton" class="button button--success" type="button" data-action="mark-applied">
-                    <svg class="icon"><use href="#icon-check"></use></svg>Ho applicato
-                  </button>
+                <div id="copilotStateControls" class="copilot-state-controls"></div>
+                <div class="form-actions copilot-secondary-actions">
                   <button id="prepareApplicationButton" class="button button--secondary" type="submit"><svg class="icon"><use href="#icon-file"></use></svg>Salva bozza</button>
-                  <button id="copilotRemoveOpportunityButton" class="button button--danger-ghost" type="button" data-action="remove-opportunity">
-                    <svg class="icon"><use href="#icon-trash"></use></svg>Cancella
-                  </button>
                   <button id="copilotRejectedButton" class="button button--danger" type="button" data-action="mark-rejected">Rifiutata</button>
                 </div>
               </form>
@@ -711,6 +703,6 @@
 
     <script src="config.js?v=20260904.29" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260907.37" defer></script>
+    <script src="app.js?v=20260907.38" defer></script>
   </body>
 </html>

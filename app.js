@@ -981,6 +981,9 @@ Cordiali saluti,
 
   function jobStatus(job) {
     const application = getApplicationForJob(job?.id);
+    const rawApplicationStatus = String(valueOf(application, "applications", "status", "")).toUpperCase();
+    const applicationNotes = String(valueOf(application, "applications", "notes", ""));
+    if (rawApplicationStatus === "REJECTED" || applicationNotes.includes("[ESITO: RIFIUTATA]")) return "CLOSED";
     const applicationStatus = normalizeStatus(valueOf(application, "applications", "status", ""), "");
     const status = PIPELINE_STATES.includes(applicationStatus)
       ? applicationStatus
@@ -1685,7 +1688,7 @@ Cordiali saluti,
     const groups = [
       { stage: "review", title: "Da valutare", copy: "Nuove opportunità: scegli se ti interessano, applica ora, salvale per dopo oppure cancellale.", icon: "search" },
       { stage: "to-apply", title: "Da applicare", copy: "Posizioni che hai scelto: le prioritarie e con Fit Score più alto sono mostrate per prime.", icon: "clock" },
-      { stage: "applied", title: "Candidature inviate", copy: "Application già inviate, ordinate con le prioritarie in evidenza.", icon: "check" }
+      { stage: "applied", title: "Candidature mandate", copy: "Application già inviate, ordinate con le prioritarie in evidenza.", icon: "check" }
     ];
     $("opportunitiesList").innerHTML = jobs.length
       ? groups.map((group) => {
@@ -2000,6 +2003,12 @@ Cordiali saluti,
   }
 
   function renderFollowups() {
+    const newButton = $("newFollowupButton");
+    if (newButton) {
+      newButton.hidden = false;
+      newButton.disabled = false;
+      newButton.innerHTML = `${icon("plus")}Nuovo follow-up`;
+    }
     let followups = [...state.data.followups];
     if (state.dashboardFilter?.route === "followups") {
       const ids = new Set(dashboardMetricData().followups.map((item) => String(item.id)));
@@ -3248,7 +3257,13 @@ Cordiali saluti,
       const applicationPatch = {};
       setMapped(applicationPatch, "applications", "status", "closed");
       setMapped(applicationPatch, "applications", "notes", previousNotes.includes(marker) ? previousNotes : `${previousNotes}${previousNotes ? "\n\n" : ""}${marker}`);
-      await writeApplicationRecord("update", application.id, applicationPatch, "CLOSED");
+      try {
+        await writeApplicationRecord("update", application.id, applicationPatch, "CLOSED");
+      } catch (error) {
+        if (!isApplicationStatusConstraintError(error)) throw error;
+        delete applicationPatch[fieldName("applications", "status")];
+        await updateRecord("applications", application.id, applicationPatch);
+      }
     }
     if (!job) throw new Error("L’opportunità non è più disponibile.");
     await updateJobClosedRecord(job);
@@ -3280,7 +3295,16 @@ Cordiali saluti,
           ? await writeApplicationRecord("update", application.id, payload, "CLOSED")
           : await writeApplicationRecord("insert", null, payload, "CLOSED");
       } catch (error) {
-        throw new Error(`Non è stato possibile registrare l’esito. ${humanizeError(error)}`);
+        if (!isApplicationStatusConstraintError(error)) {
+          throw new Error(`Non è stato possibile registrare l’esito. ${humanizeError(error)}`);
+        }
+        try {
+          savedApplication = application
+            ? await updateRecord("applications", application.id, payload)
+            : await writeApplicationRecord("insert", null, payload, "APPLIED");
+        } catch (fallbackError) {
+          throw new Error(`Non è stato possibile registrare l’esito. ${humanizeError(fallbackError)}`);
+        }
       }
       try {
         await updateJobClosedRecord(job);

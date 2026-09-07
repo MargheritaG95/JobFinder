@@ -1736,7 +1736,7 @@ Cordiali saluti,
       .filter((job) => preferenceMatchStrength(job, preferences) > 0)
       .sort((a, b) => preferenceMatchStrength(b, preferences) - preferenceMatchStrength(a, preferences) || jobFit(b) - jobFit(a) || byNewest(a, b));
     const available = candidates.filter((job) => !excluded.has(String(job.id)));
-    return (available.length ? available : candidates).slice(0, preferences.dailyCount);
+    return (excluded.size ? available : candidates).slice(0, preferences.dailyCount);
   }
 
   function runScheduledOpportunityDelivery(preferences = currentPreferences()) {
@@ -1751,16 +1751,31 @@ Cordiali saluti,
     }
   }
 
-  function refreshOpportunitySuggestions() {
+  async function refreshOpportunitySuggestions(button) {
+    setBusy(button, true, "Cerco nuove proposte…");
+    try { await loadAllData({ quiet: true }); }
+    catch (error) { setBusy(button, false); throw error; }
     const preferences = currentPreferences();
     const visibleJobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
     const current = dailyOpportunitySuggestions(visibleJobs, preferences, (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)));
     const refresh = opportunityRefreshState();
     const excludedIds = [...new Set([...toList(refresh.excludedIds).map(String), ...current.map((job) => String(job.id))])];
-    try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ ...refresh, deliveryDate: new Date().toISOString().slice(0, 10), excludedIds })); }
-    catch (_error) { showToast("Il browser non consente di memorizzare il nuovo gruppo di proposte.", "warning", "Refresh non salvato"); return; }
-    renderDashboard();
-    showToast("Le proposte non valutate sono state sostituite con le successive più compatibili.", "success", "Nuove opportunità pronte");
+    try {
+      window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ ...refresh, deliveryDate: new Date().toISOString().slice(0, 10), excludedIds }));
+      const next = dailyOpportunitySuggestions(visibleJobs, preferences, (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)));
+      if (!next.length) {
+        window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(refresh));
+        renderDashboard();
+        showToast("Non ci sono ancora altre opportunità compatibili nel database. Le proposte attuali restano visibili.", "warning", "Nessuna nuova proposta");
+        return;
+      }
+      renderDashboard();
+      showToast(`${next.length} nuove proposte compatibili sono ora visibili.`, "success", "Nuove opportunità pronte");
+    } catch (_error) {
+      showToast("Il browser non consente di memorizzare il nuovo gruppo di proposte.", "warning", "Refresh non salvato");
+    } finally {
+      setBusy(button, false);
+    }
   }
 
   function renderOpportunityFilters() {
@@ -2817,7 +2832,7 @@ Cordiali saluti,
           await loadAllData();
           break;
         case "refresh-opportunities":
-          refreshOpportunitySuggestions();
+          await refreshOpportunitySuggestions(trigger);
           break;
         case "apply-now":
           await startApplication(id, trigger);

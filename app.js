@@ -1547,14 +1547,14 @@ Cordiali saluti,
     const fit = jobFit(job);
     const location = valueOf(job, "jobs", "location", "Location non indicata");
     const choice = opportunityChoiceMarkup(job, "Applica dopo");
-    const dashboardStatus = jobStatus(job) === "APPLY" ? "" : statusBadge(jobStatus(job));
+    const dashboardStatus = ["NEW", "APPLY", "APPLIED"].includes(jobStatus(job)) ? "" : statusBadge(jobStatus(job));
     const stageActions = stage === "review"
       ? `<button class="button button--success" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">${icon("sparkles")}Applica ora</button><button class="button button--warning" type="button" data-action="save-for-later" data-id="${escapeAttribute(job.id)}">${icon("clock")}Applica dopo</button>`
       : stage === "to-apply"
         ? `${choice}<button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Ho applicato</button>`
         : choice;
     return `
-      <article class="top-opportunity top-opportunity--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
+      <article class="top-opportunity top-opportunity--${stage} top-opportunity--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
         <div class="company-logo">${companyLogoContent(job)}</div>
         <div class="opportunity-copy">
           <h3>${escapeHtml(jobTitle(job))}</h3>

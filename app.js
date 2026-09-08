@@ -1216,9 +1216,7 @@ Cordiali saluti,
     const candidates = String(aboutSection || text).split(/(?<=[.!?])\s+|\n+/).map((item) => item.trim()).filter(Boolean);
     const sentence = candidates.find((item) => item.length > 45 && item.length < 360 && /(?:company|azienda|leader|provid|offr|svilupp|specializ|operat|mission|customers|clienti|global|market|prodott|serviz)/i.test(item));
     if (sentence) return sentence.replace(/^(?:about us|chi siamo|company overview)\s*[:\-]?\s*/i, "").trim();
-    return industry
-      ? `${companyName} opera nel settore ${industry}. Per una descrizione più specifica, importa anche la sezione “About the company” dell’annuncio.`
-      : "";
+    return "";
   }
 
   function companyOverview(job) {
@@ -1232,16 +1230,7 @@ Cordiali saluti,
     if (extracted) return extracted;
     const companyName = companyNameForJob(job);
     if (/\bBYD(?: Europe)?\b/i.test(companyName)) return "BYD Europe è la divisione europea di BYD, gruppo tecnologico e produttore di veicoli elettrificati, attivo nella mobilità a basse emissioni e nei servizi collegati al mercato automotive.";
-    const industryContexts = {
-      "Automotive & Mobility": "opera nella filiera automotive e della mobilità, tra prodotti, distribuzione, servizi commerciali e supporto al ciclo di vita dei veicoli.",
-      "Technology & AI": "sviluppa tecnologie, software o servizi digitali destinati a migliorare processi, dati e attività dei propri clienti.",
-      "Financial Services": "opera nei servizi finanziari, bancari o assicurativi, combinando gestione del rischio, relazione con i clienti e soluzioni digitali.",
-      "Industrial & Infrastructure": "opera in ambito industriale e infrastrutturale, progettando o gestendo soluzioni tecnologiche, impianti e servizi per organizzazioni e territori."
-    };
-    if (industryContexts[industry]) return `${companyName} ${industryContexts[industry]}`;
-    return industry !== "Industria non indicata"
-      ? `${companyName} opera nel settore ${industry}; importa la sezione “About the company” per visualizzare prodotti, clienti e mercato specifici.`
-      : `L’annuncio non contiene una descrizione verificabile di ${companyName}. Importa anche la sezione “About the company” per completare automaticamente questo riepilogo.`;
+    return `Profilo aziendale non presente nella fonte originale di ${companyName}. Nessuna informazione è stata dedotta o inventata.`;
   }
 
   function appliedStateMarkup() {
@@ -1383,10 +1372,10 @@ Cordiali saluti,
 
   function roleSynopsis(job) {
     const description = jobDescriptionText(job);
-    if (!description) return `${inferredRoleSummary(job)} (Sintesi stimata dal titolo del ruolo: nessuna descrizione importata per questo annuncio.)`;
+    if (!description) return "Descrizione originale dell’annuncio non disponibile. Reimporta l’opportunità dal link per ottenere una sintesi verificabile.";
     const sentences = description.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.length > 35);
     const intro = sentences.filter((sentence) => /(?:role|position|ruolo|opportunit|team|you will|sarai|cerchiamo|looking for)/i.test(sentence)).slice(0, 2).join(" ");
-    const selected = intro || sentences.slice(0, 2).join(" ") || `${inferredRoleSummary(job)} (Sintesi stimata dal titolo del ruolo: nessuna descrizione importata per questo annuncio.)`;
+    const selected = intro || sentences.slice(0, 2).join(" ") || description;
     return selected.length > 520 ? `${selected.slice(0, 519).trimEnd()}…` : selected;
   }
 
@@ -1414,7 +1403,7 @@ Cordiali saluti,
 
   function responsibilitySummary(job, limit = 260) {
     const description = jobDescriptionText(job);
-    if (!description) return inferredRoleSummary(job);
+    if (!description) return "Descrizione originale non disponibile.";
     const sentences = description.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.length > 25);
     const responsibilityPattern = /responsabil|attivit|cosa farai|what you.ll do|duties|manage|lead|develop|deliver|support|coordinate|gestir|guidar|svilupp|coordin|realizz|implement/i;
     const relevant = sentences.filter((sentence) => responsibilityPattern.test(sentence));
@@ -1759,8 +1748,110 @@ Cordiali saluti,
     }
   }
 
-  function refreshOpportunitySuggestions() {
+  function plainJobText(value) {
+    const parsed = new DOMParser().parseFromString(String(value || ""), "text/html");
+    return String(parsed.body?.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  function externalPreferenceStrength(job, preferences) {
+    const text = normalizedTokens(`${job.title || ""} ${job.company_name || ""} ${job.category || ""} ${job.candidate_required_location || ""} ${plainJobText(job.description)}`).join(" ");
+    return [preferences.roles, preferences.sectors, preferences.locations, preferences.workModes]
+      .reduce((score, values) => score + (toList(values).some((value) => normalizedTokens(value).some((token) => text.includes(token))) ? 1 : 0), 0);
+  }
+
+  async function importSourcedOpportunity(sourceJob) {
+    const description = plainJobText(sourceJob.description);
+    const title = String(sourceJob.title || "").trim();
+    const companyName = String(sourceJob.company_name || "").trim();
+    const url = safeExternalUrl(sourceJob.url);
+    if (!title || !companyName || !url || description.length < 180) return null;
+    if (state.data.jobs.some((job) => safeExternalUrl(valueOf(job, "jobs", "url", "")) === url)) return null;
+
+    const industry = String(sourceJob.category || "").trim() || industryFromText(`${title} ${description}`);
+    const companyDescription = companySummaryFromText(companyName, description, industry);
+    let companyRecord = state.data.companies.find((item) => valueOf(item, "companies", "name", "").trim().toLowerCase() === companyName.toLowerCase()) || null;
+    if (!companyRecord) {
+      const companyPayload = {};
+      setMapped(companyPayload, "companies", "name", companyName);
+      setMapped(companyPayload, "companies", "sector", industry || null);
+      setMapped(companyPayload, "companies", "tier", "B");
+      setMapped(companyPayload, "companies", "logoUrl", safeExternalUrl(sourceJob.company_logo) || null);
+      setMapped(companyPayload, "companies", "notes", companyDescription || null);
+      companyRecord = await insertRecord("companies", companyPayload);
+    }
+
+    const extractedJob = { title, company_name: companyName, location: sourceJob.candidate_required_location || "Remote", description, industry, salary: sourceJob.salary, employment_type: sourceJob.job_type };
+    const analysis = analyzeOpportunity({ title, company: companyName, location: extractedJob.location, description });
+    const seniority = jobSeniority(extractedJob);
+    const experience = jobExperience(extractedJob);
+    const contract = jobContract(extractedJob);
+    const languages = jobLanguages(extractedJob);
+    const payload = {};
+    setMapped(payload, "jobs", "title", title);
+    setMapped(payload, "jobs", "companyName", companyName);
+    setMapped(payload, "jobs", "companyId", companyRecord?.id || null);
+    setMapped(payload, "jobs", "location", extractedJob.location);
+    setMapped(payload, "jobs", "fitScore", analysis.score);
+    setMapped(payload, "jobs", "status", "NEW");
+    setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "HIGH" : analysis.score >= 6.5 ? "MEDIUM" : "LOW");
+    setMapped(payload, "jobs", "source", "Remotive");
+    setMapped(payload, "jobs", "url", url);
+    setMapped(payload, "jobs", "saved", false);
+    setMapped(payload, "jobs", "whyFit", analysis.why);
+    setMapped(payload, "jobs", "gaps", analysis.gaps);
+    setMapped(payload, "jobs", "angle", analysis.angle);
+    setMapped(payload, "jobs", "description", description);
+    setMapped(payload, "jobs", "industry", industry || null);
+    setMapped(payload, "jobs", "salary", String(sourceJob.salary || "").trim() || null);
+    setMapped(payload, "jobs", "seniority", seniority === "Non indicato" ? null : seniority);
+    setMapped(payload, "jobs", "experience", experience === "Non indicata" ? null : experience);
+    setMapped(payload, "jobs", "employmentType", contract === "Non indicato" ? null : contract);
+    setMapped(payload, "jobs", "languages", languages === "Non indicata" ? [] : languages.split(" · "));
+    setMapped(payload, "jobs", "companyDescription", companyDescription || null);
+    setMapped(payload, "jobs", "responsibilities", responsibilityItems(extractedJob));
+    setMapped(payload, "jobs", "scrapeStatus", "complete");
+    setMapped(payload, "jobs", "scrapedAt", new Date().toISOString());
+    return insertRecord("jobs", payload);
+  }
+
+  async function fetchFreshOpportunities(preferences) {
+    const response = await fetch("https://remotive.com/api/remote-jobs?limit=100", { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`La fonte annunci ha risposto con errore ${response.status}.`);
+    const body = await response.json();
+    const existingUrls = new Set(state.data.jobs.map((job) => safeExternalUrl(valueOf(job, "jobs", "url", ""))).filter(Boolean));
+    const candidates = toList(body.jobs)
+      .filter((job) => job?.url && job?.title && job?.company_name && job?.description && !existingUrls.has(safeExternalUrl(job.url)))
+      .sort((a, b) => externalPreferenceStrength(b, preferences) - externalPreferenceStrength(a, preferences) || new Date(b.publication_date || 0) - new Date(a.publication_date || 0));
+    const imported = [];
+    for (const sourceJob of candidates) {
+      if (imported.length >= preferences.dailyCount) break;
+      try {
+        const created = await importSourcedOpportunity(sourceJob);
+        if (created) imported.push(created);
+      } catch (error) { console.warn("Opportunity source record skipped", error); }
+    }
+    return imported;
+  }
+
+  async function refreshOpportunitySuggestions(button) {
+    setBusy(button, true, "Cerco nuove proposte…");
+    try { await loadAllData({ quiet: true }); }
+    catch (error) { setBusy(button, false); throw error; }
     const preferences = currentPreferences();
+    try {
+      const imported = await fetchFreshOpportunities(preferences);
+      if (imported.length) {
+        window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ deliveryDate: new Date().toISOString().slice(0, 10), excludedIds: [] }));
+        renderAll();
+        showToast(`${imported.length} annunci reali importati e analizzati dal testo completo.`, "success", "Nuove opportunità pronte");
+        return;
+      }
+    } catch (error) {
+      console.error("Opportunity source sync failed", error);
+      throw new Error("Non riesco a raggiungere la fonte annunci in questo momento. Riprova tra poco.");
+    } finally {
+      setBusy(button, false);
+    }
     const visibleJobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
     const current = dailyOpportunitySuggestions(visibleJobs, preferences, (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)));
     const refresh = opportunityRefreshState();
@@ -2825,7 +2916,7 @@ Cordiali saluti,
           await loadAllData();
           break;
         case "refresh-opportunities":
-          refreshOpportunitySuggestions();
+          await refreshOpportunitySuggestions(trigger);
           break;
         case "apply-now":
           await startApplication(id, trigger);

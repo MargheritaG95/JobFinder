@@ -1383,10 +1383,10 @@ Cordiali saluti,
 
   function roleSynopsis(job) {
     const description = jobDescriptionText(job);
-    if (!description) return inferredRoleSummary(job);
+    if (!description) return `${inferredRoleSummary(job)} (Sintesi stimata dal titolo del ruolo: nessuna descrizione importata per questo annuncio.)`;
     const sentences = description.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.length > 35);
     const intro = sentences.filter((sentence) => /(?:role|position|ruolo|opportunit|team|you will|sarai|cerchiamo|looking for)/i.test(sentence)).slice(0, 2).join(" ");
-    const selected = intro || sentences.slice(0, 2).join(" ") || inferredRoleSummary(job);
+    const selected = intro || sentences.slice(0, 2).join(" ") || `${inferredRoleSummary(job)} (Sintesi stimata dal titolo del ruolo: nessuna descrizione importata per questo annuncio.)`;
     return selected.length > 520 ? `${selected.slice(0, 519).trimEnd()}…` : selected;
   }
 
@@ -1401,7 +1401,15 @@ Cordiali saluti,
     const pattern = /responsabil|attivit|what you.ll do|duties|manage|lead|develop|deliver|support|coordinate|gestir|guidar|svilupp|coordin|realizz|implement|analizz|define|drive/i;
     const items = sentences.filter((item) => pattern.test(item)).slice(0, 5);
     if (items.length) return items.map((item) => item.length > 190 ? `${item.slice(0, 189).trimEnd()}…` : item);
-    return inferredRoleSummary(job).split(/;|\.(?:\s+|$)/).map((item) => item.trim()).filter(Boolean).slice(0, 4);
+    // No structured list, no dedicated "Responsibilities" section, and no duty-like
+    // sentence anywhere in the description: previously this fell back to re-splitting
+    // inferredRoleSummary(job) into bullets, which is the exact same text already shown
+    // above under "Il ruolo in breve" — that's the duplication reported in
+    // PARSING_IMPROVEMENTS.md. Return an honest, distinct message instead of
+    // silently repeating the summary as if it were an extracted list.
+    return description
+      ? ["Non è stato possibile individuare un elenco di responsabilità distinto nel testo importato. Aggiungile manualmente o reimporta l’annuncio includendo la sezione “Responsibilities”."]
+      : ["Responsabilità non specificate: per questo annuncio non è stata importata alcuna descrizione. Reimporta l’annuncio con il testo completo per estrarle automaticamente."];
   }
 
   function responsibilitySummary(job, limit = 260) {

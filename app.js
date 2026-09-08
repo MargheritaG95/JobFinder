@@ -3979,7 +3979,52 @@ Cordiali saluti,
         companyNameForJob(job).toLowerCase() === company.toLowerCase()
       );
     });
+    const extractedJob = { title, company_name: company, location, description, industry };
+    const extractedSalary = salaryFromJob(extractedJob);
+    const extractedSeniority = jobSeniority(extractedJob);
+    const extractedExperience = jobExperience(extractedJob);
+    const extractedContract = jobContract(extractedJob);
+    const extractedLanguages = jobLanguages(extractedJob);
+    const extractedResponsibilities = responsibilityItems(extractedJob);
     if (duplicate) {
+      // Previously this always reopened the existing record unchanged, even if the
+      // person pasted a fuller description this time — so an annuncio saved without
+      // testo stayed empty forever, no matter how many times it was re-imported.
+      // Now: if the existing job has no description yet and this submission brought
+      // one, enrich the existing record with the freshly extracted fields instead of
+      // silently discarding them.
+      const existingDescription = jobDescriptionText(duplicate);
+      if (!existingDescription && description) {
+        const enrichPayload = {};
+        setMapped(enrichPayload, "jobs", "description", description);
+        setMapped(enrichPayload, "jobs", "industry", industry || null, { skipEmpty: true });
+        setMapped(enrichPayload, "jobs", "salary", extractedSalary || null, { skipEmpty: true });
+        setMapped(enrichPayload, "jobs", "seniority", extractedSeniority === "Non indicato" ? null : extractedSeniority, { skipEmpty: true });
+        setMapped(enrichPayload, "jobs", "experience", extractedExperience === "Non indicata" ? null : extractedExperience, { skipEmpty: true });
+        setMapped(enrichPayload, "jobs", "employmentType", extractedContract === "Non indicato" ? null : extractedContract, { skipEmpty: true });
+        setMapped(enrichPayload, "jobs", "languages", extractedLanguages === "Non indicata" ? [] : extractedLanguages.split(" · "));
+        setMapped(enrichPayload, "jobs", "companyDescription", companyDescription || null, { skipEmpty: true });
+        setMapped(enrichPayload, "jobs", "responsibilities", extractedResponsibilities);
+        setMapped(enrichPayload, "jobs", "scrapeStatus", description.length >= 500 ? "complete" : "partial");
+        setMapped(enrichPayload, "jobs", "scrapedAt", new Date().toISOString());
+        try {
+          await updateRecord("jobs", duplicate.id, enrichPayload);
+          try {
+            window.localStorage.setItem(`jobfinder:job-description:${state.user?.id || "anonymous"}:${duplicate.id}`, description);
+          } catch (_error) {
+            // The job is still usable when local browser storage is unavailable.
+          }
+          closeDialog();
+          renderAll();
+          openCopilot(duplicate.id);
+          showToast("L’annuncio era già presente, ma non aveva una descrizione: l’ho aggiunta e i campi sono stati ricalcolati.", "success", "Opportunità aggiornata");
+        } catch (error) {
+          closeDialog();
+          openCopilot(duplicate.id);
+          showToast(humanizeError(error, "l’aggiornamento della descrizione"), "error", "Descrizione non salvata");
+        }
+        return;
+      }
       closeDialog();
       openCopilot(duplicate.id);
       showToast("L’annuncio era già presente: ho aperto il record esistente senza creare duplicati.", "warning", "Opportunità già importata");
@@ -3988,13 +4033,6 @@ Cordiali saluti,
     const analysis = analyzeOpportunity({ title, company, location, description });
     const preferences = currentPreferences();
     if (analysis.score < preferences.minFit) throw new Error(`Questa opportunità ha Fit ${analysis.score.toFixed(1)}/10, sotto il minimo ${preferences.minFit.toFixed(1)} impostato nelle Preferenze.`);
-    const extractedJob = { title, company_name: company, location, description, industry };
-    const extractedSalary = salaryFromJob(extractedJob);
-    const extractedSeniority = jobSeniority(extractedJob);
-    const extractedExperience = jobExperience(extractedJob);
-    const extractedContract = jobContract(extractedJob);
-    const extractedLanguages = jobLanguages(extractedJob);
-    const extractedResponsibilities = responsibilityItems(extractedJob);
     let companyRecord = state.data.companies.find((item) => valueOf(item, "companies", "name", "").trim().toLowerCase() === company.toLowerCase()) || null;
     try {
       if (!companyRecord) {

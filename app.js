@@ -1842,9 +1842,21 @@ Cordiali saluti,
   }
 
   async function fetchFreshOpportunities(preferences) {
-    const response = await fetch("https://remotive.com/api/remote-jobs?limit=100", { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`La fonte annunci ha risposto con errore ${response.status}.`);
-    const body = await response.json();
+    const sources = ["/api/opportunities?limit=100", "https://remotive.com/api/remote-jobs?limit=100"];
+    let body = null;
+    const sourceErrors = [];
+    for (const sourceUrl of sources) {
+      try {
+        const response = await fetch(sourceUrl, { headers: { Accept: "application/json" }, cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const candidateBody = await response.json();
+        if (toList(candidateBody?.jobs).length) { body = candidateBody; break; }
+        sourceErrors.push(`${sourceUrl}: risposta vuota`);
+      } catch (error) {
+        sourceErrors.push(`${sourceUrl}: ${error?.message || error}`);
+      }
+    }
+    if (!body) throw new Error(`Nessuna fonte annunci disponibile (${sourceErrors.join("; ")}).`);
     const candidates = toList(body.jobs)
       .filter((job) => job?.url && job?.title && job?.company_name && job?.description)
       .sort((a, b) => externalPreferenceStrength(b, preferences) - externalPreferenceStrength(a, preferences) || new Date(b.publication_date || 0) - new Date(a.publication_date || 0));
@@ -1884,7 +1896,13 @@ Cordiali saluti,
       setBusy(button, false);
     }
     const visibleJobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
-    const current = dailyOpportunitySuggestions(visibleJobs, preferences, (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)));
+    let current = dailyOpportunitySuggestions(visibleJobs, preferences, (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)));
+    if (!current.length) {
+      current = visibleJobs.filter((job) => opportunityStage(job) === "review")
+        .sort((a, b) => jobFit(b) - jobFit(a) || new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)))
+        .slice(0, preferences.dailyCount);
+    }
+    if (!current.length) throw new Error("Non sono disponibili annunci da proporre: il feed non ha restituito risultati e non ci sono opportunità da valutare già salvate.");
     const refresh = opportunityRefreshState();
     const excludedIds = [...new Set([...toList(refresh.excludedIds).map(String), ...current.map((job) => String(job.id))])];
     try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ ...refresh, deliveryDate: new Date().toISOString().slice(0, 10), excludedIds })); }

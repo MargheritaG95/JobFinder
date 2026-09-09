@@ -169,3 +169,24 @@ Per una verifica reale delle scritture serve un utente del progetto e uno schema
 - Le publishable key sono progettate per il browser, ma la sicurezza dei dati dipende comunque dalle policy RLS.
 - I link esterni vengono aperti solo se usano `http` o `https`.
 - I dati renderizzati vengono sottoposti a escaping per ridurre il rischio di injection HTML.
+# Job catalog and personalized matching
+
+JobFinder uses a shared, server-managed catalog and keeps each user's matches,
+status, applications and feedback private. Apply
+`supabase/migrations/20260909160000_multi_user_job_catalog.sql` before deploying
+the catalog API.
+
+Set these server-only Vercel environment variables (never in `config.js`):
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `CRON_SECRET`
+- optional `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` for Italian vacancies
+- optional comma-separated `GREENHOUSE_BOARDS` and `LEVER_SITES` for official
+  company career pages
+
+The production cron refreshes the catalog every four hours. Vercel Hobby only
+supports daily cron runs; the four-hour schedule requires Vercel Pro or an
+equivalent external scheduler. “Nuove proposte” authenticates the current user,
+loads their `search_preferences`, ranks unseen catalog vacancies and writes only
+their private matches to the existing dashboard-compatible `jobs` table.

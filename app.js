@@ -1781,7 +1781,7 @@ Cordiali saluti,
     const companyName = String(sourceJob.company_name || "").trim();
     const url = safeExternalUrl(sourceJob.url);
     if (!title || !companyName || !url || description.length < 180) return null;
-    if (state.data.jobs.some((job) => safeExternalUrl(valueOf(job, "jobs", "url", "")) === url)) return null;
+    const existingJob = state.data.jobs.find((job) => safeExternalUrl(valueOf(job, "jobs", "url", "")) === url) || null;
 
     const industry = String(sourceJob.category || "").trim() || industryFromText(`${title} ${description}`);
     const companyDescription = companySummaryFromText(companyName, description, industry);
@@ -1808,8 +1808,10 @@ Cordiali saluti,
     setMapped(payload, "jobs", "companyId", companyRecord?.id || null);
     setMapped(payload, "jobs", "location", extractedJob.location);
     setMapped(payload, "jobs", "fitScore", analysis.score);
-    setMapped(payload, "jobs", "status", "NEW");
-    setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "HIGH" : analysis.score >= 6.5 ? "MEDIUM" : "LOW");
+    if (!existingJob) setMapped(payload, "jobs", "status", "NEW");
+    // Database values are APPLY / REVIEW / SKIP. HIGH / MEDIUM / LOW violate
+    // jobs_priority_check and previously made every feed insert fail silently.
+    if (!existingJob) setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "APPLY" : "REVIEW");
     setMapped(payload, "jobs", "source", "Remotive");
     setMapped(payload, "jobs", "url", url);
     setMapped(payload, "jobs", "saved", false);
@@ -1827,6 +1829,12 @@ Cordiali saluti,
     setMapped(payload, "jobs", "responsibilities", responsibilityItems(extractedJob));
     setMapped(payload, "jobs", "scrapeStatus", "complete");
     setMapped(payload, "jobs", "scrapedAt", new Date().toISOString());
+    if (existingJob) {
+      const currentDescription = jobDescriptionText(existingJob);
+      const isIncomplete = currentDescription.length < 180 || valueOf(existingJob, "jobs", "scrapeStatus", "pending") !== "complete";
+      if (!isIncomplete) return null;
+      return updateRecord("jobs", existingJob.id, payload);
+    }
     return insertRecord("jobs", payload);
   }
 
@@ -1834,18 +1842,22 @@ Cordiali saluti,
     const response = await fetch("https://remotive.com/api/remote-jobs?limit=100", { headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error(`La fonte annunci ha risposto con errore ${response.status}.`);
     const body = await response.json();
-    const existingUrls = new Set(state.data.jobs.map((job) => safeExternalUrl(valueOf(job, "jobs", "url", ""))).filter(Boolean));
     const candidates = toList(body.jobs)
-      .filter((job) => job?.url && job?.title && job?.company_name && job?.description && !existingUrls.has(safeExternalUrl(job.url)))
+      .filter((job) => job?.url && job?.title && job?.company_name && job?.description)
       .sort((a, b) => externalPreferenceStrength(b, preferences) - externalPreferenceStrength(a, preferences) || new Date(b.publication_date || 0) - new Date(a.publication_date || 0));
     const imported = [];
+    const failures = [];
     for (const sourceJob of candidates) {
       if (imported.length >= preferences.dailyCount) break;
       try {
         const created = await importSourcedOpportunity(sourceJob);
         if (created) imported.push(created);
-      } catch (error) { console.warn("Opportunity source record skipped", error); }
+      } catch (error) {
+        failures.push(error);
+        console.warn("Opportunity source record skipped", error);
+      }
     }
+    if (!imported.length && failures.length) throw failures[0];
     return imported;
   }
 
@@ -1864,7 +1876,7 @@ Cordiali saluti,
       }
     } catch (error) {
       console.error("Opportunity source sync failed", error);
-      throw new Error("Non riesco a raggiungere la fonte annunci in questo momento. Riprova tra poco.");
+      throw new Error(`Non riesco a salvare le nuove proposte: ${humanizeError(error, "l’importazione degli annunci")}`);
     } finally {
       setBusy(button, false);
     }

@@ -1842,37 +1842,22 @@ Cordiali saluti,
   }
 
   async function fetchFreshOpportunities(preferences) {
-    const sources = ["/api/opportunities?limit=100", "https://remotive.com/api/remote-jobs?limit=100"];
-    let body = null;
-    const sourceErrors = [];
-    for (const sourceUrl of sources) {
-      try {
-        const response = await fetch(sourceUrl, { headers: { Accept: "application/json" }, cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const candidateBody = await response.json();
-        if (toList(candidateBody?.jobs).length) { body = candidateBody; break; }
-        sourceErrors.push(`${sourceUrl}: risposta vuota`);
-      } catch (error) {
-        sourceErrors.push(`${sourceUrl}: ${error?.message || error}`);
-      }
-    }
-    if (!body) throw new Error(`Nessuna fonte annunci disponibile (${sourceErrors.join("; ")}).`);
-    const candidates = toList(body.jobs)
-      .filter((job) => job?.url && job?.title && job?.company_name && job?.description)
-      .sort((a, b) => externalPreferenceStrength(b, preferences) - externalPreferenceStrength(a, preferences) || new Date(b.publication_date || 0) - new Date(a.publication_date || 0));
-    const imported = [];
-    const failures = [];
-    for (const sourceJob of candidates) {
-      if (imported.length >= preferences.dailyCount) break;
-      try {
-        const created = await importSourcedOpportunity(sourceJob);
-        if (created) imported.push(created);
-      } catch (error) {
-        failures.push(error);
-        console.warn("Opportunity source record skipped", error);
-      }
-    }
-    if (!imported.length && failures.length) throw failures[0];
+    const { data: sessionData, error: sessionError } = await state.client.auth.getSession();
+    if (sessionError) throw sessionError;
+    const token = sessionData.session?.access_token;
+    if (!token) throw new Error("Sessione scaduta: accedi nuovamente.");
+    const response = await fetch("/api/opportunities", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ limit: preferences.dailyCount }),
+      cache: "no-store"
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || `Servizio opportunità non disponibile (HTTP ${response.status}).`);
+    const imported = toList(body.jobs);
+    imported.forEach((job) => {
+      if (!state.data.jobs.some((current) => String(current.id) === String(job.id))) state.data.jobs.push(job);
+    });
     return imported;
   }
 

@@ -185,8 +185,9 @@ Set these server-only Vercel environment variables (never in `config.js`):
 - optional comma-separated `GREENHOUSE_BOARDS` and `LEVER_SITES` for official
   company career pages
 
-The production cron refreshes the catalog every four hours. Vercel Hobby only
-supports daily cron runs; the four-hour schedule requires Vercel Pro or an
-equivalent external scheduler. “Nuove proposte” authenticates the current user,
+The production cron refreshes the catalog daily on Vercel Hobby. Every manual
+“Nuove proposte” request also refreshes the server-side catalog when it needs
+more unseen vacancies; a fixed four-hour cron can be enabled on Vercel Pro.
+“Nuove proposte” authenticates the current user,
 loads their `search_preferences`, ranks unseen catalog vacancies and writes only
 their private matches to the existing dashboard-compatible `jobs` table.

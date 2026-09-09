@@ -122,6 +122,8 @@ Cordiali saluti,
     sessionExpiredHandled: false,
     applicationRepairAttempted: false,
     applicationRepairError: "",
+    scheduledDeliveryDate: "",
+    scheduledDeliveryInFlight: false,
     errors: {},
     optionalErrors: {},
     lastSync: null,
@@ -1742,10 +1744,24 @@ Cordiali saluti,
     const now = new Date();
     const [hour, minute] = String(preferences.deliveryTime || "09:00").split(":").map(Number);
     const delivery = new Date(now); delivery.setHours(hour || 0, minute || 0, 0, 0);
-    if (now >= delivery && refresh.deliveryDate !== today) {
-      try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ deliveryDate: today, excludedIds: [] })); }
-      catch (_error) { /* The default ranking remains usable without browser storage. */ }
-    }
+    if (now < delivery || refresh.deliveryDate === today || state.scheduledDeliveryDate === today || state.scheduledDeliveryInFlight || !ensureWritable()) return;
+    state.scheduledDeliveryDate = today;
+    state.scheduledDeliveryInFlight = true;
+    fetchFreshOpportunities(preferences)
+      .then((imported) => {
+        try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ deliveryDate: today, excludedIds: [] })); }
+        catch (_error) { /* Imported records remain available even without browser storage. */ }
+        if (imported.length) {
+          renderAll();
+          showToast(`${imported.length} nuovi annunci reali importati dal feed programmato.`, "success", "Aggiornamento giornaliero completato");
+        }
+      })
+      .catch((error) => {
+        state.scheduledDeliveryDate = "";
+        console.error("Scheduled opportunity delivery failed", error);
+        showToast("L’aggiornamento automatico non è riuscito. Usa Nuove proposte per riprovare.", "warning", "Feed non raggiungibile");
+      })
+      .finally(() => { state.scheduledDeliveryInFlight = false; });
   }
 
   function plainJobText(value) {

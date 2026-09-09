@@ -1804,6 +1804,9 @@ Cordiali saluti,
     const languages = jobLanguages(extractedJob);
     const payload = {};
     setMapped(payload, "jobs", "title", title);
+    // The live schema still keeps role_title as a required legacy column.
+    // Populate it as well when the configured display title uses `title`.
+    if (fieldName("jobs", "title") !== "role_title") payload.role_title = title;
     setMapped(payload, "jobs", "companyName", companyName);
     setMapped(payload, "jobs", "companyId", companyRecord?.id || null);
     setMapped(payload, "jobs", "location", extractedJob.location);
@@ -4174,6 +4177,7 @@ Cordiali saluti,
     }
     const payload = {};
     setMapped(payload, "jobs", "title", title);
+    if (fieldName("jobs", "title") !== "role_title") payload.role_title = title;
     setMapped(payload, "jobs", "companyName", company);
     setMapped(payload, "jobs", "companyId", companyRecord?.id || null);
     setMapped(payload, "jobs", "location", location || null);

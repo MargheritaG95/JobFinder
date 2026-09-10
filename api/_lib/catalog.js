@@ -2,6 +2,8 @@ const crypto = require("crypto");
 
 const REMOTIVE_URL = "https://remotive.com/api/remote-jobs?limit=100";
 const ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api";
+const JOBICY_URL = "https://jobicy.com/api/v2/remote-jobs?count=200&geo=europe";
+const HIMALAYAS_URL = "https://himalayas.app/jobs/api?limit=200";
 
 function stripHtml(value) {
   return String(value || "")
@@ -106,6 +108,34 @@ function normalizeArbeitnow(job) {
   });
 }
 
+function normalizeJobicy(job) {
+  return enrich({
+    source: "Jobicy", source_job_id: String(job.id || job.jobSlug), source_url: job.url,
+    title: compact(job.jobTitle), company_name: compact(job.companyName), company_logo_url: job.companyLogo || null,
+    industry: Array.isArray(job.jobIndustry) ? job.jobIndustry.join(" · ") : compact(job.jobIndustry) || null,
+    location: compact(job.jobGeo) || "Remote", remote_type: "Remote", description: job.jobDescription || job.jobExcerpt,
+    employment_type: Array.isArray(job.jobType) ? job.jobType.join(" · ") : compact(job.jobType) || null,
+    seniority: compact(job.jobLevel) || null, published_at: asIso(job.pubDate), raw_data: job
+  });
+}
+
+function normalizeHimalayas(job) {
+  const salary = job.minSalary || job.maxSalary
+    ? `${job.currency || ""} ${job.minSalary || ""}${job.maxSalary ? ` – ${job.maxSalary}` : ""} ${job.salaryPeriod || ""}`.trim()
+    : null;
+  return enrich({
+    source: "Himalayas", source_job_id: String(job.guid || job.applicationLink), source_url: job.applicationLink || job.guid,
+    title: compact(job.title), company_name: compact(job.companyName), company_logo_url: job.companyLogo || null,
+    industry: Array.isArray(job.categories) ? job.categories.slice(0, 4).join(" · ") : null,
+    location: Array.isArray(job.locationRestrictions) && job.locationRestrictions.length ? job.locationRestrictions.join(" · ") : "Remote",
+    remote_type: "Remote", description: job.description || job.excerpt, salary_text: salary,
+    salary_min: job.minSalary || null, salary_max: job.maxSalary || null, salary_currency: job.currency || null,
+    employment_type: compact(job.employmentType) || null,
+    seniority: Array.isArray(job.seniority) ? job.seniority.join(" · ") : compact(job.seniority) || null,
+    published_at: typeof job.pubDate === "number" ? asIso(job.pubDate * 1000) : asIso(job.pubDate), raw_data: job
+  });
+}
+
 function normalizeAdzuna(job) {
   return enrich({
     source: "Adzuna", source_job_id: String(job.id), source_url: job.redirect_url,
@@ -141,7 +171,9 @@ function normalizeLever(job, site) {
 async function fetchSources() {
   const tasks = [
     getJson(REMOTIVE_URL).then((data) => ({ source: "Remotive", jobs: (data.jobs || []).map(normalizeRemotive) })),
-    ...[1, 2, 3].map((page) => getJson(`${ARBEITNOW_URL}?page=${page}`).then((data) => ({ source: `Arbeitnow:${page}`, jobs: (data.data || []).map(normalizeArbeitnow) })))
+    ...[1, 2, 3].map((page) => getJson(`${ARBEITNOW_URL}?page=${page}`).then((data) => ({ source: `Arbeitnow:${page}`, jobs: (data.data || []).map(normalizeArbeitnow) }))),
+    getJson(JOBICY_URL).then((data) => ({ source: "Jobicy", jobs: (data.jobs || []).map(normalizeJobicy) })),
+    getJson(HIMALAYAS_URL).then((data) => ({ source: "Himalayas", jobs: (data.jobs || []).map(normalizeHimalayas) }))
   ];
   if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) {
     const params = new URLSearchParams({ app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY, results_per_page: "50", "content-type": "application/json" });

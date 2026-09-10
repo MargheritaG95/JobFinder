@@ -95,6 +95,8 @@ window.JOBFINDER_CONFIG = {
         gaps: "gaps",
         angle: "angle",
         recruiterNote: "recruiter_note",
+        contactedComment: "contacted_comment",
+        interviewAt: "interview_at",
         preparationStatus: "preparation_status",
         createdAt: "created_at",
         updatedAt: "updated_at"

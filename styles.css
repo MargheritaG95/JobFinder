@@ -2450,6 +2450,10 @@ textarea::placeholder {
 .dialog-body { padding: 22px; }
 .dialog-body .form-actions { margin-bottom: 0; }
 
+.onboarding-form { gap: 18px; }
+.onboarding-progress { display: flex; align-items: center; gap: 10px; padding-top: 5px; color: var(--ink); }
+.onboarding-progress span { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; color: #fff; background: var(--blue-600); font-size: .76rem; font-weight: 800; }
+
 .field--cover-letter {
   border-left-color: #735fd6;
   background: linear-gradient(90deg, rgba(115, 95, 214, 0.07), transparent 34%);

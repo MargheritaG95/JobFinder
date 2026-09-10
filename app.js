@@ -1233,7 +1233,7 @@ Cordiali saluti,
 
   function companyOverview(job) {
     const company = getCompanyById(valueOf(job, "jobs", "companyId", ""));
-    const notes = String(valueOf(company, "companies", "notes", "") || company?.description || company?.company_description || job?.company_description || job?.company_overview || "").trim();
+    const notes = cleanImportedText(valueOf(company, "companies", "notes", "") || company?.description || company?.company_description || job?.company_description || job?.company_overview || "", false);
     const genericNotes = /propone questa opportunità per rafforzare il team|azienda attiva nel settore .+ sviluppa prodotti, servizi o soluzioni/i.test(notes);
     if (notes && !genericNotes) return notes;
     const industry = companyIndustry(job);
@@ -1287,7 +1287,28 @@ Cordiali saluti,
     } catch (_error) {
       // Continue with database fields or a factual fallback.
     }
-    return String(valueOf(job, "jobs", "description", "") || job?.job_description || job?.description_text || job?.raw_description || job?.content || importedDescription).replace(/\r/g, "").trim();
+    return cleanImportedText(valueOf(job, "jobs", "description", "") || job?.job_description || job?.description_text || job?.raw_description || job?.content || importedDescription, true);
+  }
+
+  function cleanImportedText(value, preserveLines = true) {
+    let text = String(value || "");
+    if (!text) return "";
+    for (let pass = 0; pass < 4; pass += 1) {
+      const parsed = new DOMParser().parseFromString(text, "text/html");
+      const decoded = String(parsed.documentElement?.textContent || text);
+      if (decoded === text) break;
+      text = decoded;
+    }
+    text = text
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<\s*br\s*\/?\s*>|<\/(?:p|div|li|h[1-6])\s*>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return preserveLines ? text : text.replace(/\s+/g, " ").trim();
   }
 
   function jobDescriptionText(job) {
@@ -1392,7 +1413,7 @@ Cordiali saluti,
   }
 
   function responsibilityItems(job) {
-    const structured = toList(valueOf(job, "jobs", "responsibilities", []));
+    const structured = toList(valueOf(job, "jobs", "responsibilities", [])).map((item) => cleanImportedText(item, false)).filter(Boolean);
     if (structured.length) return structured.slice(0, 6);
     const section = postingSection(job,
       ["responsibilities", "key responsibilities", "what you(?:'|’)ll do", "what you will do", "your role", "the role", "responsabilità", "responsabilità principali", "cosa farai", "attività"],
@@ -1731,10 +1752,28 @@ Cordiali saluti,
   }
 
   function preferenceMatchStrength(job, preferences = currentPreferences()) {
-    const text = normalizedTokens(`${jobTitle(job)} ${companyNameForJob(job)} ${companyIndustry(job)} ${valueOf(job, "jobs", "location", "")} ${jobDescriptionText(job)}`).join(" ");
-    const groups = [preferences.roles, preferences.sectors, preferences.locations, preferences.workModes]
+    const text = normalizedTokens(`${jobTitle(job)} ${companyNameForJob(job)} ${companyIndustry(job)} ${jobDescriptionText(job)}`).join(" ");
+    const location = String(valueOf(job, "jobs", "location", "") || "");
+    const locationText = normalizedTokens(location).join(" ");
+    const remote = /\b(remote|remoto|remota|worldwide|anywhere)\b/i.test(location)
+      && !/\b(hybrid|ibrid[oa]|on[ -]?site|in office|office based)\b/i.test(location);
+    const preferredRemote = toList(preferences.workModes).some((value) => /\b(remote|remoto|remota)\b/i.test(value));
+    const groups = [preferences.roles, preferences.sectors]
       .map((values) => toList(values).filter((value) => normalizedTokens(value).some((token) => text.includes(token))));
+    const locationMatches = toList(preferences.locations).filter((value) => {
+      const expected = normalizedTokens(value).join(" ");
+      return expected && locationText && (locationText.includes(expected) || expected.includes(locationText));
+    });
+    const workModeMatches = toList(preferences.workModes).filter((value) => normalizedTokens(value).some((token) => locationText.includes(token)));
+    groups.push(locationMatches.length || (remote && preferredRemote) ? ["location"] : []);
+    groups.push(workModeMatches.length || (remote && preferredRemote) ? ["work-mode"] : []);
     return groups.filter((matches) => matches.length).length;
+  }
+
+  function matchesRequiredPreferences(job, preferences = currentPreferences()) {
+    const requiredGroups = [preferences.roles, preferences.sectors, preferences.locations, preferences.workModes]
+      .filter((values) => toList(values).length).length;
+    return requiredGroups > 0 && preferenceMatchStrength(job, preferences) === requiredGroups;
   }
 
   function dailyOpportunitySuggestions(visibleJobs, preferences, byNewest) {
@@ -1742,7 +1781,7 @@ Cordiali saluti,
     const excluded = new Set(toList(refresh.excludedIds).map(String));
     const candidates = visibleJobs.filter((job) => opportunityStage(job) === "review")
       .filter((job) => jobFit(job) >= preferences.minFit)
-      .filter((job) => preferenceMatchStrength(job, preferences) > 0)
+      .filter((job) => matchesRequiredPreferences(job, preferences))
       .sort((a, b) => preferenceMatchStrength(b, preferences) - preferenceMatchStrength(a, preferences) || jobFit(b) - jobFit(a) || byNewest(a, b));
     const available = candidates.filter((job) => !excluded.has(String(job.id)));
     return (available.length ? available : candidates).slice(0, preferences.dailyCount);
@@ -1777,8 +1816,7 @@ Cordiali saluti,
   }
 
   function plainJobText(value) {
-    const parsed = new DOMParser().parseFromString(String(value || ""), "text/html");
-    return String(parsed.body?.textContent || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+    return cleanImportedText(value, true);
   }
 
   function externalPreferenceStrength(job, preferences) {
@@ -2556,6 +2594,8 @@ Cordiali saluti,
     $("copilotCompanyLogo").innerHTML = companyLogoContent(job);
     $("copilotRole").textContent = jobTitle(job);
     $("copilotCompany").textContent = company;
+    const emailButton = $("copilotEmailButton");
+    if (emailButton) emailButton.dataset.query = `"${company}" OR "${jobTitle(job)}"`;
     $("copilotFitScore").textContent = jobFit(job).toFixed(1);
     const priorityButton = $("copilotPriorityButton");
     if (priorityButton) {
@@ -3000,6 +3040,9 @@ Cordiali saluti,
           break;
         case "open-job":
           openJob(id || state.selectedJobId);
+          break;
+        case "open-email":
+          openExternalUrl(`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(trigger.dataset.query || "")}`);
           break;
         case "open-url":
           openExternalUrl(trigger.dataset.url);

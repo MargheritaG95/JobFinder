@@ -31,20 +31,56 @@ function list(value) {
   return String(value || "").split(/[,;\n]/).map((item) => item.trim()).filter(Boolean);
 }
 
+function normalized(value) {
+  return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function isFullyRemote(job) {
+  const location = normalized(job.location);
+  const remoteType = normalized(job.remote_type);
+  const combined = `${location} ${remoteType}`;
+  return /\b(remote|remoto|remota|worldwide|anywhere|from anywhere)\b/.test(combined)
+    && !/\b(hybrid|ibrid[oa]|on site|onsite|in office|office based)\b/.test(combined);
+}
+
+function fieldMatches(values, field) {
+  const normalizedField = normalized(field);
+  if (!normalizedField) return [];
+  return values.filter((value) => {
+    const preference = normalized(value);
+    return preference && (normalizedField.includes(preference) || preference.includes(normalizedField));
+  });
+}
+
 function scoreJob(job, preferences) {
   const haystack = new Set(tokens(`${job.title} ${job.company_name} ${job.industry || ""} ${job.location || ""} ${job.remote_type || ""} ${job.description}`));
-  const groups = [["roles", list(preferences.target_roles)], ["sectors", list(preferences.target_sectors)], ["locations", list(preferences.locations)], ["work_modes", list(preferences.work_modes)]];
+  const groups = [["roles", list(preferences.target_roles)], ["sectors", list(preferences.target_sectors)]];
+  const preferredLocations = list(preferences.locations);
+  const preferredWorkModes = list(preferences.work_modes);
   const matched = {};
   let score = 5;
   for (const [name, values] of groups) {
     const hits = values.filter((value) => tokens(value).some((token) => haystack.has(token)));
     if (hits.length) { matched[name] = hits; score += name === "roles" ? 2 : 0.75; }
   }
+  const remote = isFullyRemote(job);
+  const locationHits = fieldMatches(preferredLocations, job.location);
+  const workModeHits = fieldMatches(preferredWorkModes, `${job.location || ""} ${job.remote_type || ""}`);
+  const remoteAllowed = remote && preferredWorkModes.some((value) => /\b(remote|remoto|remota)\b/.test(normalized(value)));
+  if (locationHits.length) matched.locations = locationHits;
+  else if (remoteAllowed) matched.locations = ["Fully remote"];
+  if (workModeHits.length) matched.work_modes = workModeHits;
+  else if (remoteAllowed) matched.work_modes = ["Remote"];
+  if (matched.locations?.length) score += 0.75;
+  if (matched.work_modes?.length) score += 0.75;
   const published = job.published_at ? new Date(job.published_at).getTime() : 0;
   if (published > Date.now() - 7 * 86400000) score += 0.5;
   if (job.salary_text || job.salary_min || job.salary_max) score += 0.25;
   const configuredGroups = groups.filter(([, values]) => values.length);
-  const matchesPreferences = configuredGroups.length > 0 && configuredGroups.every(([name]) => matched[name]?.length);
+  const matchesPreferences = configuredGroups.length > 0
+    && configuredGroups.every(([name]) => matched[name]?.length)
+    && (!preferredLocations.length || Boolean(matched.locations?.length))
+    && (!preferredWorkModes.length || Boolean(matched.work_modes?.length));
   return { fit: Math.max(0, Math.min(10, Number(score.toFixed(1)))), matched, matchesPreferences };
 }
 

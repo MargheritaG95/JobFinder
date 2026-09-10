@@ -120,6 +120,7 @@ Cordiali saluti,
     sessionInitializing: false,
     sessionUserId: null,
     sessionExpiredHandled: false,
+    onboardingPrompted: false,
     applicationRepairAttempted: false,
     applicationRepairError: "",
     scheduledDeliveryDate: "",
@@ -735,6 +736,7 @@ Cordiali saluti,
     state.user = null;
     state.profile = null;
     state.sessionUserId = null;
+    state.onboardingPrompted = false;
     state.lastSync = null;
     state.errors = {};
     state.optionalErrors = {};
@@ -787,6 +789,7 @@ Cordiali saluti,
     updateUserIdentity();
     renderAll();
     updateDataHealth();
+    maybeOpenOnboarding();
 
     if (!options.quiet && Object.keys(state.errors).length === 0) {
       showToast("Dati aggiornati da Supabase.", "success", "Sincronizzazione completata");
@@ -1092,7 +1095,14 @@ Cordiali saluti,
 
   function currentPreferences() {
     const record = state.data.preferences[0] || null;
-    const local = localPersonalization();
+    const metadata = state.user?.user_metadata?.jobfinder_personalization;
+    const local = metadata && typeof metadata === "object" ? metadata : localPersonalization();
+    const cvResource = state.data.answerBank.find((item) => {
+      const category = normalizeStatus(valueOf(item, "answerBank", "category", ""), "");
+      const title = normalizeStatus(valueOf(item, "answerBank", "title", ""), "");
+      return category === "CV" || title === "CV DI RIFERIMENTO";
+    });
+    const accountCv = cvResource ? String(valueOf(cvResource, "answerBank", "content", "") || "") : "";
     if (!record) return { ...DEFAULT_PREFERENCES, ...local, isDefault: true, record: null };
     return {
       roles: toList(valueOf(record, "preferences", "roles", [])),
@@ -1105,7 +1115,7 @@ Cordiali saluti,
       dailyCount: Math.max(1, Math.min(20, asNumber(valueOf(record, "preferences", "dailyCount", DEFAULT_PREFERENCES.dailyCount), DEFAULT_PREFERENCES.dailyCount))),
       motivations: local.motivations || DEFAULT_PREFERENCES.motivations,
       profileSkills: local.profileSkills || DEFAULT_PREFERENCES.profileSkills,
-      profileCvText: local.profileCvText || DEFAULT_PREFERENCES.profileCvText,
+      profileCvText: accountCv || local.profileCvText || DEFAULT_PREFERENCES.profileCvText,
       careerChangeReason: local.careerChangeReason || DEFAULT_PREFERENCES.careerChangeReason,
       careerChangeReasonEn: local.careerChangeReasonEn || DEFAULT_PREFERENCES.careerChangeReasonEn,
       companyValues: local.companyValues || DEFAULT_PREFERENCES.companyValues,
@@ -1748,12 +1758,14 @@ Cordiali saluti,
     state.scheduledDeliveryDate = today;
     state.scheduledDeliveryInFlight = true;
     fetchFreshOpportunities(preferences)
-      .then((imported) => {
+      .then(({ imported, message }) => {
         try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ deliveryDate: today, excludedIds: [] })); }
         catch (_error) { /* Imported records remain available even without browser storage. */ }
         if (imported.length) {
           renderAll();
           showToast(`${imported.length} nuovi annunci reali importati dal feed programmato.`, "success", "Aggiornamento giornaliero completato");
+        } else if (message) {
+          showToast(message, "warning", "Nessun’altra opportunità compatibile");
         }
       })
       .catch((error) => {
@@ -1859,7 +1871,7 @@ Cordiali saluti,
     imported.forEach((job) => {
       if (!state.data.jobs.some((current) => String(current.id) === String(job.id))) state.data.jobs.push(job);
     });
-    return imported;
+    return { imported, reason: body.reason || "", message: body.message || "" };
   }
 
   async function refreshOpportunitySuggestions(button) {
@@ -1868,11 +1880,16 @@ Cordiali saluti,
     catch (error) { setBusy(button, false); throw error; }
     const preferences = currentPreferences();
     try {
-      const imported = await fetchFreshOpportunities(preferences);
+      const result = await fetchFreshOpportunities(preferences);
+      const imported = result.imported;
       if (imported.length) {
         window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ deliveryDate: new Date().toISOString().slice(0, 10), excludedIds: [] }));
         renderAll();
         showToast(`${imported.length} annunci reali importati e analizzati dal testo completo.`, "success", "Nuove opportunità pronte");
+        return;
+      }
+      if (result.reason === "no_matching_opportunities") {
+        showToast(result.message, "warning", "Nessun’altra opportunità compatibile");
         return;
       }
     } catch (error) {
@@ -1881,20 +1898,7 @@ Cordiali saluti,
     } finally {
       setBusy(button, false);
     }
-    const visibleJobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
-    let current = dailyOpportunitySuggestions(visibleJobs, preferences, (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)));
-    if (!current.length) {
-      current = visibleJobs.filter((job) => opportunityStage(job) === "review")
-        .sort((a, b) => jobFit(b) - jobFit(a) || new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0)))
-        .slice(0, preferences.dailyCount);
-    }
-    if (!current.length) throw new Error("Non sono disponibili annunci da proporre: il feed non ha restituito risultati e non ci sono opportunità da valutare già salvate.");
-    const refresh = opportunityRefreshState();
-    const excludedIds = [...new Set([...toList(refresh.excludedIds).map(String), ...current.map((job) => String(job.id))])];
-    try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ ...refresh, deliveryDate: new Date().toISOString().slice(0, 10), excludedIds })); }
-    catch (_error) { showToast("Il browser non consente di memorizzare il nuovo gruppo di proposte.", "warning", "Refresh non salvato"); return; }
-    renderDashboard();
-    showToast("Le proposte non valutate sono state sostituite con le successive più compatibili.", "success", "Nuove opportunità pronte");
+    showToast("Al momento non ci sono altre opportunità che soddisfano tutte le tue preferenze. Modifica i criteri in Preferenze oppure riprova al prossimo aggiornamento.", "warning", "Nessun’altra opportunità compatibile");
   }
 
   function renderOpportunityFilters() {
@@ -3800,6 +3804,14 @@ Cordiali saluti,
         if (existing) await updateRecord("preferences", existing.id, payload);
         else await insertRecord("preferences", payload);
       }
+      await saveReferenceCv(personalization.profileCvText);
+      const accountPersonalization = { ...personalization };
+      delete accountPersonalization.profileCvText;
+      const { data: userData, error: metadataError } = await state.client.auth.updateUser({
+        data: { jobfinder_personalization: accountPersonalization, jobfinder_onboarding_completed: true }
+      });
+      if (metadataError) throw metadataError;
+      if (userData?.user) state.user = userData.user;
       renderPreferences();
       showToast(state.optionalErrors.preferences ? "Motivazioni e competenze salvate su questo dispositivo." : "Preferenze e personalizzazione salvate.", "success", "Preferenze aggiornate");
     } catch (error) {
@@ -3837,6 +3849,95 @@ Cordiali saluti,
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
     window.setTimeout(() => $("dialogBody").querySelector("input, select, textarea, button")?.focus(), 30);
+  }
+
+  async function saveReferenceCv(content) {
+    const text = String(content || "").trim();
+    const existing = state.data.answerBank.find((item) => {
+      const category = normalizeStatus(valueOf(item, "answerBank", "category", ""), "");
+      const title = normalizeStatus(valueOf(item, "answerBank", "title", ""), "");
+      return category === "CV" || title === "CV DI RIFERIMENTO";
+    });
+    if (!text && !existing) return null;
+    const payload = {};
+    setMapped(payload, "answerBank", "title", "CV di riferimento");
+    setMapped(payload, "answerBank", "category", "CV");
+    setMapped(payload, "answerBank", "content", text);
+    return existing ? updateRecord("answerBank", existing.id, payload) : insertRecord("answerBank", payload);
+  }
+
+  async function submitOnboardingForm(form) {
+    const values = new FormData(form);
+    const payload = {};
+    setMapped(payload, "preferences", "roles", toList(values.get("roles")));
+    setMapped(payload, "preferences", "sectors", toList(values.get("sectors")));
+    setMapped(payload, "preferences", "locations", toList(values.get("locations")));
+    setMapped(payload, "preferences", "workModes", toList(values.get("work_modes")));
+    setMapped(payload, "preferences", "minFit", asNumber(values.get("min_fit"), 7));
+    setMapped(payload, "preferences", "aiLearning", true);
+    setMapped(payload, "preferences", "deliveryTime", values.get("delivery_time") || "09:00");
+    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(20, asNumber(values.get("daily_count"), 6))));
+    const personalization = {
+      motivations: String(values.get("motivations") || "").trim(),
+      profileSkills: String(values.get("profile_skills") || "").trim(),
+      careerChangeReason: String(values.get("career_change_reason") || "").trim(),
+      careerChangeReasonEn: String(values.get("career_change_reason_en") || "").trim(),
+      companyValues: String(values.get("company_values") || "").trim()
+    };
+    const existing = state.data.preferences[0] || null;
+    if (existing) await updateRecord("preferences", existing.id, payload);
+    else await insertRecord("preferences", payload);
+    const cvText = String(values.get("cv_text") || "").trim();
+    await saveReferenceCv(cvText);
+    saveLocalPersonalization({ ...personalization, profileCvText: cvText });
+    const { data, error } = await state.client.auth.updateUser({
+      data: { jobfinder_personalization: personalization, jobfinder_onboarding_completed: true }
+    });
+    if (error) throw error;
+    if (data?.user) state.user = data.user;
+    closeDialog();
+    renderAll();
+    showToast("La ricerca è ora collegata alle tue preferenze. Le proposte future useranno questi criteri.", "success", "Configurazione completata");
+  }
+
+  function maybeOpenOnboarding() {
+    if (state.demo || !state.user || state.onboardingPrompted) return;
+    const completed = Boolean(state.user.user_metadata?.jobfinder_onboarding_completed);
+    const alreadyConfigured = Boolean(state.data.preferences[0]);
+    if (completed || alreadyConfigured) return;
+    state.onboardingPrompted = true;
+    const preferences = currentPreferences();
+    openDialog({
+      eyebrow: "CONFIGURAZIONE INIZIALE",
+      title: "Personalizza la tua ricerca",
+      body: `<p class="dialog-copy">Queste informazioni alimentano il motore di ricerca, il Fit Score e i contenuti del Copilot. Potrai modificarle in qualsiasi momento da Preferenze.</p>
+        <form class="form-stack onboarding-form" data-dialog-form="onboarding" novalidate>
+          <div class="onboarding-progress"><span>1</span><strong>Criteri di ricerca</strong></div>
+          <div class="form-grid form-grid--two">
+            <label class="field"><span>Ruoli target *</span><small>Uno per riga o separati da virgola.</small><textarea name="roles" rows="4" required>${escapeHtml(preferences.roles.join("\n"))}</textarea></label>
+            <label class="field"><span>Settori target *</span><small>Uno per riga o separati da virgola.</small><textarea name="sectors" rows="4" required>${escapeHtml(preferences.sectors.join("\n"))}</textarea></label>
+            <label class="field"><span>Località *</span><textarea name="locations" rows="3" required>${escapeHtml(preferences.locations.join("\n"))}</textarea></label>
+            <label class="field"><span>Modalità di lavoro *</span><textarea name="work_modes" rows="3" required>${escapeHtml(preferences.workModes.join("\n"))}</textarea></label>
+          </div>
+          <div class="onboarding-progress"><span>2</span><strong>Profilo e materiali</strong></div>
+          <label class="field"><span>Motivazioni personali</span><small>Es. “Automotive: è una passione personale…”</small><textarea name="motivations" rows="4">${escapeHtml(preferences.motivations)}</textarea></label>
+          <label class="field"><span>Competenze da evidenziare</span><textarea name="profile_skills" rows="3">${escapeHtml(preferences.profileSkills)}</textarea></label>
+          <label class="field"><span>CV di riferimento</span><small>Incolla il testo del CV; resta associato in modo sicuro al tuo account.</small><textarea name="cv_text" rows="7">${escapeHtml(preferences.profileCvText)}</textarea></label>
+          <div class="form-grid form-grid--two">
+            <label class="field"><span>Perché vuoi cambiare campo</span><textarea name="career_change_reason" rows="4">${escapeHtml(preferences.careerChangeReason)}</textarea></label>
+            <label class="field"><span>Career change reason (EN)</span><textarea name="career_change_reason_en" rows="4">${escapeHtml(preferences.careerChangeReasonEn)}</textarea></label>
+          </div>
+          <label class="field"><span>Valori aziendali e tuo allineamento</span><small>Formato consigliato: “Azienda: valori | perché ti rappresentano”.</small><textarea name="company_values" rows="4">${escapeHtml(preferences.companyValues)}</textarea></label>
+          <div class="onboarding-progress"><span>3</span><strong>Consegna delle proposte</strong></div>
+          <div class="form-grid form-grid--two">
+            <label class="field"><span>Orario</span><input name="delivery_time" type="time" value="${escapeAttribute(preferences.deliveryTime)}" /></label>
+            <label class="field"><span>Numero di proposte</span><input name="daily_count" type="number" min="1" max="20" value="${escapeAttribute(preferences.dailyCount)}" /></label>
+          </div>
+          <label class="field range-field"><span>Fit Score minimo: <strong>${asNumber(preferences.minFit, 7).toFixed(1)}</strong></span><input name="min_fit" type="range" min="0" max="10" step="0.5" value="${escapeAttribute(preferences.minFit)}" /></label>
+          <div class="notice notice--info"><strong>Come funziona</strong><span>JobFinder mostrerà solo annunci che rispettano tutti i gruppi di preferenze configurati. Se non ce ne sono altri, te lo dirà chiaramente.</span></div>
+          <div class="form-actions"><button class="button button--primary button--wide" type="submit">${icon("check")}Salva e crea la mia ricerca</button></div>
+        </form>`
+    });
   }
 
   function closeDialog() {
@@ -4021,6 +4122,9 @@ Cordiali saluti,
           break;
         case "copilot-content":
           await submitCopilotContentEditor(form);
+          break;
+        case "onboarding":
+          await submitOnboardingForm(form);
           break;
         default:
           throw new Error(`Form non gestito: ${type}`);

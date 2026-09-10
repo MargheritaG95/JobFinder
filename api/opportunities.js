@@ -43,7 +43,9 @@ function scoreJob(job, preferences) {
   const published = job.published_at ? new Date(job.published_at).getTime() : 0;
   if (published > Date.now() - 7 * 86400000) score += 0.5;
   if (job.salary_text || job.salary_min || job.salary_max) score += 0.25;
-  return { fit: Math.max(0, Math.min(10, Number(score.toFixed(1)))), matched };
+  const configuredGroups = groups.filter(([, values]) => values.length);
+  const matchesPreferences = configuredGroups.length > 0 && configuredGroups.every(([name]) => matched[name]?.length);
+  return { fit: Math.max(0, Math.min(10, Number(score.toFixed(1)))), matched, matchesPreferences };
 }
 
 async function authenticatedUser(req) {
@@ -110,18 +112,15 @@ module.exports = async function handler(req, res) {
     }
     const minFit = Number(preferences.min_fit_score) || 0;
     let ranked = (catalog || []).map((job) => ({ job, result: scoreJob(job, preferences) }))
-      .filter(({ job, result }) => !excluded.has(config.hasServiceRole ? job.id : job.source_url) && result.fit >= minFit)
+      .filter(({ job, result }) => !excluded.has(config.hasServiceRole ? job.id : job.source_url) && result.matchesPreferences && result.fit >= minFit)
       .sort((a, b) => b.result.fit - a.result.fit || new Date(b.job.published_at || 0) - new Date(a.job.published_at || 0));
-    if (ranked.length < requested) {
-      const already = new Set(ranked.map(({ job }) => config.hasServiceRole ? job.id : job.source_url));
-      ranked.push(...(catalog || []).map((job) => ({ job, result: scoreJob(job, preferences) }))
-        .filter(({ job }) => {
-          const key = config.hasServiceRole ? job.id : job.source_url;
-          return !excluded.has(key) && !already.has(key);
-        }).sort((a, b) => b.result.fit - a.result.fit).slice(0, requested - ranked.length));
-    }
     ranked = ranked.slice(0, requested);
-    if (!ranked.length) return res.status(200).json({ jobs: [], count: 0, reason: "catalog_exhausted", message: "Nessun annuncio non ancora proposto è disponibile nelle fonti attive." });
+    if (!ranked.length) return res.status(200).json({
+      jobs: [],
+      count: 0,
+      reason: "no_matching_opportunities",
+      message: "Al momento non ci sono altre opportunità che soddisfano tutte le tue preferenze e il Fit Score minimo. Puoi modificare i criteri in Preferenze oppure riprovare al prossimo aggiornamento."
+    });
     const now = new Date().toISOString();
     if (config.hasServiceRole) {
       await supabase("user_job_matches?on_conflict=user_id,job_id", {

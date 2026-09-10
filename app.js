@@ -1622,12 +1622,13 @@ Cordiali saluti,
     const followupMoment = (item) => recordMoment(item, "followups", ["updatedAt", "createdAt", "dueDate", "updated_at", "created_at", "due_date"]);
     const sentAll = entries.filter((entry) => ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER"].includes(entry.status));
     const toSendAll = jobs.filter((job) => opportunityStage(job) === "to-apply");
-    const toReviewAll = jobs.filter((job) => opportunityStage(job) === "review");
+    const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
+    const toReviewAll = dailyOpportunitySuggestions(jobs, currentPreferences(), byNewest);
     const interviewsAll = entries.filter((entry) => entry.status === "INTERVIEW");
     const waitingAll = entries.filter((entry) => entry.status === "APPLIED");
     const inRange = (items, getMoment) => items.filter((item) => isInDashboardRange(getMoment(item)));
     return {
-      sent: inRange(sentAll, entryMoment), toSend: inRange(toSendAll, jobMoment), toReview: inRange(toReviewAll, jobMoment),
+      sent: inRange(sentAll, entryMoment), toSend: toSendAll, toReview: toReviewAll,
       interviews: inRange(interviewsAll, entryMoment), waiting: inRange(waitingAll, entryMoment), followups: inRange(followupsAll, followupMoment),
       deltas: { sent: dailyDelta(sentAll, entryMoment), toSend: dailyDelta(toSendAll, jobMoment), toReview: dailyDelta(toReviewAll, jobMoment), interviews: dailyDelta(interviewsAll, entryMoment), waiting: dailyDelta(waitingAll, entryMoment), followups: dailyDelta(followupsAll, followupMoment) }
     };
@@ -2126,9 +2127,14 @@ Cordiali saluti,
   }
 
   function renderPipeline() {
-    const pipelineLabels = { CLOSED: "Closed" };
+    const pipelineLabels = { APPLY: "TO DO", CLOSED: "CLOSED" };
+    const activeJobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
+    const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
+    const dashboardNewJobs = dailyOpportunitySuggestions(activeJobs, currentPreferences(), byNewest);
     $("pipelineBoard").innerHTML = PIPELINE_STATES.map((status, index) => {
-      const jobs = sortPipelineJobs(state.data.jobs.filter((job) => jobStatus(job) === status), status);
+      const jobs = status === "NEW"
+        ? dashboardNewJobs
+        : sortPipelineJobs(state.data.jobs.filter((job) => jobStatus(job) === status), status);
       return `
         <section class="kanban-column" data-pipeline-status="${status}" style="--column-color:${PIPELINE_COLORS[status]}">
           <header class="kanban-column__heading"><strong>${pipelineLabels[status] || status}</strong><span class="kanban-count">${jobs.length}</span></header>
@@ -4264,6 +4270,9 @@ Cordiali saluti,
     if (values.get("company_website") && !companyWebsite) throw new Error("Inserisci un sito aziendale http/https valido.");
     let source = String(values.get("source") || "Career site").trim();
     const description = String(values.get("description") || "").trim();
+    if (!title) throw new Error("Inserisci il ruolo dell’opportunità.");
+    if (!company) throw new Error("Inserisci il nome dell’azienda.");
+    if (description.length < 80) throw new Error("Incolla una descrizione dell’annuncio più completa (almeno 80 caratteri).");
     const industry = suppliedIndustry || industryFromText(`${title} ${description}`);
     companyDescription ||= companySummaryFromText(company, description, industry);
     if (/jobteaser\.(?:com|fr|it|de|co\.uk)/i.test(url)) source = "JobTeaser";
@@ -4328,8 +4337,6 @@ Cordiali saluti,
       return;
     }
     const analysis = analyzeOpportunity({ title, company, location, description });
-    const preferences = currentPreferences();
-    if (analysis.score < preferences.minFit) throw new Error(`Questa opportunità ha Fit ${analysis.score.toFixed(1)}/10, sotto il minimo ${preferences.minFit.toFixed(1)} impostato nelle Preferenze.`);
     let companyRecord = state.data.companies.find((item) => valueOf(item, "companies", "name", "").trim().toLowerCase() === company.toLowerCase()) || null;
     try {
       if (!companyRecord) {
@@ -4358,7 +4365,7 @@ Cordiali saluti,
     setMapped(payload, "jobs", "location", location || null);
     setMapped(payload, "jobs", "fitScore", analysis.score);
     setMapped(payload, "jobs", "status", "NEW");
-    setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "HIGH" : analysis.score >= 6.5 ? "MEDIUM" : "LOW");
+    setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "APPLY" : "REVIEW");
     setMapped(payload, "jobs", "source", source);
     setMapped(payload, "jobs", "url", url);
     setMapped(payload, "jobs", "saved", false);

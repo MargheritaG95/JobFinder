@@ -1846,7 +1846,8 @@ Cordiali saluti,
     if (sessionError) throw sessionError;
     const token = sessionData.session?.access_token;
     if (!token) throw new Error("Sessione scaduta: accedi nuovamente.");
-    const response = await fetch("/api/opportunities", {
+    const apiBaseUrl = String(CONFIG.apiBaseUrl || "").replace(/\/$/, "");
+    const response = await fetch(`${apiBaseUrl}/api/opportunities`, {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ limit: preferences.dailyCount }),

@@ -1784,7 +1784,18 @@ Cordiali saluti,
       .filter((job) => matchesRequiredPreferences(job, preferences))
       .sort((a, b) => preferenceMatchStrength(b, preferences) - preferenceMatchStrength(a, preferences) || jobFit(b) - jobFit(a) || byNewest(a, b));
     const available = candidates.filter((job) => !excluded.has(String(job.id)));
-    return (available.length ? available : candidates).slice(0, preferences.dailyCount);
+    return available.slice(0, preferences.dailyCount);
+  }
+
+  function excludeCurrentSuggestionsFromRefresh() {
+    const refresh = opportunityRefreshState();
+    const excluded = new Set(toList(refresh.excludedIds).map(String));
+    state.data.jobs
+      .filter((job) => opportunityStage(job) === "review")
+      .forEach((job) => excluded.add(String(job.id)));
+    const next = { ...refresh, deliveryDate: new Date().toISOString().slice(0, 10), excludedIds: [...excluded] };
+    window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(next));
+    return next;
   }
 
   function runScheduledOpportunityDelivery(preferences = currentPreferences()) {
@@ -1796,9 +1807,10 @@ Cordiali saluti,
     if (now < delivery || refresh.deliveryDate === today || state.scheduledDeliveryDate === today || state.scheduledDeliveryInFlight || !ensureWritable()) return;
     state.scheduledDeliveryDate = today;
     state.scheduledDeliveryInFlight = true;
+    const deliveryRefresh = excludeCurrentSuggestionsFromRefresh();
     fetchFreshOpportunities(preferences)
       .then(({ imported, message }) => {
-        try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ deliveryDate: today, excludedIds: [] })); }
+        try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(deliveryRefresh)); }
         catch (_error) { /* Imported records remain available even without browser storage. */ }
         if (imported.length) {
           renderAll();
@@ -1917,11 +1929,12 @@ Cordiali saluti,
     try { await loadAllData({ quiet: true }); }
     catch (error) { setBusy(button, false); throw error; }
     const preferences = currentPreferences();
+    const refresh = excludeCurrentSuggestionsFromRefresh();
     try {
       const result = await fetchFreshOpportunities(preferences);
       const imported = result.imported;
       if (imported.length) {
-        window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify({ deliveryDate: new Date().toISOString().slice(0, 10), excludedIds: [] }));
+        window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(refresh));
         renderAll();
         showToast(`${imported.length} annunci reali importati e analizzati dal testo completo.`, "success", "Nuove opportunità pronte");
         return;
@@ -3546,6 +3559,17 @@ Cordiali saluti,
     if (!job) throw new Error("L’opportunità non è più disponibile.");
     const values = new FormData(form);
     rememberRejectedOpportunity(job, String(values.get("reason") || "other"), String(values.get("notes") || "").trim());
+    const catalogJobId = job.catalog_job_id || job.catalogJobId || null;
+    if (catalogJobId && state.user?.id) {
+      const { error } = await state.client.from("user_job_matches").upsert({
+        user_id: state.user.id,
+        job_id: catalogJobId,
+        dismissed: true,
+        status: "CLOSED",
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id,job_id" });
+      if (error) throw new Error(`L’esclusione permanente non è stata salvata: ${humanizeError(error)}`);
+    }
     await deleteRecord("jobs", job.id, { verify: true });
     await loadAllData({ quiet: true });
     closeDialog();

@@ -77,6 +77,12 @@ function legacyJob(userId, job, result) {
 }
 
 module.exports = async function handler(req, res) {
+  const requestOrigin = req.headers.origin || "*";
+  res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept");
+  if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   res.setHeader("Cache-Control", "no-store");
   try {

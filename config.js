@@ -8,6 +8,10 @@ window.JOBFINDER_CONFIG = {
   supabaseUrl: "https://moyabdwxlbkfqmtjuwwa.supabase.co",
   supabasePublishableKey: "sb_publishable_kzopFoXWx_DBRo8giCgGDg_ITMsOsbV",
 
+  /* Serverless API origin. Keeping this absolute makes API actions work even
+     when the frontend is opened from GitHub Pages or another preview host. */
+  apiBaseUrl: "https://jobfinder-blush.vercel.app",
+
   /* Optional absolute GitHub Pages URL, e.g. https://username.github.io/jobfinder/
      Leave empty to use the current page URL for OAuth and password recovery. */
   siteUrl: "",

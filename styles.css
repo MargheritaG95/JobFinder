@@ -1343,6 +1343,17 @@ textarea::placeholder {
   font-size: 0.78rem;
 }
 
+.dashboard-section-heading__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-section-heading__see-all {
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
 .dashboard-section-heading span {
   display: grid;
   min-width: 24px;

@@ -1785,14 +1785,20 @@ Cordiali saluti,
       .filter((job) => matchesRequiredPreferences(job, preferences))
       .sort((a, b) => preferenceMatchStrength(b, preferences) - preferenceMatchStrength(a, preferences) || jobFit(b) - jobFit(a) || byNewest(a, b));
     const available = candidates.filter((job) => !excluded.has(String(job.id)));
-    return available.slice(0, preferences.dailyCount);
+    // Never leave the dashboard empty only because every compatible record was
+    // marked as previously shown. When the feed has no genuinely new match, keep
+    // the best compatible opportunities visible until the user evaluates them.
+    return (available.length ? available : candidates).slice(0, preferences.dailyCount);
   }
 
   function excludeCurrentSuggestionsFromRefresh() {
     const refresh = opportunityRefreshState();
     const excluded = new Set(toList(refresh.excludedIds).map(String));
-    state.data.jobs
-      .filter((job) => opportunityStage(job) === "review")
+    dailyOpportunitySuggestions(
+      state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED"),
+      currentPreferences(),
+      (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0))
+    )
       .forEach((job) => excluded.add(String(job.id)));
     const next = { ...refresh, deliveryDate: new Date().toISOString().slice(0, 10), excludedIds: [...excluded] };
     window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(next));
@@ -1808,6 +1814,7 @@ Cordiali saluti,
     if (now < delivery || refresh.deliveryDate === today || state.scheduledDeliveryDate === today || state.scheduledDeliveryInFlight || !ensureWritable()) return;
     state.scheduledDeliveryDate = today;
     state.scheduledDeliveryInFlight = true;
+    const previousRefresh = opportunityRefreshState();
     const deliveryRefresh = excludeCurrentSuggestionsFromRefresh();
     fetchFreshOpportunities(preferences)
       .then(({ imported, message }) => {
@@ -1817,10 +1824,14 @@ Cordiali saluti,
           renderAll();
           showToast(`${imported.length} nuovi annunci reali importati dal feed programmato.`, "success", "Aggiornamento giornaliero completato");
         } else if (message) {
+          window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(previousRefresh));
+          renderAll();
           showToast(message, "warning", "Nessun’altra opportunità compatibile");
         }
       })
       .catch((error) => {
+        try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(previousRefresh)); }
+        catch (_error) { /* The fallback suggestions still remain in the database. */ }
         state.scheduledDeliveryDate = "";
         console.error("Scheduled opportunity delivery failed", error);
         showToast("L’aggiornamento automatico non è riuscito. Usa Nuove proposte per riprovare.", "warning", "Feed non raggiungibile");
@@ -1930,6 +1941,7 @@ Cordiali saluti,
     try { await loadAllData({ quiet: true }); }
     catch (error) { setBusy(button, false); throw error; }
     const preferences = currentPreferences();
+    const previousRefresh = opportunityRefreshState();
     const refresh = excludeCurrentSuggestionsFromRefresh();
     try {
       const result = await fetchFreshOpportunities(preferences);
@@ -1941,10 +1953,15 @@ Cordiali saluti,
         return;
       }
       if (result.reason === "no_matching_opportunities") {
+        window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(previousRefresh));
+        renderAll();
         showToast(result.message, "warning", "Nessun’altra opportunità compatibile");
         return;
       }
     } catch (error) {
+      try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(previousRefresh)); }
+      catch (_error) { /* Existing compatible opportunities remain available. */ }
+      renderAll();
       console.error("Opportunity source sync failed", error);
       throw new Error(`Non riesco a salvare le nuove proposte: ${humanizeError(error, "l’importazione degli annunci")}`);
     } finally {

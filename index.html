@@ -110,6 +110,57 @@
               Continua con Google
             </button>
             <p id="authStatus" class="form-status" role="status" aria-live="polite"></p>
+            <p class="auth-switch">Nuova su JobFinder? <button id="showSignupButton" class="text-button" type="button">Crea un account</button></p>
+          </div>
+
+          <div id="signupPanel" class="is-hidden">
+            <button id="backToLoginFromSignupButton" class="back-link" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>
+              Torna al login
+            </button>
+            <div class="auth-heading">
+              <p class="eyebrow">Benvenuta</p>
+              <h2>Crea il tuo workspace</h2>
+              <p>Organizza opportunità, candidature e follow-up in un unico posto.</p>
+            </div>
+            <form id="signupForm" class="form-stack" novalidate>
+              <label class="field">
+                <span>Nome</span>
+                <span class="input-shell">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+                  <input id="signupName" name="name" type="text" autocomplete="name" placeholder="Il tuo nome" />
+                </span>
+              </label>
+              <label class="field">
+                <span>Email</span>
+                <span class="input-shell">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-mail"></use></svg>
+                  <input id="signupEmail" name="email" type="email" autocomplete="email" required placeholder="nome@email.com" />
+                </span>
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <span class="input-shell">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+                  <input id="signupPassword" name="password" type="password" autocomplete="new-password" required minlength="8" placeholder="Almeno 8 caratteri" />
+                  <button id="toggleSignupPassword" class="icon-button icon-button--inside" type="button" aria-label="Mostra password">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg>
+                  </button>
+                </span>
+              </label>
+              <label class="field">
+                <span>Conferma password</span>
+                <span class="input-shell">
+                  <svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
+                  <input id="signupPasswordConfirm" name="passwordConfirm" type="password" autocomplete="new-password" required minlength="8" placeholder="Ripeti la password" />
+                </span>
+              </label>
+              <button id="signupButton" class="button button--primary button--wide" type="submit">
+                <span>Crea account</span>
+                <svg class="icon" aria-hidden="true"><use href="#icon-arrow-right"></use></svg>
+              </button>
+            </form>
+            <p id="signupStatus" class="form-status" role="status" aria-live="polite"></p>
           </div>
 
           <div id="recoveryPanel" class="is-hidden">

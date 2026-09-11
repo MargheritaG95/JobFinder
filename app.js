@@ -548,6 +548,7 @@ Cordiali saluti,
       return `Lo schema Supabase non coincide con config.js (${raw}). Aggiorna la mappatura della colonna indicata.`;
     }
     if (lower.includes("relation") && lower.includes("does not exist")) return `La tabella richiesta non esiste o non è esposta: ${raw}`;
+    if (lower.includes("user already registered") || lower.includes("already registered")) return "Esiste gi\u00e0 un account con questa email. Prova ad accedere oppure recupera la password.";
     if (lower.includes("failed to fetch") || lower.includes("network")) return "Connessione a Supabase non riuscita. Controlla rete, URL e configurazione CORS.";
     return raw;
   }
@@ -707,6 +708,7 @@ Cordiali saluti,
     $("appView")?.classList.add("is-hidden");
     $("configWarning")?.classList.toggle("is-hidden", !options.configMissing);
     $("loginPanel")?.classList.remove("is-hidden");
+    $("signupPanel")?.classList.add("is-hidden");
     $("recoveryPanel")?.classList.add("is-hidden");
     $("updatePasswordPanel")?.classList.add("is-hidden");
     if (options.configMissing) {
@@ -2730,12 +2732,25 @@ Cordiali saluti,
       $("recoveryEmail").value = $("loginEmail").value;
       $("recoveryEmail").focus();
     });
+    $("showSignupButton")?.addEventListener("click", () => {
+      $("loginPanel").classList.add("is-hidden");
+      $("signupPanel").classList.remove("is-hidden");
+      $("signupEmail").value = $("loginEmail").value;
+      $("signupEmail").focus();
+    });
+    $("backToLoginFromSignupButton")?.addEventListener("click", () => {
+      $("signupPanel").classList.add("is-hidden");
+      $("loginPanel").classList.remove("is-hidden");
+      setFormStatus($("signupStatus"));
+    });
     $("backToLoginButton")?.addEventListener("click", () => {
       $("recoveryPanel").classList.add("is-hidden");
       $("loginPanel").classList.remove("is-hidden");
       setFormStatus($("recoveryStatus"));
     });
     $("recoveryForm")?.addEventListener("submit", handleRecovery);
+    $("signupForm")?.addEventListener("submit", handleSignup);
+    $("toggleSignupPassword")?.addEventListener("click", toggleSignupPassword);
     $("updatePasswordForm")?.addEventListener("submit", handlePasswordUpdate);
     $("toggleLoginPassword")?.addEventListener("click", toggleLoginPassword);
     $("logoutButton")?.addEventListener("click", handleLogout);
@@ -2855,6 +2870,57 @@ Cordiali saluti,
     }
   }
 
+  async function handleSignup(event) {
+    event.preventDefault();
+    if (!state.client) {
+      setFormStatus($("signupStatus"), "Configura prima URL e publishable key in config.js.", "error");
+      return;
+    }
+    const fullName = $("signupName").value.trim();
+    const email = $("signupEmail").value.trim();
+    const password = $("signupPassword").value;
+    const passwordConfirm = $("signupPasswordConfirm").value;
+    if (!email || !$("signupEmail").checkValidity()) {
+      setFormStatus($("signupStatus"), "Inserisci un indirizzo email valido.", "error");
+      $("signupEmail").focus();
+      return;
+    }
+    if (password.length < 8) {
+      setFormStatus($("signupStatus"), "La password deve contenere almeno 8 caratteri.", "error");
+      $("signupPassword").focus();
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setFormStatus($("signupStatus"), "Le due password non coincidono.", "error");
+      $("signupPasswordConfirm").focus();
+      return;
+    }
+    setBusy($("signupButton"), true, "Creazione account\u2026");
+    setFormStatus($("signupStatus"), "Creazione dell\u2019account\u2026");
+    try {
+      const { data, error } = await state.client.auth.signUp({
+        email, password,
+        options: { data: fullName ? { full_name: fullName } : {}, emailRedirectTo: authRedirectUrl() }
+      });
+      if (error) throw error;
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setFormStatus($("signupStatus"), "Esiste gi\u00e0 un account con questa email. Prova ad accedere oppure recupera la password.", "error");
+        return;
+      }
+      if (data.session) {
+        setFormStatus($("signupStatus"), "Account creato. Apertura della dashboard\u2026", "success");
+        await initializeSession(data.session);
+        return;
+      }
+      setFormStatus($("signupStatus"), "Account creato. Controlla la tua email per confermare l\u2019indirizzo prima di accedere (guarda anche spam e promozioni).", "success");
+      event.target.reset();
+    } catch (error) {
+      setFormStatus($("signupStatus"), humanizeError(error, "la creazione dell\u2019account"), "error");
+    } finally {
+      setBusy($("signupButton"), false);
+    }
+  }
+
   async function handleRecovery(event) {
     event.preventDefault();
     if (!state.client) {
@@ -2907,6 +2973,14 @@ Cordiali saluti,
   function toggleLoginPassword() {
     const input = $("loginPassword");
     const button = $("toggleLoginPassword");
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    button.setAttribute("aria-label", show ? "Nascondi password" : "Mostra password");
+  }
+
+  function toggleSignupPassword() {
+    const input = $("signupPassword");
+    const button = $("toggleSignupPassword");
     const show = input.type === "password";
     input.type = show ? "text" : "password";
     button.setAttribute("aria-label", show ? "Nascondi password" : "Mostra password");

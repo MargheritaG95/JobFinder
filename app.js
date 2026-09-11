@@ -3,6 +3,7 @@
 
   const CONFIG = window.JOBFINDER_CONFIG || {};
   const PIPELINE_STATES = ["NEW", "APPLY", "APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "CLOSED"];
+  const DASHBOARD_PREVIEW_LIMIT = 6;
   const PIPELINE_COLORS = {
     NEW: "#7f8da3",
     APPLY: "#735fd6",
@@ -1668,13 +1669,13 @@ Cordiali saluti,
     $("toApplyOpportunityCount").textContent = String(toApplyJobs.length);
     $("appliedOpportunityCount").textContent = String(appliedJobs.length);
     $("newOpportunities").innerHTML = newJobs.length
-      ? newJobs.map((job) => renderTopOpportunity(job, "review")).join("")
+      ? newJobs.slice(0, DASHBOARD_PREVIEW_LIMIT).map((job) => renderTopOpportunity(job, "review")).join("")
       : emptyState("Nessuna nuova opportunità", "Le nuove posizioni importate compariranno qui prima della valutazione.", { route: "opportunities", label: "Apri opportunità", icon: "search" });
     $("toApplyOpportunities").innerHTML = toApplyJobs.length
-      ? toApplyJobs.map((job) => renderTopOpportunity(job, "to-apply")).join("")
+      ? toApplyJobs.slice(0, DASHBOARD_PREVIEW_LIMIT).map((job) => renderTopOpportunity(job, "to-apply")).join("")
       : emptyState("Nessuna candidatura da preparare", "Le opportunità che salvi, apprezzi o scegli di applicare dopo compariranno qui.");
     $("appliedOpportunities").innerHTML = appliedJobs.length
-      ? appliedJobs.map((job) => renderTopOpportunity(job, "applied")).join("")
+      ? appliedJobs.slice(0, DASHBOARD_PREVIEW_LIMIT).map((job) => renderTopOpportunity(job, "applied")).join("")
       : emptyState("Nessuna candidatura inviata", "Quando premi “Ho applicato”, la posizione comparirà qui e le prioritarie saranno mostrate per prime.");
 
     renderAttentionList();

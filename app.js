@@ -4371,18 +4371,25 @@ Cordiali saluti,
     } catch (companyError) {
       console.warn("Company enrichment could not be saved", companyError);
     }
+    // Persist the essential record first. Optional enrichment columns have changed
+    // across older JobFinder installations; one stale/missing optional column must
+    // never prevent a manually supplied opportunity from being imported.
+    const corePayload = {};
+    setMapped(corePayload, "jobs", "title", title);
+    if (fieldName("jobs", "title") !== "role_title") corePayload.role_title = title;
+    setMapped(corePayload, "jobs", "companyName", company);
+    setMapped(corePayload, "jobs", "companyId", companyRecord?.id || null);
+    setMapped(corePayload, "jobs", "location", location || null);
+    setMapped(corePayload, "jobs", "fitScore", analysis.score);
+    setMapped(corePayload, "jobs", "status", "NEW");
+    setMapped(corePayload, "jobs", "priority", "REVIEW");
+    setMapped(corePayload, "jobs", "source", source);
+    setMapped(corePayload, "jobs", "url", url);
+    setMapped(corePayload, "jobs", "saved", false);
+    setMapped(corePayload, "jobs", "description", description);
+    const created = await insertRecord("jobs", corePayload);
+
     const payload = {};
-    setMapped(payload, "jobs", "title", title);
-    if (fieldName("jobs", "title") !== "role_title") payload.role_title = title;
-    setMapped(payload, "jobs", "companyName", company);
-    setMapped(payload, "jobs", "companyId", companyRecord?.id || null);
-    setMapped(payload, "jobs", "location", location || null);
-    setMapped(payload, "jobs", "fitScore", analysis.score);
-    setMapped(payload, "jobs", "status", "NEW");
-    setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "APPLY" : "REVIEW");
-    setMapped(payload, "jobs", "source", source);
-    setMapped(payload, "jobs", "url", url);
-    setMapped(payload, "jobs", "saved", false);
     setMapped(payload, "jobs", "whyFit", analysis.why);
     setMapped(payload, "jobs", "gaps", analysis.gaps);
     setMapped(payload, "jobs", "angle", analysis.angle);
@@ -4397,7 +4404,13 @@ Cordiali saluti,
     setMapped(payload, "jobs", "responsibilities", extractedResponsibilities);
     setMapped(payload, "jobs", "scrapeStatus", description.length >= 500 ? "complete" : "partial");
     setMapped(payload, "jobs", "scrapedAt", new Date().toISOString());
-    const created = await insertRecord("jobs", payload);
+    let enrichmentWarning = false;
+    try {
+      await updateRecord("jobs", created.id, payload);
+    } catch (error) {
+      enrichmentWarning = true;
+      console.warn("Opportunity imported; optional enrichment could not be saved", error);
+    }
     try {
       window.localStorage.setItem(`jobfinder:job-description:${state.user?.id || "anonymous"}:${created.id}`, description);
     } catch (_error) {
@@ -4406,7 +4419,13 @@ Cordiali saluti,
     closeDialog();
     renderAll();
     openCopilot(created.id);
-    showToast(`Fit ${analysis.score.toFixed(1)}/10${analysis.matches.length ? ` · ${analysis.matches.join(", ")}` : ""}`, "success", "Annuncio importato e analizzato");
+    showToast(
+      enrichmentWarning
+        ? "L’annuncio è stato importato. Alcuni dettagli opzionali non sono stati salvati e potranno essere completati in seguito."
+        : `Fit ${analysis.score.toFixed(1)}/10${analysis.matches.length ? ` · ${analysis.matches.join(", ")}` : ""}`,
+      enrichmentWarning ? "warning" : "success",
+      enrichmentWarning ? "Annuncio importato" : "Annuncio importato e analizzato"
+    );
   }
 
   async function submitTemplateForm(form) {

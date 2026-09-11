@@ -2509,6 +2509,22 @@ textarea::placeholder {
   white-space: normal;
 }
 
+.copilot-status-value {
+  font: inherit;
+  font-weight: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.copilot-status-value:hover {
+  color: var(--blue-600, #1d4ed8);
+}
+
 .field--cover-letter textarea {
   min-height: 230px;
   line-height: 1.65;

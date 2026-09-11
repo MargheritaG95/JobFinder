@@ -1623,7 +1623,7 @@ Cordiali saluti,
     const sentAll = entries.filter((entry) => ["APPLIED", "CONTACTED", "INTERVIEW", "OFFER"].includes(entry.status));
     const toSendAll = jobs.filter((job) => opportunityStage(job) === "to-apply");
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
-    const toReviewAll = dailyOpportunitySuggestions(jobs, currentPreferences(), byNewest);
+    const toReviewAll = reviewStageJobs(jobs, byNewest);
     const interviewsAll = entries.filter((entry) => entry.status === "INTERVIEW");
     const waitingAll = entries.filter((entry) => entry.status === "APPLIED");
     const inRange = (items, getMoment) => items.filter((item) => isInDashboardRange(getMoment(item)));
@@ -1652,7 +1652,7 @@ Cordiali saluti,
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
     const preferences = currentPreferences();
     runScheduledOpportunityDelivery(preferences);
-    const newJobs = dailyOpportunitySuggestions(visibleJobs, preferences, byNewest);
+    const newJobs = reviewStageJobs(visibleJobs, byNewest);
     const evaluatedAt = (job) => {
       const application = getApplicationForJob(job.id);
       const timestamp = valueOf(application, "applications", "appliedAt", "")
@@ -1752,40 +1752,8 @@ Cordiali saluti,
     catch (_error) { return {}; }
   }
 
-  function preferenceMatchStrength(job, preferences = currentPreferences()) {
-    const text = normalizedTokens(`${jobTitle(job)} ${companyNameForJob(job)} ${companyIndustry(job)} ${jobDescriptionText(job)}`).join(" ");
-    const location = String(valueOf(job, "jobs", "location", "") || "");
-    const locationText = normalizedTokens(location).join(" ");
-    const remote = /\b(remote|remoto|remota|worldwide|anywhere)\b/i.test(location)
-      && !/\b(hybrid|ibrid[oa]|on[ -]?site|in office|office based)\b/i.test(location);
-    const preferredRemote = toList(preferences.workModes).some((value) => /\b(remote|remoto|remota)\b/i.test(value));
-    const groups = [preferences.roles, preferences.sectors]
-      .map((values) => toList(values).filter((value) => normalizedTokens(value).some((token) => text.includes(token))));
-    const locationMatches = toList(preferences.locations).filter((value) => {
-      const expected = normalizedTokens(value).join(" ");
-      return expected && locationText && (locationText.includes(expected) || expected.includes(locationText));
-    });
-    const workModeMatches = toList(preferences.workModes).filter((value) => normalizedTokens(value).some((token) => locationText.includes(token)));
-    groups.push(locationMatches.length || (remote && preferredRemote) ? ["location"] : []);
-    groups.push(workModeMatches.length || (remote && preferredRemote) ? ["work-mode"] : []);
-    return groups.filter((matches) => matches.length).length;
-  }
-
-  function matchesRequiredPreferences(job, preferences = currentPreferences()) {
-    const requiredGroups = [preferences.roles, preferences.sectors, preferences.locations, preferences.workModes]
-      .filter((values) => toList(values).length).length;
-    return requiredGroups > 0 && preferenceMatchStrength(job, preferences) === requiredGroups;
-  }
-
-  function dailyOpportunitySuggestions(visibleJobs, preferences, byNewest) {
-    const refresh = opportunityRefreshState();
-    const excluded = new Set(toList(refresh.excludedIds).map(String));
-    const candidates = visibleJobs.filter((job) => opportunityStage(job) === "review")
-      .filter((job) => jobFit(job) >= preferences.minFit)
-      .filter((job) => matchesRequiredPreferences(job, preferences))
-      .sort((a, b) => preferenceMatchStrength(b, preferences) - preferenceMatchStrength(a, preferences) || jobFit(b) - jobFit(a) || byNewest(a, b));
-    const available = candidates.filter((job) => !excluded.has(String(job.id)));
-    return available.slice(0, preferences.dailyCount);
+  function reviewStageJobs(jobs, byNewest) {
+    return jobs.filter((job) => opportunityStage(job) === "review").sort(byNewest);
   }
 
   function excludeCurrentSuggestionsFromRefresh() {
@@ -2130,7 +2098,7 @@ Cordiali saluti,
     const pipelineLabels = { APPLY: "TO DO", CLOSED: "CLOSED" };
     const activeJobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
-    const dashboardNewJobs = dailyOpportunitySuggestions(activeJobs, currentPreferences(), byNewest);
+    const dashboardNewJobs = reviewStageJobs(activeJobs, byNewest);
     $("pipelineBoard").innerHTML = PIPELINE_STATES.map((status, index) => {
       const jobs = status === "NEW"
         ? dashboardNewJobs
@@ -2633,7 +2601,10 @@ Cordiali saluti,
       referralToggle.classList.toggle("is-active", active);
       referralToggle.setAttribute("aria-pressed", String(active));
     }
-    $("copilotStatus").textContent = jobStatus(job);
+    const contactedComment = valueOf(application, "applications", "contactedComment", "");
+    $("copilotStatus").innerHTML = application
+      ? `<button type="button" class="copilot-status-value" data-action="application-status" data-id="${escapeAttribute(application.id)}" title="Cambia stato">${escapeHtml(jobStatus(job))}</button>${contactedComment ? `<small class="application-status-detail">${escapeHtml(contactedComment)}</small>` : ""}`
+      : escapeHtml(jobStatus(job));
     $("copilotLocation").textContent = valueOf(job, "jobs", "location", "") || "N/A";
     const industry = companyIndustry(job);
     $("copilotIndustry").textContent = industry === "Industria non indicata" ? "N/A" : industry;
@@ -3743,7 +3714,7 @@ Cordiali saluti,
     openDialog({
       eyebrow: "CANDIDATURA REGISTRATA",
       title: "Hai applicato!",
-      body: `<div class="notice notice--success"><strong>${escapeHtml(jobTitle(job))}</strong> presso ${escapeHtml(jobCompany(job))} risulta ora applicata.</div>
+      body: `<div class="notice notice--success"><strong>${escapeHtml(jobTitle(job))}</strong> presso ${escapeHtml(companyNameForJob(job))} risulta ora applicata.</div>
         <p class="dialog-copy">Lo stato è stato aggiornato in Dashboard, Opportunità, Pipeline e Le mie Application. La posizione è ora la prima tra quelle già valutate.</p>
         <p class="dialog-copy"><strong>Vuoi impostare anche un follow-up?</strong></p>
         <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Non ora</button><button class="button button--primary" type="button" data-action="followup-for-application" data-id="${escapeAttribute(application.id)}">${icon("clock")}Crea follow-up</button></div>`

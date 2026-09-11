@@ -117,11 +117,11 @@ async function catalogRows() {
   return supabase(`job_catalog?select=*&is_active=eq.true&or=(published_at.is.null,published_at.gte.${encodeURIComponent(since)})&order=published_at.desc.nullslast&limit=1000`);
 }
 
-function legacyJob(userId, job, result) {
+function legacyJob(userId, job, result, companyId) {
   const why = Object.entries(result.matched).map(([group, values]) => `${group}: ${values.join(", ")}`);
   return {
     user_id: userId, ...(job.id && /^[0-9a-f-]{36}$/i.test(job.id) ? { catalog_job_id: job.id } : {}), title: job.title, role_title: job.title,
-    company_name: job.company_name, location: job.location || job.remote_type || "N/A",
+    company_name: job.company_name, company_id: companyId || null, location: job.location || job.remote_type || "N/A",
     fit_score: result.fit, status: "NEW", priority: result.fit >= 8 ? "APPLY" : "REVIEW",
     source: job.source, url: job.source_url, is_saved: false,
     why_fit: why.length ? why : ["Annuncio recente compatibile con la ricerca attiva"],
@@ -131,6 +131,31 @@ function legacyJob(userId, job, result) {
     languages: job.languages || [], company_description: job.company_description,
     responsibilities: job.responsibilities || [], scrape_status: "complete", scraped_at: new Date().toISOString()
   };
+}
+
+async function ensureCompanyId(userId, token, companiesByName, job) {
+  const name = String(job.company_name || "").trim();
+  if (!name) return null;
+  const key = name.toLowerCase();
+  if (companiesByName.has(key)) return companiesByName.get(key);
+  try {
+    const rows = await userSupabase("companies", token, {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: userId, name, sector: job.industry || null,
+        logo_url: job.company_logo_url || null, website: job.company_website || null,
+        tier: "C", notes: job.company_description || null
+      }),
+      headers: { Prefer: "return=representation" }
+    });
+    const id = rows?.[0]?.id || null;
+    companiesByName.set(key, id);
+    return id;
+  } catch (error) {
+    console.error("[opportunities] company creation failed", { name, message: error.message });
+    companiesByName.set(key, null);
+    return null;
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -213,11 +238,14 @@ module.exports = async function handler(req, res) {
         headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
       });
     }
+    const existingCompanies = await userSupabase(`companies?user_id=eq.${user.id}&select=id,name`, token);
+    const companiesByName = new Map((existingCompanies || []).map((row) => [String(row.name || "").trim().toLowerCase(), row.id]));
     const created = [];
     for (const item of ranked) {
       const existing = await userSupabase(`jobs?user_id=eq.${user.id}&url=eq.${encodeURIComponent(item.job.source_url)}&select=id&limit=1`, token);
       if (existing?.length) continue;
-      const rows = await userSupabase("jobs", token, { method: "POST", body: JSON.stringify(legacyJob(user.id, item.job, item.result)), headers: { Prefer: "return=representation" } });
+      const companyId = await ensureCompanyId(user.id, token, companiesByName, item.job);
+      const rows = await userSupabase("jobs", token, { method: "POST", body: JSON.stringify(legacyJob(user.id, item.job, item.result, companyId)), headers: { Prefer: "return=representation" } });
       if (rows?.[0]) created.push(rows[0]);
     }
     return res.status(200).json({ jobs: created, count: created.length, catalogMatches: ranked.length });

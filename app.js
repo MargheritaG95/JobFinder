@@ -1660,10 +1660,10 @@ Cordiali saluti,
         || valueOf(job, "jobs", "createdAt", 0);
       return new Date(timestamp).getTime() || 0;
     };
-    const toApplyJobs = visibleJobs.filter((job) => opportunityStage(job) === "to-apply").sort(priorityThenFit).slice(0, 6);
+    const toApplyJobs = visibleJobs.filter((job) => opportunityStage(job) === "to-apply").sort(priorityThenFit);
     const appliedJobs = visibleJobs.filter((job) => opportunityStage(job) === "applied").sort((a, b) => {
       return Number(isPriorityJob(b)) - Number(isPriorityJob(a)) || evaluatedAt(b) - evaluatedAt(a) || jobFit(b) - jobFit(a);
-    }).slice(0, 6);
+    });
     $("newOpportunityCount").textContent = String(newJobs.length);
     $("toApplyOpportunityCount").textContent = String(toApplyJobs.length);
     $("appliedOpportunityCount").textContent = String(appliedJobs.length);
@@ -2153,7 +2153,9 @@ Cordiali saluti,
       ? `<button class="button button--secondary" type="button" data-action="find-contacts" data-id="${escapeAttribute(job.id)}">Trova contatti</button>`
       : status === "APPLY"
         ? `<button class="button button--success" type="button" data-action="mark-applied" data-id="${escapeAttribute(job.id)}">${icon("check")}Ho applicato</button>`
-        : `<button class="button button--secondary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Prepara candidatura</button>`;
+        : status === "OFFER"
+          ? `<span class="badge badge--fit">Offerta ricevuta</span>`
+          : `<button class="button button--secondary" type="button" data-action="open-copilot" data-id="${escapeAttribute(job.id)}">Prepara candidatura</button>`;
     return `
       <article class="kanban-card kanban-card--clickable" draggable="true" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" data-pipeline-job-id="${escapeAttribute(job.id)}" data-pipeline-status="${status}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}. Trascina per cambiare il ranking nella colonna.">
         <div class="kanban-card__drag-handle" title="Trascina per ordinare">⋮⋮ <span>Trascina per ordinare</span></div>
@@ -2243,14 +2245,16 @@ Cordiali saluti,
     const status = entry.status;
     const followup = followupForEntry(entry);
     const appliedAt = valueOf(application, "applications", "appliedAt", "");
+    const contactedComment = valueOf(application, "applications", "contactedComment", "");
+    const interviewAt = valueOf(application, "applications", "interviewAt", "");
     const materialState = missingRecord ? "Record incompleto" : valueOf(application, "applications", "cvUsed", "CV non indicato");
     const nextAction = followup
       ? `${Boolean(valueOf(followup, "followups", "completed", false)) ? "Completato" : formatDate(valueOf(followup, "followups", "dueDate", ""), { short: true })}`
-      : status === "APPLIED" ? "Imposta follow-up" : status === "INTERVIEW" ? "Prepara colloquio" : "Aggiorna stato";
+      : status === "APPLIED" ? "Imposta follow-up" : status === "INTERVIEW" ? (interviewAt ? `Colloquio ${formatDate(interviewAt, { short: true })}` : "Inserisci data colloquio") : "Aggiorna stato";
     return `
       <tr class="${missingRecord ? "application-row--warning" : ""}">
         <td><div class="table-primary"><span class="company-logo">${job ? companyLogoContent(job) : escapeHtml(initials(company))}</span><span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(company)}</small>${job ? `<small class="application-role-description"><b>Responsabilità:</b> ${escapeHtml(responsibilitySummary(job, 520))}</small>` : ""}</span></div></td>
-        <td>${statusBadge(status)}</td>
+        <td>${statusBadge(status)}${status === "CONTACTED" && contactedComment ? `<small class="application-status-detail">${escapeHtml(contactedComment)}</small>` : ""}</td>
         <td>${escapeHtml(appliedAt ? formatDate(appliedAt, { short: true }) : missingRecord ? "Da recuperare" : "Non indicata")}</td>
         <td><span class="${missingRecord ? "text-warning" : ""}">${escapeHtml(materialState)}</span></td>
         <td><strong>${escapeHtml(nextAction)}</strong></td>
@@ -2791,6 +2795,14 @@ Cordiali saluti,
       if (event.target === $("appDialog")) closeDialog();
     });
     document.addEventListener("click", handleDelegatedClick);
+    document.addEventListener("change", (event) => {
+      const select = event.target.closest?.("[data-application-status-select]");
+      if (!select) return;
+      const form = select.closest("form");
+      form?.querySelectorAll("[data-status-field]").forEach((field) => {
+        field.classList.toggle("is-hidden", field.dataset.statusField !== select.value);
+      });
+    });
     document.addEventListener("dragstart", handlePipelineDragStart);
     document.addEventListener("dragover", handlePipelineDragOver);
     document.addEventListener("drop", handlePipelineDrop);
@@ -4122,7 +4134,9 @@ Cordiali saluti,
       title: "Cambia stato",
       body: `
         <form class="form-stack" data-dialog-form="application-status" data-record-id="${escapeAttribute(application.id)}">
-          <label class="field"><span>Nuovo stato</span><select name="status">${choices.map((status) => optionMarkup(status, titleCase(status), current)).join("")}</select></label>
+          <label class="field"><span>Nuovo stato</span><select name="status" data-application-status-select>${choices.map((status) => optionMarkup(status, titleCase(status), current)).join("")}</select></label>
+          <label class="field ${current === "CONTACTED" ? "" : "is-hidden"}" data-status-field="CONTACTED"><span>Commento sul contatto</span><textarea name="contacted_comment" rows="4" placeholder="Chi hai contattato, risposta ricevuta, prossimo passo…">${escapeHtml(valueOf(application, "applications", "contactedComment", ""))}</textarea></label>
+          <label class="field ${current === "INTERVIEW" ? "" : "is-hidden"}" data-status-field="INTERVIEW"><span>Data e ora del colloquio</span><input type="datetime-local" name="interview_at" value="${escapeAttribute(String(valueOf(application, "applications", "interviewAt", "")).slice(0, 16))}" /></label>
           <p class="notice notice--info"><strong>Sincronizzazione automatica</strong><span>Il nuovo stato verrà mostrato in Dashboard, Opportunità, Pipeline e Le mie Application.</span></p>
           <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--primary" type="submit">${icon("check")}Aggiorna stato</button></div>
         </form>
@@ -4357,18 +4371,25 @@ Cordiali saluti,
     } catch (companyError) {
       console.warn("Company enrichment could not be saved", companyError);
     }
+    // Persist the essential record first. Optional enrichment columns have changed
+    // across older JobFinder installations; one stale/missing optional column must
+    // never prevent a manually supplied opportunity from being imported.
+    const corePayload = {};
+    setMapped(corePayload, "jobs", "title", title);
+    if (fieldName("jobs", "title") !== "role_title") corePayload.role_title = title;
+    setMapped(corePayload, "jobs", "companyName", company);
+    setMapped(corePayload, "jobs", "companyId", companyRecord?.id || null);
+    setMapped(corePayload, "jobs", "location", location || null);
+    setMapped(corePayload, "jobs", "fitScore", analysis.score);
+    setMapped(corePayload, "jobs", "status", "NEW");
+    setMapped(corePayload, "jobs", "priority", "REVIEW");
+    setMapped(corePayload, "jobs", "source", source);
+    setMapped(corePayload, "jobs", "url", url);
+    setMapped(corePayload, "jobs", "saved", false);
+    setMapped(corePayload, "jobs", "description", description);
+    const created = await insertRecord("jobs", corePayload);
+
     const payload = {};
-    setMapped(payload, "jobs", "title", title);
-    if (fieldName("jobs", "title") !== "role_title") payload.role_title = title;
-    setMapped(payload, "jobs", "companyName", company);
-    setMapped(payload, "jobs", "companyId", companyRecord?.id || null);
-    setMapped(payload, "jobs", "location", location || null);
-    setMapped(payload, "jobs", "fitScore", analysis.score);
-    setMapped(payload, "jobs", "status", "NEW");
-    setMapped(payload, "jobs", "priority", analysis.score >= 8 ? "APPLY" : "REVIEW");
-    setMapped(payload, "jobs", "source", source);
-    setMapped(payload, "jobs", "url", url);
-    setMapped(payload, "jobs", "saved", false);
     setMapped(payload, "jobs", "whyFit", analysis.why);
     setMapped(payload, "jobs", "gaps", analysis.gaps);
     setMapped(payload, "jobs", "angle", analysis.angle);
@@ -4383,7 +4404,13 @@ Cordiali saluti,
     setMapped(payload, "jobs", "responsibilities", extractedResponsibilities);
     setMapped(payload, "jobs", "scrapeStatus", description.length >= 500 ? "complete" : "partial");
     setMapped(payload, "jobs", "scrapedAt", new Date().toISOString());
-    const created = await insertRecord("jobs", payload);
+    let enrichmentWarning = false;
+    try {
+      await updateRecord("jobs", created.id, payload);
+    } catch (error) {
+      enrichmentWarning = true;
+      console.warn("Opportunity imported; optional enrichment could not be saved", error);
+    }
     try {
       window.localStorage.setItem(`jobfinder:job-description:${state.user?.id || "anonymous"}:${created.id}`, description);
     } catch (_error) {
@@ -4392,7 +4419,13 @@ Cordiali saluti,
     closeDialog();
     renderAll();
     openCopilot(created.id);
-    showToast(`Fit ${analysis.score.toFixed(1)}/10${analysis.matches.length ? ` · ${analysis.matches.join(", ")}` : ""}`, "success", "Annuncio importato e analizzato");
+    showToast(
+      enrichmentWarning
+        ? "L’annuncio è stato importato. Alcuni dettagli opzionali non sono stati salvati e potranno essere completati in seguito."
+        : `Fit ${analysis.score.toFixed(1)}/10${analysis.matches.length ? ` · ${analysis.matches.join(", ")}` : ""}`,
+      enrichmentWarning ? "warning" : "success",
+      enrichmentWarning ? "Annuncio importato" : "Annuncio importato e analizzato"
+    );
   }
 
   async function submitTemplateForm(form) {
@@ -4478,10 +4511,12 @@ Cordiali saluti,
     const values = new FormData(form);
     const status = normalizeStatus(values.get("status"), "DRAFT");
     const progressByStatus = { DRAFT: 20, APPLIED: 100, CONTACTED: 100, INTERVIEW: 100, OFFER: 100, CLOSED: 100 };
-    const previousApplication = recordPatch("applications", application, ["status", "progress", "appliedAt"]);
+    const previousApplication = recordPatch("applications", application, ["status", "progress", "appliedAt", "contactedComment", "interviewAt"]);
     const payload = { [fieldName("applications", "status")]: applicationStatusForDatabase(status) };
     if (progressByStatus[status] !== undefined) payload[fieldName("applications", "progress")] = progressByStatus[status];
     if (status === "APPLIED" && !valueOf(application, "applications", "appliedAt", "")) payload[fieldName("applications", "appliedAt")] = new Date().toISOString();
+    if (status === "CONTACTED") payload[fieldName("applications", "contactedComment")] = String(values.get("contacted_comment") || "").trim() || null;
+    if (status === "INTERVIEW") payload[fieldName("applications", "interviewAt")] = String(values.get("interview_at") || "").trim() || null;
     await writeApplicationRecord("update", application.id, payload, status);
 
     const job = getJobById(valueOf(application, "applications", "jobId", ""));

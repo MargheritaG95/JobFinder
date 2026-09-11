@@ -2453,6 +2453,7 @@ textarea::placeholder {
 .onboarding-form { gap: 18px; }
 .onboarding-progress { display: flex; align-items: center; gap: 10px; padding-top: 5px; color: var(--ink); }
 .onboarding-progress span { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; color: #fff; background: var(--blue-600); font-size: .76rem; font-weight: 800; }
+.copilot-source-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 
 .field--cover-letter {
   border-left-color: #735fd6;
@@ -2495,6 +2496,16 @@ textarea::placeholder {
   font-size: 0.61rem;
   font-weight: 500;
   line-height: 1.5;
+  white-space: normal;
+}
+
+.application-status-detail {
+  display: block;
+  max-width: 220px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.6rem;
+  line-height: 1.4;
   white-space: normal;
 }
 

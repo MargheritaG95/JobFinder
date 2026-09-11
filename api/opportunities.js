@@ -35,6 +35,25 @@ function normalized(value) {
   return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function stableUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(utm_|trk|tracking|ref|source|campaign|gh_src)/i.test(key)) url.searchParams.delete(key);
+    }
+    url.pathname = url.pathname.replace(/\/$/, "");
+    url.searchParams.sort();
+    return url.toString();
+  } catch (_) {
+    return String(value || "").trim();
+  }
+}
+
+function opportunityKey(job) {
+  return `${normalized(job.title || job.role_title)}::${normalized(job.company_name)}`;
+}
+
 function isFullyRemote(job) {
   const location = normalized(job.location);
   const remoteType = normalized(job.remote_type);
@@ -131,6 +150,7 @@ module.exports = async function handler(req, res) {
     const config = supabaseConfig();
     let catalog;
     let excluded = new Set();
+    let excludedKeys = new Set();
     if (config.hasServiceRole) {
       const existingMatches = await supabase(`user_job_matches?user_id=eq.${user.id}&select=job_id`);
       excluded = new Set((existingMatches || []).map((row) => row.job_id));
@@ -143,13 +163,30 @@ module.exports = async function handler(req, res) {
         errors: sourceResult.errors
       });
       catalog = sourceResult.results.flatMap((result) => result.jobs);
-      const existingJobs = await userSupabase(`jobs?user_id=eq.${user.id}&select=url`, token);
-      excluded = new Set((existingJobs || []).map((row) => row.url));
+      const existingJobs = await userSupabase(`jobs?user_id=eq.${user.id}&select=url,title,role_title,company_name`, token);
+      const proposalHistory = await userSupabase(`user_opportunity_history?user_id=eq.${user.id}&select=opportunity_key,source_url`, token);
+      excluded = new Set((existingJobs || []).map((row) => stableUrl(row.url)));
+      (proposalHistory || []).forEach((row) => excluded.add(stableUrl(row.source_url)));
+      excludedKeys = new Set((existingJobs || []).map(opportunityKey));
+      (proposalHistory || []).forEach((row) => excludedKeys.add(row.opportunity_key));
     }
     const minFit = Number(preferences.min_fit_score) || 0;
     let ranked = (catalog || []).map((job) => ({ job, result: scoreJob(job, preferences) }))
-      .filter(({ job, result }) => !excluded.has(config.hasServiceRole ? job.id : job.source_url) && result.matchesPreferences && result.fit >= minFit)
+      .filter(({ job, result }) => {
+        const wasAlreadyProposed = config.hasServiceRole
+          ? excluded.has(job.id)
+          : excluded.has(stableUrl(job.source_url)) || excludedKeys.has(opportunityKey(job));
+        return !wasAlreadyProposed && result.matchesPreferences && result.fit >= minFit;
+      })
       .sort((a, b) => b.result.fit - a.result.fit || new Date(b.job.published_at || 0) - new Date(a.job.published_at || 0));
+    console.log("[opportunities] matching summary", {
+      mode: config.hasServiceRole ? "catalog" : "direct-fallback",
+      catalog: (catalog || []).length,
+      excluded: excluded.size,
+      excludedKeys: excludedKeys.size,
+      compatible: ranked.length,
+      requested
+    });
     ranked = ranked.slice(0, requested);
     if (!ranked.length) return res.status(200).json({
       jobs: [],
@@ -161,6 +198,18 @@ module.exports = async function handler(req, res) {
     if (config.hasServiceRole) {
       await supabase("user_job_matches?on_conflict=user_id,job_id", {
         method: "POST", body: JSON.stringify(ranked.map(({ job, result }) => ({ user_id: user.id, job_id: job.id, fit_score: result.fit, matched_preferences: result.matched, why_fit: Object.values(result.matched).flat(), gaps: [], angle: [], status: "NEW", first_proposed_at: now, last_proposed_at: now, updated_at: now }))),
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
+      });
+    } else {
+      await userSupabase("user_opportunity_history?on_conflict=user_id,opportunity_key", token, {
+        method: "POST",
+        body: JSON.stringify(ranked.map(({ job }) => ({
+          user_id: user.id,
+          opportunity_key: opportunityKey(job),
+          source_url: stableUrl(job.source_url),
+          first_proposed_at: now,
+          last_proposed_at: now
+        }))),
         headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
       });
     }

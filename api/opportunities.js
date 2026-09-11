@@ -1,4 +1,4 @@
-const { fetchSources, refreshCatalog, supabase } = require("./_lib/catalog");
+const { fetchSources, refreshCatalog, supabase, usable } = require("./_lib/catalog");
 
 const PUBLIC_SUPABASE_URL = "https://moyabdwxlbkfqmtjuwwa.supabase.co";
 const PUBLIC_SUPABASE_KEY = "sb_publishable_kzopFoXWx_DBRo8giCgGDg_ITMsOsbV";
@@ -187,7 +187,7 @@ module.exports = async function handler(req, res) {
         sources: sourceResult.results.map((result) => `${result.source}:${result.jobs.length}`),
         errors: sourceResult.errors
       });
-      catalog = sourceResult.results.flatMap((result) => result.jobs);
+      catalog = sourceResult.results.flatMap((result) => result.jobs).filter(usable);
       const existingJobs = await userSupabase(`jobs?user_id=eq.${user.id}&select=url,title,role_title,company_name`, token);
       const proposalHistory = await userSupabase(`user_opportunity_history?user_id=eq.${user.id}&select=opportunity_key,source_url`, token);
       excluded = new Set((existingJobs || []).map((row) => stableUrl(row.url)));

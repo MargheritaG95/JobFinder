@@ -1655,6 +1655,7 @@ Cordiali saluti,
     const byNewest = (a, b) => new Date(valueOf(b, "jobs", "createdAt", 0)) - new Date(valueOf(a, "jobs", "createdAt", 0));
     const preferences = currentPreferences();
     runScheduledOpportunityDelivery(preferences);
+    void runOpportunityLifecycleCleanup();
     const newJobs = reviewStageJobs(visibleJobs, byNewest);
     const evaluatedAt = (job) => {
       const application = getApplicationForJob(job.id);
@@ -1797,6 +1798,42 @@ Cordiali saluti,
         showToast("L’aggiornamento automatico non è riuscito. Usa Nuove proposte per riprovare.", "warning", "Feed non raggiungibile");
       })
       .finally(() => { state.scheduledDeliveryInFlight = false; });
+  }
+
+  function opportunityLifecycleKey() {
+    return `jobfinder:lifecycle-cleanup:${state.user?.id || "anonymous"}`;
+  }
+
+  async function runOpportunityLifecycleCleanup() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (window.localStorage.getItem(opportunityLifecycleKey()) === today || !ensureWritable()) return;
+    const now = Date.now();
+    const ageDays = (job) => {
+      const created = new Date(valueOf(job, "jobs", "createdAt", 0)).getTime();
+      return created ? (now - created) / 86400000 : 0;
+    };
+    const stale = state.data.jobs.filter((job) => opportunityStage(job) === "review" && jobStatus(job) !== "CLOSED" && ageDays(job) >= 30);
+    let removed = 0;
+    let archived = 0;
+    for (const job of stale) {
+      try {
+        if (ageDays(job) >= 60) {
+          await deleteRecord("jobs", job.id);
+          removed += 1;
+        } else {
+          await updateJobClosedRecord(job);
+          archived += 1;
+        }
+      } catch (error) {
+        console.error("Opportunity lifecycle cleanup failed", error);
+      }
+    }
+    try { window.localStorage.setItem(opportunityLifecycleKey(), today); }
+    catch (_error) { /* Cleanup still ran even without browser storage. */ }
+    if (removed || archived) {
+      renderAll();
+      showToast(`${archived} opportunit\u00e0 mai valutate archiviate, ${removed} rimosse dopo 60 giorni di inattivit\u00e0.`, "info", "Pulizia automatica");
+    }
   }
 
   function plainJobText(value) {

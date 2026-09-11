@@ -237,4 +237,4 @@ async function refreshCatalog() {
   return { jobs: stored, fetched: jobs.length, accepted: deduped.length, sources: results.map((r) => r.source), errors };
 }
 
-module.exports = { stripHtml, fetchSources, refreshCatalog, supabase };
+module.exports = { stripHtml, fetchSources, refreshCatalog, supabase, usable };

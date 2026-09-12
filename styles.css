@@ -2804,10 +2804,12 @@ textarea::placeholder {
 
 @media (max-width: 860px) {
   .copilot-company-header--hero { grid-template-columns: auto minmax(0, 1fr); }
-  .copilot-header-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 15px; }
-  .copilot-score-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-  .copilot-score-stack .language-segmented { order: 1; }
-  .copilot-score-stack .copilot-signal-toggles { order: 2; flex-wrap: wrap; }
+  .copilot-header-actions { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px 14px; margin-top: 15px; }
+  .copilot-open-job-button { grid-column: 1; grid-row: 1; justify-self: start; }
+  .copilot-score-stack { display: contents; }
+  .copilot-score { grid-column: 2; grid-row: 1; justify-self: start; margin: 0; }
+  .copilot-signal-toggles { grid-column: 1; grid-row: 2; flex-wrap: wrap; }
+  .language-segmented { grid-column: 2; grid-row: 2; justify-self: start; }
   .copilot-meta-inline, .copilot-context-columns, .copilot-content-grid { grid-template-columns: 1fr; margin-left: 0; }
   .copilot-context-block + .copilot-context-block { border-top: 1px solid #e5eaf1; border-left: 0; }
   .copilot-bottom-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }

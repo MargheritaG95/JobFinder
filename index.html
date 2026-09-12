@@ -587,8 +587,15 @@
               <div>
                 <p class="eyebrow">YOUR CAREER LIBRARY</p>
                 <h1>Risorse</h1>
-                <p>Risposte, messaggi e materiali riutilizzabili per le candidature.</p>
+                <p>Il tuo CV, la cover letter e il messaggio recruiter di riferimento: alimentano i contenuti generati dal Copilot.</p>
               </div>
+              <button class="button button--primary" type="button" data-action="new-resource">
+                <svg class="icon"><use href="#icon-plus"></use></svg>Aggiungi risorsa
+              </button>
+            </div>
+            <div class="notice notice--info">
+              <strong>Materiali di riferimento</strong>
+              <span>Usa variabili come [Nome], [Azienda] e [Ruolo]. Se non aggiungi nulla, il Copilot userà un modello generico.</span>
             </div>
             <div id="resourcesList" class="resource-grid"></div>
           </section>
@@ -598,7 +605,7 @@
               <div>
                 <p class="eyebrow">WRITE ONCE, REUSE OFTEN</p>
                 <h1>Templates</h1>
-                <p>Messaggi, risposte e cover letter da copiare e adattare in pochi secondi.</p>
+                <p>Aggiungi qui qualsiasi altro testo che trovi utile riutilizzare: domande, follow-up, ringraziamenti e altro.</p>
               </div>
               <button class="button button--primary" type="button" data-action="new-template">
                 <svg class="icon"><use href="#icon-plus"></use></svg>Nuovo template
@@ -637,12 +644,14 @@
                 <div class="copilot-company-header copilot-company-header--hero">
                   <div id="copilotCompanyLogo" class="company-logo company-logo--large">JF</div>
                   <div><h1 id="copilotRole">Ruolo</h1><p id="copilotCompany">Azienda</p></div>
-                  <button class="button button--primary copilot-open-job-button" type="button" data-action="open-job"><svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio</button>
-                  <div class="copilot-score-stack">
-                    <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
-                    <div class="copilot-signal-toggles"><button id="copilotPriorityButton" class="copilot-priority-toggle" type="button" data-action="toggle-priority" aria-pressed="false"><span aria-hidden="true">☆</span>Priorità</button><button id="copilotReferralButton" class="copilot-referral-toggle" type="button" data-action="toggle-referral" aria-pressed="false"><svg class="icon"><use href="#icon-user"></use></svg>Referral</button></div>
-                    <div class="language-segmented" role="group" aria-label="Lingua dei testi"><button type="button" data-action="set-copilot-language" data-language="it" aria-pressed="true">IT</button><button type="button" data-action="set-copilot-language" data-language="en" aria-pressed="false">EN</button></div>
-                    <select id="copilotLanguage" class="visually-hidden" aria-label="Lingua dei testi"><option value="it">IT</option><option value="en">EN</option></select>
+                  <div class="copilot-header-actions">
+                    <button class="button button--primary copilot-open-job-button" type="button" data-action="open-job"><svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio</button>
+                    <div class="copilot-score-stack">
+                      <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
+                      <div class="copilot-signal-toggles"><button id="copilotPriorityButton" class="copilot-priority-toggle" type="button" data-action="toggle-priority" aria-pressed="false"><span aria-hidden="true">☆</span>Priorità</button><button id="copilotReferralButton" class="copilot-referral-toggle" type="button" data-action="toggle-referral" aria-pressed="false"><svg class="icon"><use href="#icon-user"></use></svg>Referral</button></div>
+                      <div class="language-segmented" role="group" aria-label="Lingua dei testi"><button type="button" data-action="set-copilot-language" data-language="it" aria-pressed="true">IT</button><button type="button" data-action="set-copilot-language" data-language="en" aria-pressed="false">EN</button></div>
+                      <select id="copilotLanguage" class="visually-hidden" aria-label="Lingua dei testi"><option value="it">IT</option><option value="en">EN</option></select>
+                    </div>
                   </div>
                 </div>
                 <div class="copilot-all-facts-row">
@@ -702,8 +711,8 @@
                 <div class="copilot-action-bar">
                   <div id="copilotStateControls" class="copilot-state-controls"></div>
                   <div class="form-actions copilot-secondary-actions">
-                    <button id="prepareApplicationButton" class="button button--secondary" type="submit"><svg class="icon"><use href="#icon-file"></use></svg>Salva bozza</button>
-                    <button id="copilotRejectedButton" class="button button--danger" type="button" data-action="mark-rejected">Rifiutata</button>
+                    <button id="prepareApplicationButton" class="button top-opportunity__state-option top-opportunity__state-option--secondary" type="submit"><svg class="icon"><use href="#icon-file"></use></svg>Salva bozza</button>
+                    <button id="copilotRejectedButton" class="button top-opportunity__state-option top-opportunity__state-option--remove" type="button" data-action="mark-rejected">Rifiutata</button>
                   </div>
                 </div>
               </form>

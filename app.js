@@ -103,6 +103,10 @@ Cordiali saluti,
     "preferences"
   ];
   const OPTIONAL_ENTITIES = new Set(["preferences"]);
+  const RESOURCE_CATEGORIES = ["cv", "cover letter", "messaggio recruiter"];
+  function isResourceCategory(category) {
+    return RESOURCE_CATEGORIES.includes(String(category || "").trim().toLowerCase());
+  }
 
   const state = {
     client: null,
@@ -2431,18 +2435,28 @@ Cordiali saluti,
   }
 
   function renderResources() {
-    const resources = [...state.data.answerBank].sort((a, b) => String(valueOf(a, "answerBank", "title", "")).localeCompare(String(valueOf(b, "answerBank", "title", "")), "it"));
+    const resources = state.data.answerBank
+      .filter((item) => isResourceCategory(valueOf(item, "answerBank", "category", "")))
+      .sort((a, b) => String(valueOf(a, "answerBank", "title", "")).localeCompare(String(valueOf(b, "answerBank", "title", "")), "it"));
     $("resourcesList").innerHTML = resources.length
       ? resources.map((resource) => {
         const content = valueOf(resource, "answerBank", "content", "");
         return `
-          <article class="resource-card">
-            <div><span class="resource-icon">${icon("book")}</span><h3>${escapeHtml(valueOf(resource, "answerBank", "title", "Risorsa"))}</h3><p>${escapeHtml(content ? `${content.slice(0, 150)}${content.length > 150 ? "…" : ""}` : "Contenuto non disponibile.")}</p></div>
-            <footer><span>${escapeHtml(valueOf(resource, "answerBank", "category", "Answer bank"))}</span><button class="text-button" type="button" data-action="view-resource" data-id="${escapeAttribute(resource.id)}">Apri ${icon("arrow-right")}</button></footer>
-          </article>
-        `;
+          <article class="resource-card template-card">
+            <div>
+              <span class="resource-icon">${icon("book")}</span>
+              <span class="badge badge--blue">${escapeHtml(valueOf(resource, "answerBank", "category", "Risorsa"))}</span>
+              <h3>${escapeHtml(valueOf(resource, "answerBank", "title", "Risorsa"))}</h3>
+              <p>${escapeHtml(content ? `${content.slice(0, 210)}${content.length > 210 ? "…" : ""}` : "Contenuto non disponibile.")}</p>
+            </div>
+            <footer class="template-actions">
+              <button class="button button--primary" type="button" data-action="copy-template" data-id="${escapeAttribute(resource.id)}">${icon("copy")}Copia</button>
+              <button class="icon-button" type="button" data-action="edit-template" data-id="${escapeAttribute(resource.id)}" aria-label="Modifica risorsa" title="Modifica">${icon("edit")}</button>
+              <button class="icon-button" type="button" data-action="delete-template" data-id="${escapeAttribute(resource.id)}" aria-label="Elimina risorsa" title="Elimina">${icon("trash")}</button>
+            </footer>
+          </article>`;
       }).join("")
-      : emptyState("Answer bank vuota", "Aggiungi risposte e materiali nella tabella answer_bank: saranno disponibili qui come libreria personale.");
+      : emptyState("Nessuna risorsa salvata", "Salva qui il tuo CV, la cover letter e il messaggio recruiter di riferimento: alimentano i contenuti generati dal Copilot.", { name: "new-resource", label: "Aggiungi risorsa", icon: "plus" });
   }
 
   function renderAnalytics() {
@@ -2485,6 +2499,21 @@ Cordiali saluti,
     `).join("");
   }
 
+  function cvGapKeywords(preferences, job) {
+    const cvText = String(preferences.profileCvText || "").trim();
+    if (!cvText) return [];
+    const stopWords = new Set(["with", "that", "this", "from", "have", "will", "your", "their", "role", "team", "work", "about", "into", "which", "also", "such", "been", "being", "more", "most", "using", "able", "across", "within", "company", "position", "other", "some", "than", "these", "those", "part", "looking", "strong", "drive"]);
+    const wordPattern = new RegExp(String.fromCharCode(91, 97, 45, 122, 93, 123, 52, 44, 125), "g");
+    const cvWords = new Set(cvText.toLowerCase().match(wordPattern) || []);
+    const jobWords = jobDescriptionText(job).toLowerCase().match(wordPattern) || [];
+    const counts = new Map();
+    jobWords.forEach((word) => {
+      if (stopWords.has(word) || cvWords.has(word)) return;
+      counts.set(word, (counts.get(word) || 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([word]) => word);
+  }
+
   function suggestedCopilotContent(job, language = "it") {
     const preferences = currentPreferences();
     const company = companyNameForJob(job);
@@ -2493,12 +2522,19 @@ Cordiali saluti,
     const location = valueOf(job, "jobs", "location", "");
     const source = valueOf(job, "jobs", "source", "");
     const fit = jobFit(job);
-    const why = language === "en" ? `Fit ${fit.toFixed(1)}/10. The ${role} role is aligned with the target profile${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Highlight measurable outcomes, the ability to connect strategy with execution, and customer impact.` : valueOf(job, "jobs", "whyFit", "") || `Fit ${fit.toFixed(1)}/10. Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`;
-    const gaps = language === "en" ? "Check which technical or industry requirements are not yet covered by your profile. Address any gaps through relevant transferable experience and a concrete learning plan." : valueOf(job, "jobs", "gaps", "") || "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.";
-    const angle = language === "en" ? `Position yourself as the link between business goals, customer needs, and operational transformation. Support each statement with an outcome and explain why this approach is relevant to ${company}.` : valueOf(job, "jobs", "angle", "") || `Posizionati come ponte tra obiettivi di business, bisogni del cliente e trasformazione operativa. Collega ogni affermazione a un risultato e mostra perché questo approccio è rilevante per ${company}.`;
-    const motivation = motivationForJob(preferences, job);
     const evidence = relevantCvEvidence(preferences, job);
     const skills = toList(preferences.profileSkills).slice(0, 4);
+    const gapWords = cvGapKeywords(preferences, job);
+    const why = language === "en"
+      ? (evidence ? `Fit ${fit.toFixed(1)}/10. Your CV includes directly relevant experience: ${evidence}` : `Fit ${fit.toFixed(1)}/10. The ${role} role is aligned with the target profile${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Highlight measurable outcomes, the ability to connect strategy with execution, and customer impact.`)
+      : valueOf(job, "jobs", "whyFit", "") || (evidence ? `Fit ${fit.toFixed(1)}/10. Il tuo CV riporta un’esperienza direttamente pertinente: ${evidence}` : `Fit ${fit.toFixed(1)}/10. Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`);
+    const gaps = language === "en"
+      ? (gapWords.length ? `Your CV does not clearly mention: ${naturalListEnglish(gapWords)}. Check whether you have this experience and add it if so; otherwise prepare a concrete answer on how you would close the gap.` : "Check which technical or industry requirements are not yet covered by your profile. Address any gaps through relevant transferable experience and a concrete learning plan.")
+      : valueOf(job, "jobs", "gaps", "") || (gapWords.length ? `Il tuo CV non menziona chiaramente: ${naturalList(gapWords)}. Verifica se possiedi questa esperienza e aggiungila se sì; altrimenti prepara una risposta concreta su come colmare il gap.` : "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.");
+    const angle = language === "en"
+      ? (skills.length ? `Position yourself around ${naturalListEnglish(skills)}, connecting each point to a measurable outcome and to why it matters for ${company}.` : `Position yourself as the link between business goals, customer needs, and operational transformation. Support each statement with an outcome and explain why this approach is relevant to ${company}.`)
+      : valueOf(job, "jobs", "angle", "") || (skills.length ? `Posizionati intorno a ${naturalList(skills)}, collegando ogni punto a un risultato misurabile e al motivo per cui è rilevante per ${company}.` : `Posizionati come ponte tra obiettivi di business, bisogni del cliente e trasformazione operativa. Collega ogni affermazione a un risultato e mostra perché questo approccio è rilevante per ${company}.`);
+    const motivation = motivationForJob(preferences, job);
     const competenceSentence = evidence
       ? language === "en" ? `My background includes experience that is particularly relevant to this role: ${evidence}` : `Nel mio percorso ho maturato esperienze particolarmente pertinenti: ${evidence}`
       : skills.length
@@ -2665,7 +2701,7 @@ Cordiali saluti,
     const savedRecruiterNote = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || "");
     $("copilotRecruiterNote").value = resolvedRecruiterNote(savedRecruiterNote, suggestions.note);
     $("copilotCoverLetter").value = valueOf(application, "applications", "notes", localDraft.notes || suggestedCoverLetter(job, language));
-    $("copilotCoverLetterSource").textContent = "Basata sul modello principale di Margherita, adattata all’annuncio e completata secondo le linee guida.";
+    $("copilotCoverLetterSource").textContent = "Basata sul tuo template di riferimento (o su un modello generico), adattata all’annuncio e completata secondo le linee guida.";
     renderCopilotTemplateOptions();
     const saveState = $("copilotSaveState");
     saveState.textContent = application ? `Salvata · ${titleCase(valueOf(application, "applications", "preparationStatus", "draft"))}` : localDraft.savedAt ? "Bozza salvata su questo dispositivo" : "Nuova application";
@@ -3228,6 +3264,9 @@ Cordiali saluti,
         case "view-resource":
           openResourceDetails(state.data.answerBank.find((item) => String(item.id) === String(id)));
           break;
+        case "new-resource":
+          openTemplateForm(null, "Cover letter");
+          break;
         case "new-template":
           openTemplateForm();
           break;
@@ -3384,7 +3423,7 @@ Cordiali saluti,
     $("copilotAngle").value = suggestions.angle;
     $("copilotRecruiterNote").value = suggestions.note;
     $("copilotCoverLetter").value = suggestedCoverLetter(job, language);
-    $("copilotCoverLetterSource").textContent = "Basata sul modello principale di Margherita, adattata all’annuncio e completata secondo le linee guida.";
+    $("copilotCoverLetterSource").textContent = "Basata sul tuo template di riferimento (o su un modello generico), adattata all’annuncio e completata secondo le linee guida.";
     showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
   }
 
@@ -3448,7 +3487,9 @@ Cordiali saluti,
   }
 
   function renderTemplates() {
-    const templates = [...state.data.answerBank].sort((a, b) => String(valueOf(a, "answerBank", "title", "")).localeCompare(String(valueOf(b, "answerBank", "title", "")), "it"));
+    const templates = state.data.answerBank
+      .filter((item) => !isResourceCategory(valueOf(item, "answerBank", "category", "")))
+      .sort((a, b) => String(valueOf(a, "answerBank", "title", "")).localeCompare(String(valueOf(b, "answerBank", "title", "")), "it"));
     $("templatesList").innerHTML = templates.length
       ? templates.map((template) => {
         const content = valueOf(template, "answerBank", "content", "");
@@ -3467,7 +3508,7 @@ Cordiali saluti,
             </footer>
           </article>`;
       }).join("")
-      : emptyState("Nessun template", "Salva qui messaggi recruiter, risposte frequenti, follow-up e cover letter da riutilizzare.", { name: "new-template", label: "Crea il primo template", icon: "plus" });
+      : emptyState("Nessun template", "Salva qui messaggi personalizzati, risposte frequenti e altri testi utili da riutilizzare.", { name: "new-template", label: "Crea il primo template", icon: "plus" });
   }
 
   function openOpportunityImport() {
@@ -4327,10 +4368,10 @@ Cordiali saluti,
     return safeExternalUrl(withProtocol) || null;
   }
 
-  function openTemplateForm(template = null) {
+  function openTemplateForm(template = null, defaultCategory = null) {
     const isEdit = Boolean(template);
     const categories = ["Messaggio recruiter", "Cover letter", "Domanda application", "Follow-up", "Ringraziamento", "Altro"];
-    const currentCategory = valueOf(template, "answerBank", "category", categories[0]);
+    const currentCategory = valueOf(template, "answerBank", "category", defaultCategory || categories[0]);
     openDialog({
       eyebrow: isEdit ? "MODIFICA TEMPLATE" : "NUOVO TEMPLATE",
       title: isEdit ? "Aggiorna testo riutilizzabile" : "Salva un testo riutilizzabile",

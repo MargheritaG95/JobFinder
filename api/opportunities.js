@@ -77,6 +77,14 @@ function phraseMatches(value, haystackSet, haystackText) {
   return words.every((word) => (word.length >= 3 ? haystackSet.has(word) : new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(haystackText)));
 }
 
+function isGenericRemoteLocation(job) {
+  const loc = normalized(job.location);
+  if (!loc) return true;
+  const genericWords = new Set(["remote", "remoto", "remota", "worldwide", "anywhere", "global", "international", "eu", "europe", "emea", "fully"]);
+  const words = loc.split(" ").filter(Boolean);
+  return words.length > 0 && words.every((word) => genericWords.has(word));
+}
+
 function scoreJob(job, preferences) {
   const haystackText = normalized(`${job.title} ${job.company_name} ${job.industry || ""}`);
   const haystack = new Set(tokens(`${job.title} ${job.company_name} ${job.industry || ""}`));
@@ -90,6 +98,7 @@ function scoreJob(job, preferences) {
     if (hits.length) { matched[name] = hits; score += name === "roles" ? 2 : 0.75; }
   }
   const remote = isFullyRemote(job);
+  const generic = isGenericRemoteLocation(job);
   const combinedLocation = normalized(`${job.location || ""} ${job.remote_type || ""}`);
   const hybrid = /\b(hybrid|ibrid[oa])\b/.test(combinedLocation);
   const locationHits = fieldMatches(preferredLocations, job.location);
@@ -98,6 +107,7 @@ function scoreJob(job, preferences) {
   const hybridAllowed = hybrid && preferredWorkModes.some((value) => /\bhybrid\b/.test(normalized(value)));
   const onsiteAllowed = !remote && !hybrid && preferredWorkModes.some((value) => /\bon[\s-]?site\b/.test(normalized(value)));
   if (locationHits.length) matched.locations = locationHits;
+  else if (remote && generic && remoteAllowed) matched.locations = ["Fully remote"];
   if (workModeHits.length) matched.work_modes = workModeHits;
   else if (remoteAllowed) matched.work_modes = ["Remote"];
   else if (hybridAllowed) matched.work_modes = ["Hybrid"];

@@ -4147,11 +4147,6 @@ Cordiali saluti,
           <label class="field"><span>Competenze da evidenziare</span><textarea name="profile_skills" rows="3">${escapeHtml(preferences.profileSkills)}</textarea></label>
           <label class="field"><span>CV di riferimento</span><small>Incolla il testo del CV; resta associato in modo sicuro al tuo account.</small><textarea name="cv_text" rows="7">${escapeHtml(preferences.profileCvText)}</textarea></label>
           <label class="field"><span>Cover letter di riferimento</span><small>Incolla un tuo esempio di cover letter, oppure lascia vuoto: verrà usato un modello generico che potrai personalizzare in qualsiasi momento dai Templates.</small><textarea name="cover_letter_text" rows="7"></textarea></label>
-          <div class="form-grid form-grid--two">
-            <label class="field"><span>Perché vuoi cambiare campo</span><textarea name="career_change_reason" rows="4">${escapeHtml(preferences.careerChangeReason)}</textarea></label>
-            <label class="field"><span>Career change reason (EN)</span><textarea name="career_change_reason_en" rows="4">${escapeHtml(preferences.careerChangeReasonEn)}</textarea></label>
-          </div>
-          <label class="field"><span>Valori aziendali e tuo allineamento</span><small>Formato consigliato: “Azienda: valori | perché ti rappresentano”.</small><textarea name="company_values" rows="4">${escapeHtml(preferences.companyValues)}</textarea></label>
           <div class="onboarding-progress"><span>3</span><strong>Consegna delle proposte</strong></div>
           <div class="form-grid form-grid--two">
             <label class="field"><span>Orario</span><input name="delivery_time" type="time" value="${escapeAttribute(preferences.deliveryTime)}" /></label>

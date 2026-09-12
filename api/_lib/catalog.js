@@ -2,8 +2,9 @@ const crypto = require("crypto");
 
 const REMOTIVE_URL = "https://remotive.com/api/remote-jobs?limit=100";
 const ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api";
-const JOBICY_URL = "https://jobicy.com/api/v2/remote-jobs?count=200&geo=europe";
+const JOBICY_URL = "https://jobicy.com/api/v2/remote-jobs?count=200";
 const HIMALAYAS_URL = "https://himalayas.app/jobs/api?limit=200";
+const REMOTEOK_URL = "https://remoteok.com/api";
 
 function decodeHtmlEntities(value) {
   const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
@@ -149,6 +150,17 @@ function normalizeHimalayas(job) {
   });
 }
 
+function normalizeRemoteOk(job) {
+  return enrich({
+    source: "RemoteOK", source_job_id: String(job.id), source_url: job.url || job.apply_url,
+    title: compact(job.position), company_name: compact(job.company), company_logo_url: job.company_logo || job.logo || null,
+    industry: Array.isArray(job.tags) ? job.tags.slice(0, 4).join(" · ") : null,
+    location: compact(job.location) || "Remote", remote_type: "Remote", description: job.description,
+    salary_min: job.salary_min || null, salary_max: job.salary_max || null,
+    published_at: job.date ? asIso(job.date) : (job.epoch ? asIso(job.epoch * 1000) : null), raw_data: job
+  });
+}
+
 function normalizeAdzuna(job) {
   return enrich({
     source: "Adzuna", source_job_id: String(job.id), source_url: job.redirect_url,
@@ -186,7 +198,8 @@ async function fetchSources() {
     getJson(REMOTIVE_URL).then((data) => ({ source: "Remotive", jobs: (data.jobs || []).map(normalizeRemotive) })),
     ...[1, 2, 3].map((page) => getJson(`${ARBEITNOW_URL}?page=${page}`).then((data) => ({ source: `Arbeitnow:${page}`, jobs: (data.data || []).map(normalizeArbeitnow) }))),
     getJson(JOBICY_URL).then((data) => ({ source: "Jobicy", jobs: (data.jobs || []).map(normalizeJobicy) })),
-    getJson(HIMALAYAS_URL).then((data) => ({ source: "Himalayas", jobs: (data.jobs || []).map(normalizeHimalayas) }))
+    getJson(HIMALAYAS_URL).then((data) => ({ source: "Himalayas", jobs: (data.jobs || []).map(normalizeHimalayas) })),
+    getJson(REMOTEOK_URL).then((data) => ({ source: "RemoteOK", jobs: (Array.isArray(data) ? data : []).filter((job) => job.id).map(normalizeRemoteOk) }))
   ];
   if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) {
     const params = new URLSearchParams({ app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY, results_per_page: "50", "content-type": "application/json" });

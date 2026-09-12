@@ -53,40 +53,40 @@
     careerChangeReasonEn: "I am intentionally moving towards roles where I can combine transferable experience, customer understanding, and the ability to turn strategic goals into tangible outcomes. This decision is grounded in a long-standing interest, supported by targeted education and relevant projects.",
     companyValues: "TeamViewer: collaborazione, spirito di squadra, attenzione al cliente e innovazione | Mi riconosco in questi valori perché nel mio modo di lavorare metto al centro il cliente, la collaborazione tra stakeholder e il miglioramento continuo."
   };
-  const PRIMARY_COVER_LETTERS = {
-    en: `Dear Hiring Team,
+  const FALLBACK_COVER_LETTERS = {
+    en: `[Name]
+[Email]
+[Date]
 
-I am writing to express my interest in the [Role] position, advertised through [Source]. With over eight years of international experience in business development, customer experience, sales operations, and cross-functional transformation projects, I am particularly attracted by this opportunity at [Company]. [Motivation]
+Dear [Company] Hiring Team,
 
-In my most recent role at Generali Corporate & Commercial, I led a cross-functional team of 15+ people across nine countries to design and scale a global data-driven NPS framework, translating customer insights and predictive trends into strategic recommendations for C-level stakeholders. Previously, I managed a €20M portfolio of multinational clients and generated €6M in new business, while also leading initiatives involving Salesforce CRM redesign, Power BI solutions, and commercial process improvement.
+I am writing to apply for the [Role] position, which I found through [Source]. [Motivation]
 
-Building on this professional experience, I am currently pursuing an International Master in Artificial Intelligence at Rome Business School, focused on machine learning, AI-driven decision-making and data strategy, as well as a Master in Game Programming & AI Programming at Digital Bros Game Academy, where I am developing hands-on skills in C++, AI systems and object-oriented programming. [Career change]
+[Career change]
 
-[Value for company] My experience managing stakeholders across countries and functions has taught me how to turn complex business challenges into structured initiatives, align different priorities and drive implementation—capabilities I would be excited to apply to [Company].
+[Relevant experience] [Value for company]
 
 [Company values]
 
-Fluent in Italian, English, French and Spanish, I would welcome the opportunity to discuss how my experience and evolving technical expertise could contribute to the [Role] team.
-
-Thank you for considering my application.
+I would welcome the opportunity to discuss my application further and thank you for your time and consideration.
 
 Kind regards,
 [Name]`,
-    it: `Gentile Team di Selezione,
+    it: `[Nome]
+[Email]
+[Data]
 
-desidero esprimere il mio interesse per la posizione di [Ruolo], pubblicata tramite [Fonte]. Con oltre otto anni di esperienza internazionale in business development, customer experience, sales operations e progetti di trasformazione cross-funzionali, sono particolarmente interessata a questa opportunità in [Azienda]. [Motivazione]
+Gentile Team di Selezione di [Azienda],
 
-Nel mio ruolo più recente presso Generali Corporate & Commercial, ho guidato un team cross-funzionale di oltre 15 persone in nove Paesi per progettare e sviluppare un framework NPS globale e data-driven, traducendo insight sui clienti e trend predittivi in raccomandazioni strategiche per stakeholder C-level. In precedenza ho gestito un portafoglio di clienti multinazionali da €20 milioni e generato €6 milioni di nuovo business, guidando anche iniziative di redesign di Salesforce CRM, soluzioni Power BI e miglioramento dei processi commerciali.
+desidero candidarmi per la posizione di [Ruolo], che ho trovato tramite [Fonte]. [Motivazione]
 
-A partire da questa esperienza professionale, sto frequentando un International Master in Artificial Intelligence presso Rome Business School, focalizzato su machine learning, decisioni supportate dall’AI e data strategy, oltre a un Master in Game Programming & AI Programming presso Digital Bros Game Academy, dove sto sviluppando competenze pratiche in C++, sistemi AI e programmazione orientata agli oggetti. [Cambio campo]
+[Cambio campo]
 
-[Valore per azienda] L’esperienza nella gestione di stakeholder in Paesi e funzioni differenti mi ha insegnato a trasformare sfide di business complesse in iniziative strutturate, allineare priorità diverse e guidarne l’implementazione: capacità che sarei entusiasta di applicare in [Azienda].
+[Esperienza rilevante] [Valore per azienda]
 
 [Valori aziendali]
 
-Parlo fluentemente italiano, inglese, francese e spagnolo e sarei lieta di approfondire come la mia esperienza e le competenze tecniche in continua evoluzione possano contribuire al team responsabile della posizione di [Ruolo].
-
-La ringrazio per l’attenzione dedicata alla mia candidatura.
+Resto a disposizione per un eventuale colloquio e vi ringrazio per l’attenzione dedicata alla mia candidatura.
 
 Cordiali saluti,
 [Nome]`
@@ -393,7 +393,8 @@ Cordiali saluti,
       responsabilità: responsibilitySummary(job, 420),
       responsibilities: responsibilitySummary(job, 420)
     };
-    const content = PRIMARY_COVER_LETTERS[english ? "en" : "it"];
+    const savedTemplate = coverLetterResource(language);
+    const content = (valueOf(savedTemplate, "answerBank", "content", "") || "").trim() || FALLBACK_COVER_LETTERS[english ? "en" : "it"];
     const templateKeys = new Set([...content.matchAll(/\[([^\]]+)\]/g)].map((match) => String(match[1]).trim().toLowerCase()));
     let filled = content.replace(/\[([^\]]+)\]/g, (match, key) => replacements[String(key).trim().toLowerCase()] || match);
     const hasAnyKey = (...keys) => keys.some((key) => templateKeys.has(key));
@@ -4034,6 +4035,17 @@ Cordiali saluti,
     return existing ? updateRecord("answerBank", existing.id, payload) : insertRecord("answerBank", payload);
   }
 
+  async function saveReferenceCoverLetter(content) {
+    const text = String(content || "").trim();
+    const existing = state.data.answerBank.find((item) => /cover\s*letter/i.test(String(valueOf(item, "answerBank", "category", ""))));
+    if (!text && !existing) return null;
+    const payload = {};
+    setMapped(payload, "answerBank", "title", "Cover letter di riferimento");
+    setMapped(payload, "answerBank", "category", "Cover letter");
+    setMapped(payload, "answerBank", "content", text);
+    return existing ? updateRecord("answerBank", existing.id, payload) : insertRecord("answerBank", payload);
+  }
+
   async function submitOnboardingForm(form) {
     const values = new FormData(form);
     const payload = {};
@@ -4057,6 +4069,8 @@ Cordiali saluti,
     else await insertRecord("preferences", payload);
     const cvText = String(values.get("cv_text") || "").trim();
     await saveReferenceCv(cvText);
+    const coverLetterText = String(values.get("cover_letter_text") || "").trim();
+    await saveReferenceCoverLetter(coverLetterText);
     saveLocalPersonalization({ ...personalization, profileCvText: cvText });
     const { data, error } = await state.client.auth.updateUser({
       data: { jobfinder_personalization: personalization, jobfinder_onboarding_completed: true }
@@ -4091,6 +4105,7 @@ Cordiali saluti,
           <label class="field"><span>Motivazioni personali</span><small>Es. “Automotive: è una passione personale…”</small><textarea name="motivations" rows="4">${escapeHtml(preferences.motivations)}</textarea></label>
           <label class="field"><span>Competenze da evidenziare</span><textarea name="profile_skills" rows="3">${escapeHtml(preferences.profileSkills)}</textarea></label>
           <label class="field"><span>CV di riferimento</span><small>Incolla il testo del CV; resta associato in modo sicuro al tuo account.</small><textarea name="cv_text" rows="7">${escapeHtml(preferences.profileCvText)}</textarea></label>
+          <label class="field"><span>Cover letter di riferimento</span><small>Incolla un tuo esempio di cover letter, oppure lascia vuoto: verrà usato un modello generico che potrai personalizzare in qualsiasi momento dai Templates.</small><textarea name="cover_letter_text" rows="7"></textarea></label>
           <div class="form-grid form-grid--two">
             <label class="field"><span>Perché vuoi cambiare campo</span><textarea name="career_change_reason" rows="4">${escapeHtml(preferences.careerChangeReason)}</textarea></label>
             <label class="field"><span>Career change reason (EN)</span><textarea name="career_change_reason_en" rows="4">${escapeHtml(preferences.careerChangeReasonEn)}</textarea></label>

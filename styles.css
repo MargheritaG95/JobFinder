@@ -2807,7 +2807,9 @@ textarea::placeholder {
 @media (max-width: 860px) {
   .copilot-company-header--hero { grid-template-columns: auto minmax(0, 1fr); }
   .copilot-open-job-button { grid-column: 1 / -1; justify-self: start; }
-  .copilot-score-stack { grid-column: 1 / -1; grid-template-columns: repeat(3, auto); justify-content: start; margin-top: 15px; }
+  .copilot-score-stack { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 15px; }
+  .copilot-score-stack .language-segmented { order: 1; }
+  .copilot-score-stack .copilot-signal-toggles { order: 2; flex-wrap: wrap; }
   .copilot-meta-inline, .copilot-context-columns, .copilot-content-grid { grid-template-columns: 1fr; margin-left: 0; }
   .copilot-context-block + .copilot-context-block { border-top: 1px solid #e5eaf1; border-left: 0; }
   .copilot-bottom-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2881,6 +2883,7 @@ textarea::placeholder {
   .hero-stat { justify-content: flex-start; }
 
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpi-card:last-child { grid-column: auto; }
   .copilot-role-facts { grid-template-columns: 1fr; gap: 11px; padding: 15px; }
   .copilot-role-facts > div { min-height: 42px; }
   .copilot-all-facts-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }

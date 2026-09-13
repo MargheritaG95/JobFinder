@@ -5,6 +5,7 @@ const ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api";
 const JOBICY_URL = "https://jobicy.com/api/v2/remote-jobs?count=200";
 const HIMALAYAS_URL = "https://himalayas.app/jobs/api?limit=200";
 const REMOTEOK_URL = "https://remoteok.com/api";
+const MUSE_URL = "https://www.themuse.com/api/public/jobs";
 
 function decodeHtmlEntities(value) {
   const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
@@ -161,6 +162,18 @@ function normalizeRemoteOk(job) {
   });
 }
 
+function normalizeMuse(job) {
+  const location = Array.isArray(job.locations) && job.locations.length ? job.locations.map((l) => l.name).join(" · ") : null;
+  return enrich({
+    source: "TheMuse", source_job_id: String(job.id), source_url: job.refs && job.refs.landing_page,
+    title: compact(job.name), company_name: compact(job.company && job.company.name),
+    industry: Array.isArray(job.categories) && job.categories.length ? job.categories.map((c) => c.name).join(" · ") : null,
+    location, remote_type: null, description: job.contents,
+    seniority: Array.isArray(job.levels) && job.levels.length ? job.levels.map((l) => l.name).join(" · ") : null,
+    published_at: asIso(job.publication_date), raw_data: job
+  });
+}
+
 function normalizeAdzuna(job) {
   return enrich({
     source: "Adzuna", source_job_id: String(job.id), source_url: job.redirect_url,
@@ -193,13 +206,20 @@ function normalizeLever(job, site) {
   });
 }
 
+function museOffset() {
+  const start = new Date(new Date().getUTCFullYear(), 0, 1);
+  const dayOfYear = Math.floor((Date.now() - start.getTime()) / 86400000);
+  return (dayOfYear % 50) * 10;
+}
+
 async function fetchSources() {
   const tasks = [
     getJson(REMOTIVE_URL).then((data) => ({ source: "Remotive", jobs: (data.jobs || []).map(normalizeRemotive) })),
     ...[1, 2, 3].map((page) => getJson(`${ARBEITNOW_URL}?page=${page}`).then((data) => ({ source: `Arbeitnow:${page}`, jobs: (data.data || []).map(normalizeArbeitnow) }))),
     getJson(JOBICY_URL).then((data) => ({ source: "Jobicy", jobs: (data.jobs || []).map(normalizeJobicy) })),
     getJson(HIMALAYAS_URL).then((data) => ({ source: "Himalayas", jobs: (data.jobs || []).map(normalizeHimalayas) })),
-    getJson(REMOTEOK_URL).then((data) => ({ source: "RemoteOK", jobs: (Array.isArray(data) ? data : []).filter((job) => job.id).map(normalizeRemoteOk) }))
+    getJson(REMOTEOK_URL).then((data) => ({ source: "RemoteOK", jobs: (Array.isArray(data) ? data : []).filter((job) => job.id).map(normalizeRemoteOk) })),
+    ...Array.from({ length: 10 }, (_, i) => museOffset() + i + 1).map((page) => getJson(`${MUSE_URL}?page=${page}`).then((data) => ({ source: `TheMuse:${page}`, jobs: (data.results || []).map(normalizeMuse) })))
   ];
   if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) {
     const params = new URLSearchParams({ app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY, results_per_page: "50", "content-type": "application/json" });

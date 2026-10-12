@@ -116,9 +116,25 @@ function scoreJob(job, preferences) {
   const generic = isGenericRemoteLocation(job);
   const combinedLocation = normalized(`${job.location || ""} ${job.remote_type || ""}`);
   const hybrid = /\b(hybrid|ibrid[oa])\b/.test(combinedLocation);
-  const locationAliases = { belgio: "belgium", belgique: "belgium", belgien: "belgium", belgium: "belgium", italia: "italy", italie: "italy", germania: "germany", allemagne: "germany", francia: "france", spagna: "spain", paesi_bassi: "netherlands", olanda: "netherlands" };
-  const expandedLocations = preferredLocations.flatMap((value) => { const key = normalized(value).replace(/ /g, "_"); return [value, ...(locationAliases[key] ? [locationAliases[key]] : [])]; });
-  const locationHits = fieldMatches(expandedLocations, job.location);
+  const countryNames = new Map();
+  const countryLocales = ["en", "it", "fr", "de", "es", "nl", "pt"];
+  for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
+    const code = String.fromCharCode(a, b);
+    const names = new Set([normalized(code)]);
+    for (const locale of countryLocales) {
+      const label = new Intl.DisplayNames([locale], { type: "region" }).of(code);
+      if (label && normalized(label) !== normalized(code)) names.add(normalized(label));
+    }
+    if (names.size > 1) for (const name of names) countryNames.set(name, names);
+  }
+  const locationText = normalized(job.location);
+  const locationHits = preferredLocations.filter((value) => {
+    const place = normalized(value);
+    if (!place || !locationText) return false;
+    const alternatives = countryNames.get(place) || new Set([place]);
+    return [...alternatives].some((candidate) => candidate.length >= 2 &&
+      (` ${locationText} `).includes(` ${candidate} `));
+  });
   const workModeHits = fieldMatches(preferredWorkModes, `${job.location || ""} ${job.remote_type || ""}`);
   const remoteAllowed = remote && preferredWorkModes.some((value) => /\b(remote|remoto|remota)\b/.test(normalized(value)));
   const hybridAllowed = hybrid && preferredWorkModes.some((value) => /\bhybrid\b/.test(normalized(value)));

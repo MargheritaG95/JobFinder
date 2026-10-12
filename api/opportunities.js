@@ -152,7 +152,7 @@ async function authenticatedUser(req) {
 
 async function catalogRows() {
   const since = new Date(Date.now() - 40 * 86400000).toISOString();
-  return supabase(`job_catalog?select=*&is_active=eq.true&or=(published_at.gte.${encodeURIComponent(since)})&order=published_at.desc.nullslast&limit=1000`);
+  return supabase(`job_catalog?select=*&is_active=eq.true&published_at=gte.${encodeURIComponent(since)}&order=published_at.desc.nullslast&limit=1000`);
 }
 
 function legacyJob(userId, job, result, companyId) {

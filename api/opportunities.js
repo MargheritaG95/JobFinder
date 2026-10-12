@@ -134,7 +134,7 @@ function scoreJob(job, preferences) {
   if (job.salary_text || job.salary_min || job.salary_max) score += 0.25;
   const rolesConfigured = list(preferences.target_roles).length > 0;
   const sectorsConfigured = list(preferences.target_sectors).length > 0;
-  const roleOrSectorOk = rolesConfigured ? Boolean(matched.roles?.length) : (sectorsConfigured ? Boolean(matched.sectors?.length) : false);
+  const roleOrSectorOk = rolesConfigured ? Boolean(matched.roles?.length) : (sectorsConfigured ? Boolean(matched.sectors?.length) : true);
   const matchesPreferences = roleOrSectorOk
     && (!preferredLocations.length || Boolean(matched.locations?.length))
     && (!preferredWorkModes.length || Boolean(matched.work_modes?.length));

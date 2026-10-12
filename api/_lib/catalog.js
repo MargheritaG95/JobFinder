@@ -216,11 +216,11 @@ function museOffset() {
 async function fetchSources() {
   const tasks = [
     getJson(REMOTIVE_URL).then((data) => ({ source: "Remotive", jobs: (data.jobs || []).map(normalizeRemotive) })),
-    ...[1, 2, 3].map((page) => getJson(`${ARBEITNOW_URL}?page=${page}`).then((data) => ({ source: `Arbeitnow:${page}`, jobs: (data.data || []).map(normalizeArbeitnow) }))),
+    ...[1, 2, 3, 4, 5, 6].map((page) => getJson(`${ARBEITNOW_URL}?page=${page}`).then((data) => ({ source: `Arbeitnow:${page}`, jobs: (data.data || []).map(normalizeArbeitnow) }))),
     getJson(JOBICY_URL).then((data) => ({ source: "Jobicy", jobs: (data.jobs || []).map(normalizeJobicy) })),
     getJson(HIMALAYAS_URL).then((data) => ({ source: "Himalayas", jobs: (data.jobs || []).map(normalizeHimalayas) })),
     getJson(REMOTEOK_URL).then((data) => ({ source: "RemoteOK", jobs: (Array.isArray(data) ? data : []).filter((job) => job.id).map(normalizeRemoteOk) })),
-    ...Array.from({ length: 10 }, (_, i) => museOffset() + i).map((page) => getJson(`${MUSE_URL}?page=${page}`).then((data) => ({ source: `TheMuse:${page}`, jobs: (data.results || []).map(normalizeMuse) })))
+    ...Array.from({ length: 5 }, (_, i) => i).map((page) => getJson(`${MUSE_URL}?page=${page}`).then((data) => ({ source: `TheMuse:${page}`, jobs: (data.results || []).map(normalizeMuse) })))
   ];
   if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) {
     const params = new URLSearchParams({ app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY, results_per_page: "50", "content-type": "application/json" });
@@ -238,8 +238,15 @@ async function fetchSources() {
   return { results, errors };
 }
 
+const MAX_JOB_AGE_DAYS = 40;
+
+function isRecent(job) {
+  const timestamp = Date.parse(job.published_at || "");
+  return Number.isFinite(timestamp) && timestamp <= Date.now() + 86400000 && timestamp >= Date.now() - MAX_JOB_AGE_DAYS * 86400000;
+}
+
 function usable(job) {
-  return Boolean(job.source && job.source_job_id && /^https?:\/\//i.test(job.source_url || "") && job.title && job.company_name && job.description?.length >= 80);
+  return Boolean(job.source && job.source_job_id && /^https?:\/\//i.test(job.source_url || "") && job.title && job.company_name && job.description?.length >= 80 && isRecent(job));
 }
 
 async function supabase(path, options = {}) {
@@ -268,7 +275,13 @@ async function refreshCatalog() {
     });
     stored.push(...(rows || []));
   }
+  // Deactivate outdated catalog records; preserve saved jobs and user history.
+  const cutoff = new Date(Date.now() - MAX_JOB_AGE_DAYS * 86400000).toISOString();
+  await supabase(`job_catalog?is_active=eq.true&or=(published_at.is.null,published_at.lt.${encodeURIComponent(cutoff)})`, {
+    method: "PATCH", body: JSON.stringify({ is_active: false }),
+    headers: { Prefer: "return=minimal" }
+  });
   return { jobs: stored, fetched: jobs.length, accepted: deduped.length, sources: results.map((r) => r.source), errors };
 }
 
-module.exports = { stripHtml, fetchSources, refreshCatalog, supabase, usable };
+module.exports = { stripHtml, fetchSources, refreshCatalog, supabase, usable, isRecent };

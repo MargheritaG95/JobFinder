@@ -2411,11 +2411,73 @@ Cordiali saluti,
       : emptyState("Nessuna opportunità da valutare", "Il feedback sarà disponibile quando la tabella jobs conterrà almeno un’opportunità.");
   }
 
+  let selectedPreferenceCities = [];
+  function setupLocationPicker(preferences) {
+    const select = $("preferenceCountries");
+    if (!select) return;
+    if (!select.options.length) {
+      const regions = new Intl.DisplayNames(["it"], { type: "region" });
+      const options = [];
+      for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
+        const code = String.fromCharCode(a, b);
+        const name = regions.of(code);
+        if (name && name !== code) options.push(name);
+      }
+      options.sort((a, b) => a.localeCompare(b, "it")).forEach((name) => select.add(new Option(name, name)));
+    }
+    const locations = toList(preferences.locations);
+    const normalizedCountry = (value) => String(value).trim().toLocaleLowerCase("it");
+    const countrySet = new Set([...select.options].map((option) => normalizedCountry(option.value)));
+    selectedPreferenceCities = locations.filter((value) => !countrySet.has(normalizedCountry(value)));
+    [...select.options].forEach((option) => { option.selected = locations.some((value) => normalizedCountry(value) === normalizedCountry(option.value)); });
+    renderPreferenceCityChips();
+  }
+  function renderPreferenceCityChips() {
+    const host = $("preferenceCityChips");
+    if (!host) return;
+    host.replaceChildren();
+    selectedPreferenceCities.forEach((city) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "button";
+      button.textContent = city + " ×";
+      button.title = "Rimuovi " + city;
+      button.addEventListener("click", () => {
+        selectedPreferenceCities = selectedPreferenceCities.filter((item) => item !== city);
+        renderPreferenceCityChips();
+      });
+      host.append(button);
+    });
+  }
+  function addPreferenceCity() {
+    const input = $("preferenceCityInput");
+    const city = String(input?.value || "").trim();
+    if (city && !selectedPreferenceCities.some((item) => item.toLowerCase() === city.toLowerCase())) {
+      selectedPreferenceCities.push(city);
+      renderPreferenceCityChips();
+    }
+    if (input) input.value = "";
+  }
+  document.addEventListener("click", (event) => {
+    if (event.target?.id === "addPreferenceCity") addPreferenceCity();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.target?.id === "preferenceCityInput" && event.key === "Enter") {
+      event.preventDefault();
+      addPreferenceCity();
+    }
+  });
+
+  function selectedPreferenceLocations() {
+    return [...new Set([...$("preferenceCountries").selectedOptions].map((option) => option.value).concat(selectedPreferenceCities))];
+  }
+
   function renderPreferences() {
     const preferences = currentPreferences();
     $("preferenceRoles").value = preferences.roles.join("\n");
     $("preferenceSectors").value = preferences.sectors.join("\n");
     $("preferenceLocations").value = preferences.locations.join("\n");
+    setupLocationPicker(preferences);
     $("preferenceWorkModes").value = preferences.workModes.join("\n");
     $("preferenceMotivations").value = preferences.motivations;
     $("preferenceProfileSkills").value = preferences.profileSkills;
@@ -4004,7 +4066,7 @@ Cordiali saluti,
     const payload = {};
     setMapped(payload, "preferences", "roles", toList($("preferenceRoles").value));
     setMapped(payload, "preferences", "sectors", toList($("preferenceSectors").value));
-    setMapped(payload, "preferences", "locations", toList($("preferenceLocations").value));
+    setMapped(payload, "preferences", "locations", selectedPreferenceLocations());
     setMapped(payload, "preferences", "workModes", toList($("preferenceWorkModes").value));
     setMapped(payload, "preferences", "minFit", asNumber($("preferenceMinFit").value, 7));
     setMapped(payload, "preferences", "aiLearning", $("preferenceAiLearning").checked);

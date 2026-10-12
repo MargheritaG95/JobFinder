@@ -261,6 +261,19 @@
     return text.split(" ").every((word) => generic.has(word));
   }
 
+  // "Remote" with no place often hides a restriction in the text ("US only", "must be based in Canada").
+  // Accept it only if the description names no country/region, or names one the user chose.
+  const RESTRICTION_PATTERN = /\b(only|based in|located in|resident in|residing in|reside in|must live|must be (?:located|based)|eligible to work in|authori[sz]ed to work in|work authori[sz]ation|time ?zones?|hours overlap|est|pst|cet|solo|residente in|domiciliat[oa] in)\b/;
+  function remoteOpenTo(job, preferredCodes) {
+    const text = normalized(String(job.description || "").slice(0, 4000));
+    if (!text || !RESTRICTION_PATTERN.test(text)) return true;
+    const named = countriesInText(text);
+    const regionHit = Object.entries(REGIONS).some(([region, codes]) => hasPhrase(text, region) && codes.some((code) => preferredCodes.has(code)));
+    if (regionHit) return true;
+    if (!named.size) return !/\b(us|usa|u s|united states|north america|americas|latam|apac|canada|pst|pdt|est|edt|cst|pacific time|eastern time|central time)\b/.test(text);
+    return [...named].some((code) => preferredCodes.has(code));
+  }
+
   // -------------------------------------------------------------- work mode
   const MODE_PATTERNS = {
     hybrid: /\b(hybrid|ibrid[oa]|smart working|partially remote|parzialmente da remoto|flexible working)\b/,
@@ -359,7 +372,16 @@
     if (preferences.locations.length) {
       const hits = preferences.locations.map((place) => locationMatch(place, job, mode)).filter(Boolean);
       if (hits.length) matched.locations = hits.map((hit) => hit.value);
-      else if (mode === "remote" && isWorldwide(job) && (!modes.size || modes.has("remote"))) matched.locations = ["Full remote"];
+      else if (mode === "remote" && isWorldwide(job) && (!modes.size || modes.has("remote"))) {
+        const codes = new Set();
+        preferences.locations.forEach((value) => {
+          const key = normalized(value);
+          const place = PLACE_INDEX.get(key);
+          if (place) codes.add(place.country);
+          else if (countries().byName.has(key)) codes.add(countries().byName.get(key));
+        });
+        if (remoteOpenTo(job, codes)) matched.locations = ["Full remote"];
+      }
       locationOk = Boolean(matched.locations);
       if (locationOk) score += hits.some((hit) => hit.strength === "city") ? 1.5 : 1;
       else missing.push("locations");

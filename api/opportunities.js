@@ -124,7 +124,18 @@ module.exports = async function handler(req, res) {
     const user = await authenticatedUser(req);
     const token = String(req.headers.authorization).replace(/^Bearer\s+/i, "");
     const requested = Math.max(1, Math.min(20, Number(req.body?.limit) || 6));
-    const preferences = (await userSupabase(`search_preferences?user_id=eq.${user.id}&select=*&limit=1`, token))?.[0] || {};
+    let preferences = (await userSupabase(`search_preferences?user_id=eq.${user.id}&select=*&limit=1`, token).catch(() => null))?.[0] || {};
+    // Fallback: the app sends the preferences it shows; use them when the stored row has no criteria.
+    const sent = req.body?.preferences;
+    if (!matching.hasCriteria(preferences) && sent && typeof sent === "object") {
+      const clean = (value) => matching.list(value).map((item) => String(item).slice(0, 120)).slice(0, 30);
+      preferences = {
+        ...preferences,
+        target_roles: clean(sent.target_roles), target_sectors: clean(sent.target_sectors),
+        locations: clean(sent.locations), work_modes: clean(sent.work_modes),
+        min_fit_score: Math.max(0, Math.min(10, Number(sent.min_fit_score) || 0))
+      };
+    }
     const config = supabaseConfig();
     // Searches built from this user's roles and places run alongside the shared catalog.
     const targetedPromise = matching.hasCriteria(preferences)

@@ -1854,7 +1854,7 @@ Cordiali saluti,
     state.scheduledDeliveryDate = today;
     state.scheduledDeliveryInFlight = true;
     const deliveryRefresh = excludeCurrentSuggestionsFromRefresh();
-    fetchFreshOpportunities(preferences)
+    state.scheduledDeliveryPromise = fetchFreshOpportunities(preferences)
       .then(({ imported, message }) => {
         try { window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(deliveryRefresh)); }
         catch (_error) { /* Imported records remain available even without browser storage. */ }
@@ -1994,7 +1994,15 @@ Cordiali saluti,
     const response = await fetch(`${apiBaseUrl}/api/opportunities`, {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ limit: preferences.dailyCount }),
+      // The saved preferences travel with the request: the server prefers its own copy and
+      // falls back to these if it cannot read them (e.g. right after saving).
+      body: JSON.stringify({
+        limit: preferences.dailyCount,
+        preferences: preferences.isDefault ? null : {
+          target_roles: preferences.roles, target_sectors: preferences.sectors,
+          locations: preferences.locations, work_modes: preferences.workModes, min_fit_score: preferences.minFit
+        }
+      }),
       cache: "no-store"
     });
     const body = await response.json().catch(() => ({}));
@@ -2008,6 +2016,10 @@ Cordiali saluti,
 
   async function refreshOpportunitySuggestions(button) {
     setBusy(button, true, "Cerco nuove proposte…");
+    // The automatic daily delivery may be running already: wait for it instead of racing it.
+    if (state.scheduledDeliveryInFlight && state.scheduledDeliveryPromise) {
+      try { await state.scheduledDeliveryPromise; } catch (_) { /* the manual search below retries */ }
+    }
     try { await loadAllData({ quiet: true }); }
     catch (error) { setBusy(button, false); throw error; }
     const preferences = currentPreferences();
@@ -2021,7 +2033,11 @@ Cordiali saluti,
         ["opportunityFitFilter", "opportunityStatusFilter", "opportunityPriorityFilter", "opportunityCompanyFilter", "opportunityLocationFilter"].forEach((id) => { const field = $(id); if (field) field.value = id === "opportunityFitFilter" ? "0" : ""; });
         renderAll();
         navigate("opportunities");
-        showToast(`${imported.length} annunci reali importati e analizzati dal testo completo.`, "success", "Nuove opportunità pronte");
+        const visible = imported.filter((job) => !isOffPreference(job)).length;
+        const hidden = imported.length - visible;
+        showToast(hidden
+          ? `${visible} nuove opportunità in linea con le preferenze${hidden ? ` (${hidden} fuori criteri, visibili con il filtro Preferenze)` : ""}.`
+          : `${imported.length} nuove opportunità in linea con le tue preferenze.`, visible ? "success" : "warning", "Nuove opportunità");
         return;
       }
       if (result.message) {

@@ -2996,3 +2996,84 @@ textarea::placeholder {
 }
 .icon-button--danger { color: #c43d4d; border-color: #f0b8bf; background: #fff8f9; }
 .icon-button--danger:hover { background: #fff0f2; border-color: #d96572; }
+
+/* Location preferences — consistent with the existing form system */
+.location-picker {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: #f8faff;
+}
+.location-picker .compact-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.location-picker .compact-field > label {
+  color: #344054;
+  font-size: .79rem;
+  font-weight: 650;
+}
+.location-picker select,
+.location-picker input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  outline: none;
+}
+.location-picker select {
+  min-height: 166px;
+  padding: 8px;
+  font-size: .85rem;
+}
+.location-picker select option {
+  padding: 7px 9px;
+  border-radius: 5px;
+}
+.location-picker input {
+  min-height: 44px;
+  padding: 0 12px;
+}
+.location-picker select:focus,
+.location-picker input:focus {
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 4px rgba(59,130,246,.09);
+}
+.location-picker #addPreferenceCity {
+  justify-self: start;
+  margin-top: 2px;
+}
+.location-picker #preferenceCityChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.location-picker #preferenceCityChips:empty { display: none; }
+.location-picker #preferenceCityChips button {
+  min-height: 32px;
+  padding: 5px 11px;
+  border: 1px solid #c9d8f2;
+  border-radius: 999px;
+  background: #eaf1ff;
+  color: #28518a;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.location-picker > small {
+  color: var(--muted-2);
+  font-size: .72rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+@media (max-width: 600px) {
+  .location-picker { padding: 12px; }
+  .location-picker select { min-height: 140px; }
+}

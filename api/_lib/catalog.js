@@ -185,6 +185,17 @@ function normalizeAdzuna(job) {
   });
 }
 
+function normalizeJooble(job, region) {
+  return enrich({
+    source: "Jooble", source_job_id: region + ":" + String(job.id || job.link),
+    source_url: job.link, title: compact(job.title),
+    company_name: compact(job.company), location: compact(job.location) || null,
+    description: compact(job.snippet), salary_text: compact(job.salary) || null,
+    employment_type: compact(job.type) || null, published_at: asIso(job.updated),
+    raw_data: job
+  });
+}
+
 function displaySlug(slug) {
   return String(slug || "").replace(/[-_]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -223,8 +234,29 @@ async function fetchSources() {
     ...Array.from({ length: 5 }, (_, i) => i).map((page) => getJson(`${MUSE_URL}?page=${page}`).then((data) => ({ source: `TheMuse:${page}`, jobs: (data.results || []).map(normalizeMuse) })))
   ];
   if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) {
-    const params = new URLSearchParams({ app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY, results_per_page: "50", "content-type": "application/json" });
-    tasks.push(getJson(`https://api.adzuna.com/v1/api/jobs/it/search/1?${params}`).then((data) => ({ source: "Adzuna", jobs: (data.results || []).map(normalizeAdzuna) })));
+    const countries = String(process.env.ADZUNA_COUNTRIES || "it,gb,de,fr,be,nl,es,ch,at,us,ca").split(",").map((v) => v.trim().toLowerCase()).filter((v) => /^[a-z]{2}$/.test(v)).slice(0, 25);
+    for (const country of countries) for (const page of [1, 2]) {
+      const params = new URLSearchParams({
+        app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY,
+        results_per_page: "50", sort_by: "date", max_days_old: "40",
+        "content-type": "application/json"
+      });
+      tasks.push(getJson(`https://api.adzuna.com/v1/api/jobs/${country}/search/${page}?${params}`)
+        .then((data) => ({ source: `Adzuna:${country}:${page}`, jobs: (data.results || []).map(normalizeAdzuna) })));
+    }
+  }
+  if (process.env.JOOBLE_API_KEY) {
+    const regions = String(process.env.JOOBLE_REGIONS || "it").split(",").map((v) => v.trim().toLowerCase()).filter((v) => /^[a-z]{2}$/.test(v)).slice(0, 10);
+    const keywords = String(process.env.JOOBLE_KEYWORDS || "business analyst,customer success,product manager,strategy").split(",").map((v) => v.trim()).filter(Boolean).slice(0, 8);
+    for (const region of regions) for (const keywordsValue of keywords) {
+      const key = region === "us" ? process.env.JOOBLE_API_KEY : (process.env[`JOOBLE_API_KEY_${region.toUpperCase()}`] || (region === "it" ? process.env.JOOBLE_API_KEY : ""));
+      if (!key) continue;
+      const domain = region === "us" ? "jooble.org" : `${region}.jooble.org`;
+      tasks.push(getJson(`https://${domain}/api/${encodeURIComponent(key)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keywords: keywordsValue, location: "", page: "1", ResultOnPage: "50" })
+      }).then((data) => ({ source: `Jooble:${region}`, jobs: (data.jobs || []).map((job) => normalizeJooble(job, region)) })));
+    }
   }
   for (const board of String(process.env.GREENHOUSE_BOARDS || "").split(",").map((v) => v.trim()).filter(Boolean)) {
     tasks.push(getJson(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board)}/jobs?content=true`).then((data) => ({ source: `Greenhouse:${board}`, jobs: (data.jobs || []).map((job) => normalizeGreenhouse(job, board)) })));

@@ -1,4 +1,4 @@
-const { fetchSources, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
+const { fetchSources, fetchBoards, boardFromUrl, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
 const matching = require("../shared/matching");
 
 const PUBLIC_SUPABASE_URL = "https://moyabdwxlbkfqmtjuwwa.supabase.co";
@@ -134,6 +134,15 @@ module.exports = async function handler(req, res) {
         userAgent: String(req.headers["user-agent"] || "JobFinder/2.0").slice(0, 200)
       }).catch((error) => ({ jobs: [], errors: [error.message] }))
       : Promise.resolve({ jobs: [], errors: [] });
+    // Career boards of the companies this user follows: any saved/imported job or target company
+    // whose link is a public Greenhouse / Lever / Ashby board gets all its openings scanned.
+    const boardsPromise = Promise.all([
+      userSupabase(`jobs?user_id=eq.${user.id}&select=url&limit=500`, token).catch(() => []),
+      userSupabase(`companies?user_id=eq.${user.id}&select=website&limit=500`, token).catch(() => [])
+    ]).then(([jobRows, companyRows]) => fetchBoards(
+      [...(jobRows || []).map((row) => boardFromUrl(row.url)), ...(companyRows || []).map((row) => boardFromUrl(row.website))],
+      { timeoutMs: 7000, max: 15 }
+    )).catch((error) => ({ jobs: [], errors: [error.message] }));
     let catalog;
     let excluded = new Set();
     let excludedKeys = new Set();
@@ -141,9 +150,10 @@ module.exports = async function handler(req, res) {
       const existingMatches = await supabase(`user_job_matches?user_id=eq.${user.id}&select=job_id`);
       excluded = new Set((existingMatches || []).map((row) => row.job_id));
       catalog = (await catalogRows()).filter(isRecent);
-      const targeted = await targetedPromise;
-      if (targeted.jobs.length) {
-        const { stored } = await upsertCatalog(targeted.jobs);
+      const [targeted, followed] = await Promise.all([targetedPromise, boardsPromise]);
+      const extra = targeted.jobs.concat(followed.jobs);
+      if (extra.length) {
+        const { stored } = await upsertCatalog(extra);
         const known = new Set(catalog.map((job) => job.id));
         catalog.push(...stored.filter((job) => !known.has(job.id) && isRecent(job)));
       }
@@ -155,8 +165,8 @@ module.exports = async function handler(req, res) {
         sources: sourceResult.results.map((result) => `${result.source}:${result.jobs.length}`),
         errors: sourceResult.errors
       });
-      const targeted = await targetedPromise;
-      catalog = sourceResult.results.flatMap((result) => result.jobs).filter(usable).concat(targeted.jobs);
+      const [targeted, followed] = await Promise.all([targetedPromise, boardsPromise]);
+      catalog = sourceResult.results.flatMap((result) => result.jobs).filter(usable).concat(targeted.jobs, followed.jobs);
       const existingJobs = await userSupabase(`jobs?user_id=eq.${user.id}&select=url,title,role_title,company_name`, token);
       const proposalHistory = await userSupabase(`user_opportunity_history?user_id=eq.${user.id}&select=opportunity_key,source_url`, token);
       excluded = new Set((existingJobs || []).map((row) => stableUrl(row.url)));

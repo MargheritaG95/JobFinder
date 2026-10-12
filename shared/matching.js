@@ -254,7 +254,7 @@
   function isWorldwide(job) {
     const text = normalized(job.location);
     if (!text) return true;
-    const generic = new Set(["remote", "remoto", "remota", "fully", "full", "100", "only", "work", "from", "home", "da"]);
+    const generic = new Set(["remote", "remoto", "remota", "fully", "full", "100", "only", "work", "from", "home", "da", "in", "the", "of", "il", "di"]);
     WORLDWIDE.forEach((word) => normalized(word).split(" ").forEach((piece) => generic.add(piece)));
     return text.split(" ").every((word) => generic.has(word));
   }

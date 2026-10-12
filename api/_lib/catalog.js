@@ -8,6 +8,15 @@ const HIMALAYAS_URL = "https://himalayas.app/jobs/api?limit=200";
 const REMOTEOK_URL = "https://remoteok.com/api";
 const MUSE_URL = "https://www.themuse.com/api/public/jobs";
 const WORKING_NOMADS_URL = "https://www.workingnomads.com/api/exposed_jobs/";
+const WWR_URL = "https://weworkremotely.com/remote-jobs.rss";
+
+// Public career boards (no key) of employers hiring across Europe. Verified to return listings.
+// Override or extend with GREENHOUSE_BOARDS / LEVER_SITES / ASHBY_BOARDS (comma-separated slugs).
+const DEFAULT_BOARDS = {
+  greenhouse: ["airbnb", "datadog", "mongodb", "stripe", "elastic"],
+  lever: ["spotify"],
+  ashby: ["notion"]
+};
 
 function decodeHtmlEntities(value) {
   const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
@@ -97,8 +106,14 @@ function enrich(job) {
   };
 }
 
+function defaultSignal() {
+  // A slow source must never make the whole request time out.
+  return typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(9000) : undefined;
+}
+
 async function getJson(url, options = {}) {
   const response = await fetch(url, {
+    signal: defaultSignal(),
     ...options,
     headers: { Accept: "application/json", "User-Agent": "JobFinder/2.0", ...(options.headers || {}) }
   });
@@ -270,6 +285,94 @@ function normalizeGreenhouse(job, board) {
   });
 }
 
+function normalizeAshby(job, board) {
+  const locations = [job.location, ...(Array.isArray(job.secondaryLocations) ? job.secondaryLocations.map((item) => item.location || item) : [])].filter((item) => typeof item === "string" && item);
+  return enrich({
+    source: "Ashby", source_job_id: `${board}:${job.id}`, source_url: job.jobUrl || job.applyUrl,
+    title: compact(job.title), company_name: displaySlug(board), location: compact(locations.join(" · ")) || null,
+    remote_type: job.isRemote ? "Remote" : (/hybrid/i.test(job.workplaceType || "") ? "Hybrid" : (/onsite|on-site/i.test(job.workplaceType || "") ? "On-site" : null)),
+    industry: compact(job.department || job.team) || null, description: job.descriptionPlain || job.descriptionHtml,
+    employment_type: compact(job.employmentType) || null, published_at: asIso(job.publishedAt), raw_data: { id: job.id }
+  });
+}
+
+function xmlField(item, name) {
+  const match = item.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"));
+  return match ? match[1].replace(/^<!\[CDATA\[|\]\]>$/g, "").trim() : "";
+}
+
+// We Work Remotely RSS: "Company: Role" titles, region/country per item.
+function parseWwr(xml) {
+  return (String(xml).match(/<item>[\s\S]*?<\/item>/gi) || []).map((item) => {
+    const rawTitle = stripHtml(xmlField(item, "title"));
+    const split = rawTitle.indexOf(":");
+    const company = split > 0 ? rawTitle.slice(0, split) : "";
+    const title = split > 0 ? rawTitle.slice(split + 1) : rawTitle;
+    const region = [xmlField(item, "region"), xmlField(item, "country")].map(stripHtml).filter(Boolean).join(" · ");
+    const link = stripHtml(xmlField(item, "link"));
+    return enrich({
+      source: "We Work Remotely", source_job_id: link, source_url: link,
+      title: compact(title), company_name: compact(company), company_logo_url: null,
+      industry: compact(stripHtml(xmlField(item, "category"))) || null, location: region ? `Remote · ${region}` : "Remote", remote_type: "Remote",
+      description: xmlField(item, "description"), employment_type: compact(stripHtml(xmlField(item, "type"))) || null,
+      published_at: asIso(stripHtml(xmlField(item, "pubDate"))), raw_data: {}
+    });
+  });
+}
+
+async function getText(url, options = {}) {
+  const response = await fetch(url, { signal: defaultSignal(), ...options, headers: { Accept: "application/rss+xml, application/xml, text/xml", "User-Agent": "JobFinder/2.0", ...(options.headers || {}) } });
+  if (!response.ok) throw new Error(`${new URL(url).hostname}: HTTP ${response.status}`);
+  return response.text();
+}
+
+/** Recognises a public ATS career board from a job or careers URL. */
+function boardFromUrl(value) {
+  let url;
+  try { url = new URL(String(value || "")); } catch (_) { return null; }
+  const host = url.hostname.toLowerCase();
+  const slug = (url.pathname.split("/").filter(Boolean)[0] || "").toLowerCase();
+  if (!slug || !/^[a-z0-9][a-z0-9._-]{1,60}$/.test(slug)) return null;
+  if (/(^|\.)greenhouse\.io$/.test(host) && (host.startsWith("boards.") || host.startsWith("job-boards."))) return { type: "greenhouse", slug };
+  if (host === "jobs.lever.co" || host === "jobs.eu.lever.co") return { type: host.includes(".eu.") ? "lever-eu" : "lever", slug };
+  if (host === "jobs.ashbyhq.com") return { type: "ashby", slug };
+  return null;
+}
+
+function boardTask(board, signal) {
+  const slug = encodeURIComponent(board.slug);
+  if (board.type === "greenhouse") return getJson(`https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`, { signal })
+    .then((data) => ({ source: `Greenhouse:${board.slug}`, jobs: (data.jobs || []).map((job) => normalizeGreenhouse(job, board.slug)) }));
+  if (board.type === "lever" || board.type === "lever-eu") return getJson(`https://api${board.type === "lever-eu" ? ".eu" : ""}.lever.co/v0/postings/${slug}?mode=json`, { signal })
+    .then((data) => ({ source: `Lever:${board.slug}`, jobs: (Array.isArray(data) ? data : []).map((job) => normalizeLever(job, board.slug)) }));
+  if (board.type === "ashby") return getJson(`https://api.ashbyhq.com/posting-api/job-board/${slug}`, { signal })
+    .then((data) => ({ source: `Ashby:${board.slug}`, jobs: (data.jobs || []).filter((job) => job.isListed !== false).map((job) => normalizeAshby(job, board.slug)) }));
+  return Promise.reject(new Error(`Unsupported board ${board.type}`));
+}
+
+function configuredBoards() {
+  const fromEnv = (name, type, defaults) => {
+    const raw = process.env[name];
+    const slugs = raw === undefined ? defaults : String(raw).split(",").map((v) => v.trim()).filter(Boolean);
+    return slugs.map((slug) => ({ type, slug }));
+  };
+  return [
+    ...fromEnv("GREENHOUSE_BOARDS", "greenhouse", DEFAULT_BOARDS.greenhouse),
+    ...fromEnv("LEVER_SITES", "lever", DEFAULT_BOARDS.lever),
+    ...fromEnv("ASHBY_BOARDS", "ashby", DEFAULT_BOARDS.ashby)
+  ];
+}
+
+/** Fetches specific career boards (e.g. the companies a user follows). */
+async function fetchBoards(boards, { timeoutMs = 7000, max = 15 } = {}) {
+  const unique = [...new Map(boards.filter(Boolean).map((board) => [`${board.type}:${board.slug}`, board])).values()].slice(0, max);
+  const signal = () => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
+  const settled = await Promise.allSettled(unique.map((board) => boardTask(board, signal())));
+  const results = settled.filter((item) => item.status === "fulfilled").map((item) => item.value);
+  const errors = settled.filter((item) => item.status === "rejected").map((item) => item.reason?.message || String(item.reason));
+  return { results, errors, jobs: results.flatMap((result) => result.jobs).filter(usable) };
+}
+
 function normalizeLever(job, site) {
   return enrich({
     source: "Lever", source_job_id: `${site}:${job.id}`, source_url: job.hostedUrl || job.applyUrl,
@@ -407,12 +510,8 @@ async function fetchSources() {
       }).then((data) => ({ source: `Jooble:${region}`, jobs: (data.jobs || []).map((job) => normalizeJooble(job, region)) })));
     }
   }
-  for (const board of String(process.env.GREENHOUSE_BOARDS || "").split(",").map((v) => v.trim()).filter(Boolean)) {
-    tasks.push(getJson(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board)}/jobs?content=true`).then((data) => ({ source: `Greenhouse:${board}`, jobs: (data.jobs || []).map((job) => normalizeGreenhouse(job, board)) })));
-  }
-  for (const site of String(process.env.LEVER_SITES || "").split(",").map((v) => v.trim()).filter(Boolean)) {
-    tasks.push(getJson(`https://api.lever.co/v0/postings/${encodeURIComponent(site)}?mode=json`).then((data) => ({ source: `Lever:${site}`, jobs: (data || []).map((job) => normalizeLever(job, site)) })));
-  }
+  tasks.push(getText(WWR_URL).then((xml) => ({ source: "WeWorkRemotely", jobs: parseWwr(xml) })));
+  for (const board of configuredBoards()) tasks.push(boardTask(board));
   const settled = await Promise.allSettled(tasks);
   const results = settled.filter((item) => item.status === "fulfilled").map((item) => item.value);
   const errors = settled.filter((item) => item.status === "rejected").map((item) => item.reason?.message || String(item.reason));
@@ -470,4 +569,4 @@ async function refreshCatalog({ queries = [] } = {}) {
   return { jobs: stored, fetched: jobs.length, accepted, sources: results.concat(targeted.results).map((r) => r.source), errors: errors.concat(targeted.errors) };
 }
 
-module.exports = { stripHtml, fetchSources, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent };
+module.exports = { stripHtml, fetchSources, fetchBoards, boardFromUrl, parseWwr, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent };

@@ -204,7 +204,8 @@ Le regole di corrispondenza stanno in `shared/matching.js` e sono usate sia dall
 
 Fonti di opportunità:
 
-- sempre attive (feed pubblici): Remotive, Arbeitnow, Jobicy, Himalayas, RemoteOK, The Muse, Working Nomads;
+- sempre attive (feed pubblici, senza chiave): Remotive, Arbeitnow, Jobicy, Himalayas, RemoteOK, The Muse, Working Nomads, We Work Remotely e le pagine lavoro pubbliche di Airbnb, Datadog, MongoDB, Stripe, Elastic (Greenhouse), Spotify (Lever), Notion (Ashby) — elenco modificabile con `GREENHOUSE_BOARDS`, `LEVER_SITES`, `ASHBY_BOARDS`;
+- aziende seguite: se salvi o importi un annuncio pubblicato su Greenhouse, Lever o Ashby, oppure inserisci come sito di un'azienda target la sua pagina lavoro su queste piattaforme, a ogni "Nuove proposte" vengono lette tutte le posizioni aperte di quell'azienda;
 - **JSearch** (`JSEARCH_API_KEY`, chiave RapidAPI; opzionale `JSEARCH_API_HOST`): legge Google for Jobs e porta annunci pubblicati su **LinkedIn, Glassdoor, Indeed** e siti aziendali, cercando i ruoli dell'utente nei suoi Paesi/città. Il piano gratuito ha 200 chiamate al mese: ne usiamo al massimo 3 per "Nuove proposte" e nessuna nel refresh notturno;
 - **Adzuna** (`ADZUNA_APP_ID` + `ADZUNA_APP_KEY`), **Jooble** (`JOOBLE_API_KEY`, `JOOBLE_API_KEY_<PAESE>`), **Careerjet** (`CAREERJET_AFFID`): ricerche per ruolo e luogo in Italia ed Europa;
 - LinkedIn, Glassdoor e Indeed non offrono API pubbliche e il loro scraping viola i termini d'uso: nella pagina Opportunità il riquadro "Cerca anche su" apre le loro ricerche già filtrate con ruolo e luogo, e "Importa annuncio" porta dentro un annuncio trovato lì.

@@ -116,13 +116,15 @@ function scoreJob(job, preferences) {
   const generic = isGenericRemoteLocation(job);
   const combinedLocation = normalized(`${job.location || ""} ${job.remote_type || ""}`);
   const hybrid = /\b(hybrid|ibrid[oa])\b/.test(combinedLocation);
-  const locationHits = fieldMatches(preferredLocations, job.location);
+  const locationAliases = { belgio: "belgium", belgique: "belgium", belgien: "belgium", belgium: "belgium", italia: "italy", italie: "italy", germania: "germany", allemagne: "germany", francia: "france", spagna: "spain", paesi_bassi: "netherlands", olanda: "netherlands" };
+  const expandedLocations = preferredLocations.flatMap((value) => { const key = normalized(value).replace(/ /g, "_"); return [value, ...(locationAliases[key] ? [locationAliases[key]] : [])]; });
+  const locationHits = fieldMatches(expandedLocations, job.location);
   const workModeHits = fieldMatches(preferredWorkModes, `${job.location || ""} ${job.remote_type || ""}`);
   const remoteAllowed = remote && preferredWorkModes.some((value) => /\b(remote|remoto|remota)\b/.test(normalized(value)));
   const hybridAllowed = hybrid && preferredWorkModes.some((value) => /\bhybrid\b/.test(normalized(value)));
   const onsiteAllowed = !remote && !hybrid && preferredWorkModes.some((value) => /\bon[\s-]?site\b/.test(normalized(value)));
   if (locationHits.length) matched.locations = locationHits;
-  else if (remote && generic && remoteAllowed) matched.locations = ["Fully remote"];
+  else if (remote && generic && remoteAllowed && preferredLocations.some((value) => /^(remote|remoto|remota|worldwide|anywhere|global|international)$/i.test(String(value).trim()))) matched.locations = ["Fully remote"];
   if (workModeHits.length) matched.work_modes = workModeHits;
   else if (remoteAllowed) matched.work_modes = ["Remote"];
   else if (hybridAllowed) matched.work_modes = ["Hybrid"];
@@ -256,7 +258,16 @@ module.exports = async function handler(req, res) {
       compatible: ranked.length,
       requested
     });
-    ranked = ranked.slice(0, requested);
+    const diversified = [];
+    const remaining = [...ranked];
+    const seenCompanies = new Set();
+    while (remaining.length && diversified.length < requested) {
+      const index = remaining.findIndex(({ job }) => !seenCompanies.has(normalized(job.company_name)));
+      const [picked] = remaining.splice(index < 0 ? 0 : index, 1);
+      diversified.push(picked);
+      seenCompanies.add(normalized(picked.job.company_name));
+    }
+    ranked = diversified;
     if (!ranked.length) return res.status(200).json({
       jobs: [],
       count: 0,

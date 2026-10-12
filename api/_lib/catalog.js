@@ -244,10 +244,10 @@ function normalizeJSearch(job, country) {
   return enrich({
     source: compact(job.job_publisher) || "Google Jobs", source_job_id: `jsearch:${job.job_id}`,
     source_url: job.job_apply_link || job.job_google_link,
-    title: compact(job.job_title), company_name: compact(job.employer_name),
+    title: compact(job.job_title || job.title), company_name: compact(job.employer_name || job.company_name || job.company),
     company_logo_url: job.employer_logo || null, company_website: job.employer_website || null,
     location: withCountry(place, countryLabel(job.job_country || country)),
-    remote_type: job.job_is_remote ? "Remote" : null, description: job.job_description,
+    remote_type: job.job_is_remote ? "Remote" : null, description: job.job_description || job.description,
     salary_text: salary, salary_min: job.job_min_salary || null, salary_max: job.job_max_salary || null, salary_currency: job.job_salary_currency || null,
     employment_type: compact(job.job_employment_type) || null, published_at: asIso(posted), raw_data: { job_id: job.job_id, job_publisher: job.job_publisher }
   });
@@ -406,7 +406,7 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], u
   const direct = process.env.OPENWEBNINJA_API_KEY;
   if (direct || process.env.JSEARCH_API_KEY) {
     const host = process.env.JSEARCH_API_HOST || "jsearch.p.rapidapi.com";
-    const endpoint = direct ? (process.env.OPENWEBNINJA_JSEARCH_URL || "https://api.openwebninja.com/jsearch/search") : `https://${host}/search`;
+    const endpoint = direct ? (process.env.OPENWEBNINJA_JSEARCH_URL || "https://api.openwebninja.com/jsearch/search-v2") : `https://${host}/search`;
     const headers = direct ? { "x-api-key": direct } : { "X-RapidAPI-Key": process.env.JSEARCH_API_KEY, "X-RapidAPI-Host": host };
     for (const query of jsearchQueries) {
       const country = String(query.country || "").toLowerCase();
@@ -415,7 +415,12 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], u
       if (!what || !/^[a-z]{2}$/.test(country)) continue;
       const params = new URLSearchParams({ query: `${what} in ${where || countryLabelEn(country) || country}`, page: "1", num_pages: "1", country, date_posted: "month" });
       tasks.push(getJson(`${endpoint}?${params}`, { signal: signal(), headers })
-        .then((data) => ({ source: `JSearch:${country}:${what}:${where}`, jobs: (data.data || []).map((job) => normalizeJSearch(job, country)) })));
+        .then((data) => {
+          // v1 returns { data: [...] }; accept the nested shapes newer versions may use as well.
+          const list = Array.isArray(data?.data) ? data.data : (data?.data?.jobs || data?.jobs || data?.results || []);
+          if (!list.length) console.log("[jsearch] empty response", { query: params.get("query"), keys: Object.keys(data || {}), status: data?.status });
+          return { source: `JSearch:${country}:${what}:${where}`, jobs: list.map((job) => normalizeJSearch(job, country)) };
+        }));
     }
   }
   for (const query of queries) {

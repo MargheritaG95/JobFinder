@@ -1978,7 +1978,7 @@ Cordiali saluti,
   }
 
   function filteredJobs() {
-    const minFit = asNumber($("opportunityFitFilter")?.value, 7);
+    const minFit = asNumber($("opportunityFitFilter")?.value, 0);
     const status = $("opportunityStatusFilter")?.value || "";
     const priority = $("opportunityPriorityFilter")?.value || "";
     const company = $("opportunityCompanyFilter")?.value || "";

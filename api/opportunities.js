@@ -149,7 +149,7 @@ function scoreJob(job, preferences) {
   const hybridAllowed = hybrid && preferredWorkModes.some((value) => /\bhybrid\b/.test(normalized(value)));
   const onsiteAllowed = !remote && !hybrid && preferredWorkModes.some((value) => /\bon[\s-]?site\b/.test(normalized(value)));
   if (locationHits.length) matched.locations = locationHits;
-  else if (remote && generic && remoteAllowed && preferredLocations.some((value) => /^(remote|remoto|remota|worldwide|anywhere|global|international)$/i.test(String(value).trim()))) matched.locations = ["Fully remote"];
+  else if (remote && generic && remoteAllowed) matched.locations = ["Fully remote"];
   if (workModeHits.length) matched.work_modes = workModeHits;
   else if (remoteAllowed) matched.work_modes = ["Remote"];
   else if (hybridAllowed) matched.work_modes = ["Hybrid"];

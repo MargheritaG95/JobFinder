@@ -225,7 +225,7 @@
     return found;
   }
 
-  function locationMatch(preference, job, mode, citiesByCountry) {
+  function locationMatch(preference, job, mode) {
     const locationText = normalized(job.location);
     const pref = normalized(preference);
     if (!pref) return null;
@@ -233,15 +233,13 @@
     const { byName } = countries();
     const countryCode = place ? null : byName.get(pref) || (pref.length === 2 ? pref.toUpperCase() : null);
     if (place) {
-      if (place.names.some((name) => hasPhrase(locationText, name))) return { value: preference, strength: "strong" };
+      if (place.names.some((name) => hasPhrase(locationText, name))) return { value: preference, strength: "city" };
       return null;
     }
     if (countryCode && countries().byCode.has(countryCode)) {
       const inJob = countriesInText(locationText);
-      // With cities chosen in this country, on-site / hybrid roles must be in one of those cities;
-      // the country alone still counts for remote roles.
-      const narrowed = mode !== "remote" && citiesByCountry && citiesByCountry.has(countryCode);
-      if (inJob.has(countryCode) && !narrowed) return { value: preference, strength: "strong" };
+      // A chosen country always counts; chosen cities only raise the Fit Score (see scoreJob).
+      if (inJob.has(countryCode)) return { value: preference, strength: "country" };
       if (mode === "remote") {
         const regionHit = Object.entries(REGIONS).some(([region, codes]) => codes.includes(countryCode) && hasPhrase(locationText, region));
         if (regionHit) return { value: preference, strength: "region" };
@@ -249,7 +247,7 @@
       return null;
     }
     // Free-text place not in our dictionaries: plain phrase match.
-    if (hasPhrase(locationText, pref)) return { value: preference, strength: "strong" };
+    if (hasPhrase(locationText, pref)) return { value: preference, strength: "city" };
     return null;
   }
 
@@ -357,12 +355,11 @@
     // Location. A worldwide remote role is fine wherever you live, if you accept remote.
     let locationOk = true;
     if (preferences.locations.length) {
-      const citiesByCountry = new Set(preferences.locations.map((value) => PLACE_INDEX.get(normalized(value))).filter(Boolean).map((place) => place.country));
-      const hits = preferences.locations.map((place) => locationMatch(place, job, mode, citiesByCountry)).filter(Boolean);
+      const hits = preferences.locations.map((place) => locationMatch(place, job, mode)).filter(Boolean);
       if (hits.length) matched.locations = hits.map((hit) => hit.value);
       else if (mode === "remote" && isWorldwide(job) && (!modes.size || modes.has("remote"))) matched.locations = ["Full remote"];
       locationOk = Boolean(matched.locations);
-      if (locationOk) score += 1;
+      if (locationOk) score += hits.some((hit) => hit.strength === "city") ? 1.5 : 1;
       else missing.push("locations");
     } else score += 0.5;
 

@@ -198,7 +198,7 @@ Le regole di corrispondenza stanno in `shared/matching.js` e sono usate sia dall
 
 - **Ruolo** (obbligatorio se indicato): tutte le parole chiave del ruolo devono comparire nel titolo, con sinonimi IT/EN (es. "Responsabile prodotto" = "Product Manager"); una funzione diversa ("Product Designer") non conta come "Product Manager".
 - **Settore**: cercato in titolo, settore, azienda e descrizione, con famiglie di sinonimi (Tech, AI, Automotive, Fintech…). È un bonus se hai indicato ruoli, obbligatorio se indichi solo settori.
-- **Location**: Paesi in tutte le lingue, città con nomi IT/EN (Milano = Milan), regioni italiane. Se scegli una città, per ruoli in sede/ibridi conta la città; il Paese vale per i ruoli remote (anche "Remote - Europe").
+- **Location**: Paesi in tutte le lingue, città con nomi IT/EN (Milano = Milan), regioni italiane. I Paesi scelti valgono per intero (anche "Remote - Europe" per i ruoli remote); le città scelte alzano il Fit Score degli annunci lì.
 - **Modalità**: Remote / Hybrid / On-site (anche Remoto, Ibrido, In sede).
 - Le proposte "Da valutare" che non rispettano più le preferenze o il Fit minimo vengono nascoste (filtro "Preferenze" per rivederle); dopo il salvataggio delle preferenze tutto viene ricalcolato subito.
 

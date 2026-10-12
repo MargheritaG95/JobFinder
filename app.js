@@ -2675,7 +2675,7 @@ Cordiali saluti,
       ? "Scegli prima almeno un Paese: qui compariranno solo le sue città."
       : loading.length ? `Caricamento città di ${escapeHtml(loading.join(", "))}…`
       : failed.length ? `Elenco città non disponibile per ${escapeHtml(failed.join(", "))}: scrivi il nome e premi Invio.`
-      : "Nessuna città selezionata = tutto il Paese. Con una città, i ruoli in sede o ibridi devono essere lì; il Paese resta valido per i ruoli da remoto.";
+      : "I Paesi scelti valgono sempre per intero; le città selezionate danno priorità (Fit Score più alto) agli annunci in quelle città.";
     host.innerHTML = comboMarkup("country", { label: "Paesi", placeholder: locationPicker.countries.length ? "Aggiungi un Paese…" : "Cerca un Paese…", chips: countryChips })
       + comboMarkup("city", { label: "Città", placeholder: locationPicker.countries.length ? "Cerca una città…" : "Seleziona prima un Paese", chips: cityChips, disabled: !locationPicker.countries.length, hint: cityHint });
     if (focused) {

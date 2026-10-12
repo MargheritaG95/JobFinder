@@ -1,4 +1,4 @@
-const { fetchSources, refreshCatalog, supabase, usable } = require("./_lib/catalog");
+const { fetchSources, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
 
 const PUBLIC_SUPABASE_URL = "https://moyabdwxlbkfqmtjuwwa.supabase.co";
 const PUBLIC_SUPABASE_KEY = "sb_publishable_kzopFoXWx_DBRo8giCgGDg_ITMsOsbV";
@@ -151,8 +151,8 @@ async function authenticatedUser(req) {
 }
 
 async function catalogRows() {
-  const since = new Date(Date.now() - 45 * 86400000).toISOString();
-  return supabase(`job_catalog?select=*&is_active=eq.true&or=(published_at.is.null,published_at.gte.${encodeURIComponent(since)})&order=published_at.desc.nullslast&limit=1000`);
+  const since = new Date(Date.now() - 40 * 86400000).toISOString();
+  return supabase(`job_catalog?select=*&is_active=eq.true&or=(published_at.gte.${encodeURIComponent(since)})&order=published_at.desc.nullslast&limit=1000`);
 }
 
 function legacyJob(userId, job, result, companyId) {
@@ -217,8 +217,8 @@ module.exports = async function handler(req, res) {
     if (config.hasServiceRole) {
       const existingMatches = await supabase(`user_job_matches?user_id=eq.${user.id}&select=job_id`);
       excluded = new Set((existingMatches || []).map((row) => row.job_id));
-      catalog = await catalogRows();
-      if (!catalog?.length || catalog.filter((job) => !excluded.has(job.id)).length < requested) { await refreshCatalog(); catalog = await catalogRows(); }
+      catalog = (await catalogRows()).filter(isRecent);
+      if (!catalog?.length || catalog.filter((job) => !excluded.has(job.id)).length < requested) { await refreshCatalog(); catalog = (await catalogRows()).filter(isRecent); }
     } else {
       const sourceResult = await fetchSources();
       console.log("[opportunities] direct source refresh", {

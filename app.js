@@ -2411,6 +2411,52 @@ Cordiali saluti,
       : emptyState("Nessuna opportunità da valutare", "Il feedback sarà disponibile quando la tabella jobs conterrà almeno un’opportunità.");
   }
 
+  const cityListsCache = new Map();
+  let cityRequestVersion = 0;
+  function syncCityCountryOptions() {
+    const countrySelect = $("preferenceCountries");
+    const cityCountry = $("preferenceCityCountry");
+    if (!countrySelect || !cityCountry) return;
+    const previous = cityCountry.value;
+    cityCountry.replaceChildren(new Option("Seleziona un Paese", ""));
+    [...countrySelect.selectedOptions].forEach((option) => cityCountry.add(new Option(option.text, option.value)));
+    cityCountry.value = [...cityCountry.options].some((option) => option.value === previous) ? previous : (cityCountry.options[1]?.value || "");
+    loadCitiesForCountry();
+  }
+  async function loadCitiesForCountry() {
+    const country = $("preferenceCityCountry")?.value || "";
+    const select = $("preferenceCitySelect");
+    if (!select) return;
+    const version = ++cityRequestVersion;
+    select.replaceChildren(new Option(country ? "Caricamento città…" : "Seleziona prima un Paese", ""));
+    select.disabled = true;
+    if (!country) return;
+    try {
+      let cities = cityListsCache.get(country);
+      if (!cities) {
+        const response = await fetch("https://countriesnow.space/api/v0.1/countries/cities", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ country })
+        });
+        if (!response.ok) throw new Error("Servizio città non disponibile");
+        const data = await response.json();
+        if (data.error || !Array.isArray(data.data)) throw new Error("Elenco città non disponibile");
+        cities = [...new Set(data.data.filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
+        cityListsCache.set(country, cities);
+      }
+      if (version !== cityRequestVersion) return;
+      select.replaceChildren(new Option("Seleziona una città", ""));
+      cities.forEach((city) => select.add(new Option(city, city)));
+      select.disabled = false;
+    } catch (_) {
+      if (version !== cityRequestVersion) return;
+      select.replaceChildren(new Option("Elenco non disponibile: scrivi la città sotto", ""));
+    }
+  }
+  document.addEventListener("change", (event) => {
+    if (event.target?.id === "preferenceCountries") syncCityCountryOptions();
+    if (event.target?.id === "preferenceCityCountry") loadCitiesForCountry();
+  });
   let selectedPreferenceCities = [];
   function setupLocationPicker(preferences) {
     const select = $("preferenceCountries");
@@ -2431,6 +2477,7 @@ Cordiali saluti,
     selectedPreferenceCities = locations.filter((value) => !countrySet.has(normalizedCountry(value)));
     [...select.options].forEach((option) => { option.selected = locations.some((value) => normalizedCountry(value) === normalizedCountry(option.value)); });
     renderPreferenceCityChips();
+    syncCityCountryOptions();
   }
   function renderPreferenceCityChips() {
     const host = $("preferenceCityChips");
@@ -2451,12 +2498,13 @@ Cordiali saluti,
   }
   function addPreferenceCity() {
     const input = $("preferenceCityInput");
-    const city = String(input?.value || "").trim();
+    const city = String(input?.value || $("preferenceCitySelect")?.value || "").trim();
     if (city && !selectedPreferenceCities.some((item) => item.toLowerCase() === city.toLowerCase())) {
       selectedPreferenceCities.push(city);
       renderPreferenceCityChips();
     }
     if (input) input.value = "";
+    if ($("preferenceCitySelect")) $("preferenceCitySelect").value = "";
   }
   document.addEventListener("click", (event) => {
     if (event.target?.id === "addPreferenceCity") addPreferenceCity();

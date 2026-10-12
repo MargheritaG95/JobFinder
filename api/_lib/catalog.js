@@ -209,7 +209,8 @@ function normalizeLever(job, site) {
 function museOffset() {
   const start = new Date(new Date().getUTCFullYear(), 0, 1);
   const dayOfYear = Math.floor((Date.now() - start.getTime()) / 86400000);
-  return (dayOfYear % 50) * 10;
+  // The Muse rejects pages >= 100 with HTTP 400. Rotate ten-page windows within 0–99.
+  return (dayOfYear % 10) * 10;
 }
 
 async function fetchSources() {
@@ -219,7 +220,7 @@ async function fetchSources() {
     getJson(JOBICY_URL).then((data) => ({ source: "Jobicy", jobs: (data.jobs || []).map(normalizeJobicy) })),
     getJson(HIMALAYAS_URL).then((data) => ({ source: "Himalayas", jobs: (data.jobs || []).map(normalizeHimalayas) })),
     getJson(REMOTEOK_URL).then((data) => ({ source: "RemoteOK", jobs: (Array.isArray(data) ? data : []).filter((job) => job.id).map(normalizeRemoteOk) })),
-    ...Array.from({ length: 10 }, (_, i) => museOffset() + i + 1).map((page) => getJson(`${MUSE_URL}?page=${page}`).then((data) => ({ source: `TheMuse:${page}`, jobs: (data.results || []).map(normalizeMuse) })))
+    ...Array.from({ length: 10 }, (_, i) => museOffset() + i).map((page) => getJson(`${MUSE_URL}?page=${page}`).then((data) => ({ source: `TheMuse:${page}`, jobs: (data.results || []).map(normalizeMuse) })))
   ];
   if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) {
     const params = new URLSearchParams({ app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY, results_per_page: "50", "content-type": "application/json" });

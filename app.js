@@ -2436,7 +2436,7 @@ Cordiali saluti,
       if (!cities) {
         const response = await fetch("https://countriesnow.space/api/v0.1/countries/cities", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ country })
+          body: JSON.stringify({ country: new Intl.DisplayNames(["en"], { type: "region" }).of([...$("preferenceCountries").options].find((option) => option.value === country)?.dataset.code || country) || country })
         });
         if (!response.ok) throw new Error("Servizio città non disponibile");
         const data = await response.json();
@@ -2467,9 +2467,9 @@ Cordiali saluti,
       for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
         const code = String.fromCharCode(a, b);
         const name = regions.of(code);
-        if (name && name !== code) options.push(name);
+        if (name && name !== code) options.push({ name, code });
       }
-      options.sort((a, b) => a.localeCompare(b, "it")).forEach((name) => select.add(new Option(name, name)));
+      options.sort((a, b) => a.name.localeCompare(b.name, "it")).forEach(({ name, code }) => { const option = new Option(name, name); option.dataset.code = code; select.add(option); });
     }
     const locations = toList(preferences.locations);
     const normalizedCountry = (value) => String(value).trim().toLocaleLowerCase("it");

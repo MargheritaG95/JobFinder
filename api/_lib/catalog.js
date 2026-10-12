@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const matching = require("../../shared/matching");
 
 const REMOTIVE_URL = "https://remotive.com/api/remote-jobs?limit=100";
 const ARBEITNOW_URL = "https://www.arbeitnow.com/api/job-board-api";
@@ -67,7 +68,9 @@ function enrich(job) {
   const employment = job.employment_type || extract(combined, [/\b(full[- ]time|part[- ]time|contract|internship|temporary|permanent|tempo indeterminato|tempo determinato)\b/i]);
   const seniority = job.seniority || extract(job.title, [/\b(intern|junior|mid[- ]?level|senior|lead|head|director|vp|vice president|manager)\b/i]);
   const languages = [...new Set((combined.match(/\b(Italian|English|French|Spanish|German|Italiano|Inglese|Francese|Spagnolo|Tedesco)\b/gi) || []).map((v) => v.toLowerCase()))];
-  const remote = /\b(remote|remoto)\b/i.test(combined) ? "Remote" : /\bhybrid|ibrid[oa]\b/i.test(combined) ? "Hybrid" : null;
+  // Hybrid is checked before remote: "hybrid, 2 days remote" is not a remote role.
+  const mode = matching.jobWorkMode({ ...job, description });
+  const remote = mode === "unknown" ? null : matching.MODE_LABELS[mode];
   const salary = job.salary_text || extract(description, [
     /((?:€|EUR|£|GBP|\$|USD)\s?\d{2,3}(?:[.,]\d{3})?(?:\s?[-–]\s?(?:€|EUR|£|GBP|\$|USD)?\s?\d{2,3}(?:[.,]\d{3})?)?(?:\s*(?:per year|annui|RAL|p\.a\.))?)/i,
     /(\d{2,3}(?:[.,]\d{3})?\s?[-–]\s?\d{2,3}(?:[.,]\d{3})?\s?(?:EUR|euro|GBP|USD))/i
@@ -174,11 +177,24 @@ function normalizeMuse(job) {
   });
 }
 
-function normalizeAdzuna(job) {
+function withCountry(location, countryName) {
+  const value = compact(location);
+  if (!countryName) return value || null;
+  if (!value) return countryName;
+  return matching.normalized(value).includes(matching.normalized(countryName)) ? value : `${value}, ${countryName}`;
+}
+
+function countryLabel(code) {
+  try { return new Intl.DisplayNames(["it"], { type: "region" }).of(String(code || "").toUpperCase()) || null; }
+  catch (_) { return null; }
+}
+
+function normalizeAdzuna(job, country) {
+  const area = Array.isArray(job.location?.area) ? job.location.area : [];
   return enrich({
     source: "Adzuna", source_job_id: String(job.id), source_url: job.redirect_url,
     title: compact(job.title), company_name: compact(job.company?.display_name), company_logo_url: null,
-    industry: compact(job.category?.label) || null, location: compact(job.location?.display_name) || null,
+    industry: compact(job.category?.label) || null, location: withCountry(job.location?.display_name, area[0] || countryLabel(country)),
     description: job.description, salary_text: job.salary_min || job.salary_max ? `${job.salary_min || ""}${job.salary_max ? ` – ${job.salary_max}` : ""}` : null,
     salary_min: job.salary_min || null, salary_max: job.salary_max || null, salary_currency: "EUR",
     employment_type: compact(job.contract_type || job.contract_time) || null, published_at: asIso(job.created), raw_data: job
@@ -189,7 +205,7 @@ function normalizeJooble(job, region) {
   return enrich({
     source: "Jooble", source_job_id: region + ":" + String(job.id || job.link),
     source_url: job.link, title: compact(job.title),
-    company_name: compact(job.company), location: compact(job.location) || null,
+    company_name: compact(job.company), location: withCountry(job.location, region === "us" ? null : countryLabel(region)),
     description: compact(job.snippet), salary_text: compact(job.salary) || null,
     employment_type: compact(job.type) || null, published_at: asIso(job.updated),
     raw_data: job
@@ -217,6 +233,73 @@ function normalizeLever(job, site) {
   });
 }
 
+const ADZUNA_COUNTRIES = new Set("gb us at au be br ca ch de es fr in it mx nl nz pl sg za".split(" "));
+
+function joobleKey(region) {
+  if (region === "us") return process.env.JOOBLE_API_KEY || "";
+  return process.env[`JOOBLE_API_KEY_${region.toUpperCase()}`] || (region === "it" ? process.env.JOOBLE_API_KEY || "" : "");
+}
+
+/**
+ * Searches driven by a user's preferences (roles × preferred countries/cities) on the
+ * keyword-search APIs. Generic remote boards rarely carry local roles in Italy or
+ * elsewhere in Europe, so this is what fills the catalog with relevant listings.
+ * queries: [{ what: "Product Manager", country: "it", where: "Milano" }]
+ */
+async function fetchTargeted(queries, { timeoutMs = 8000 } = {}) {
+  const tasks = [];
+  const seen = new Set();
+  const signal = () => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
+  for (const query of queries) {
+    const country = String(query.country || "").toLowerCase();
+    const what = compact(query.what);
+    const where = compact(query.where);
+    if (!what || !/^[a-z]{2}$/.test(country)) continue;
+    const key = `${country}|${what.toLowerCase()}|${where.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY && ADZUNA_COUNTRIES.has(country)) {
+      const params = new URLSearchParams({
+        app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY,
+        results_per_page: "50", sort_by: "date", max_days_old: String(MAX_JOB_AGE_DAYS),
+        what_phrase: what, "content-type": "application/json"
+      });
+      if (where) params.set("where", where);
+      tasks.push(getJson(`https://api.adzuna.com/v1/api/jobs/${country}/search/1?${params}`, { signal: signal() })
+        .then((data) => ({ source: `Adzuna:${country}:${what}`, jobs: (data.results || []).map((job) => normalizeAdzuna(job, country)) })));
+    }
+    const jooble = process.env.JOOBLE_API_KEY ? joobleKey(country) : "";
+    if (jooble) {
+      const domain = country === "us" ? "jooble.org" : `${country}.jooble.org`;
+      tasks.push(getJson(`https://${domain}/api/${encodeURIComponent(jooble)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, signal: signal(),
+        body: JSON.stringify({ keywords: what, location: where || countryLabel(country) || "", page: "1", ResultOnPage: "50" })
+      }).then((data) => ({ source: `Jooble:${country}:${what}`, jobs: (data.jobs || []).map((job) => normalizeJooble(job, country)) })));
+    }
+  }
+  const settled = await Promise.allSettled(tasks);
+  const results = settled.filter((item) => item.status === "fulfilled").map((item) => item.value);
+  const errors = settled.filter((item) => item.status === "rejected").map((item) => item.reason?.message || String(item.reason));
+  return { results, errors, jobs: results.flatMap((result) => result.jobs).filter(usable) };
+}
+
+/** Builds targeted queries from one or more users' search_preferences rows. */
+function queriesFromPreferences(rows, { maxRoles = 4, maxQueries = 12 } = {}) {
+  const queries = [];
+  for (const row of rows) {
+    const roles = matching.list(row.target_roles).slice(0, maxRoles);
+    const countries = matching.preferredCountryCodes(row).map((code) => code.toLowerCase());
+    const cities = matching.preferredCities(row);
+    for (const what of roles) for (const country of countries.length ? countries : ["it"]) {
+      queries.push({ what, country, where: "" });
+      // A city search per country brings local on-site / hybrid roles that the national feed buries.
+      const city = cities.find((item) => item.country ? item.country.toLowerCase() === country : countries.length <= 1);
+      if (city) queries.push({ what, country, where: city.name });
+    }
+  }
+  return queries.slice(0, maxQueries);
+}
+
 function museOffset() {
   const start = new Date(new Date().getUTCFullYear(), 0, 1);
   const dayOfYear = Math.floor((Date.now() - start.getTime()) / 86400000);
@@ -242,7 +325,7 @@ async function fetchSources() {
         "content-type": "application/json"
       });
       tasks.push(getJson(`https://api.adzuna.com/v1/api/jobs/${country}/search/${page}?${params}`)
-        .then((data) => ({ source: `Adzuna:${country}:${page}`, jobs: (data.results || []).map(normalizeAdzuna) })));
+        .then((data) => ({ source: `Adzuna:${country}:${page}`, jobs: (data.results || []).map((job) => normalizeAdzuna(job, country)) })));
     }
   }
   if (process.env.JOOBLE_API_KEY) {
@@ -294,10 +377,7 @@ async function supabase(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-async function refreshCatalog() {
-  const { results, errors } = await fetchSources();
-  const jobs = results.flatMap((result) => result.jobs).filter(usable);
-  if (!jobs.length) throw new Error(`No source returned usable jobs. ${errors.join("; ")}`);
+async function upsertCatalog(jobs) {
   const deduped = [...new Map(jobs.map((job) => [job.source_url, job])).values()];
   const stored = [];
   for (let offset = 0; offset < deduped.length; offset += 75) {
@@ -307,13 +387,21 @@ async function refreshCatalog() {
     });
     stored.push(...(rows || []));
   }
+  return { stored, accepted: deduped.length };
+}
+
+async function refreshCatalog({ queries = [] } = {}) {
+  const [{ results, errors }, targeted] = await Promise.all([fetchSources(), fetchTargeted(queries)]);
+  const jobs = results.flatMap((result) => result.jobs).filter(usable).concat(targeted.jobs);
+  if (!jobs.length) throw new Error(`No source returned usable jobs. ${errors.concat(targeted.errors).join("; ")}`);
+  const { stored, accepted } = await upsertCatalog(jobs);
   // Deactivate outdated catalog records; preserve saved jobs and user history.
   const cutoff = new Date(Date.now() - MAX_JOB_AGE_DAYS * 86400000).toISOString();
   await supabase(`job_catalog?is_active=eq.true&or=(published_at.is.null,published_at.lt.${encodeURIComponent(cutoff)})`, {
     method: "PATCH", body: JSON.stringify({ is_active: false }),
     headers: { Prefer: "return=minimal" }
   });
-  return { jobs: stored, fetched: jobs.length, accepted: deduped.length, sources: results.map((r) => r.source), errors };
+  return { jobs: stored, fetched: jobs.length, accepted, sources: results.concat(targeted.results).map((r) => r.source), errors: errors.concat(targeted.errors) };
 }
 
-module.exports = { stripHtml, fetchSources, refreshCatalog, supabase, usable, isRecent };
+module.exports = { stripHtml, fetchSources, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent };

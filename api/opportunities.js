@@ -1,4 +1,5 @@
-const { fetchSources, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
+const { fetchSources, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
+const matching = require("../shared/matching");
 
 const PUBLIC_SUPABASE_URL = "https://moyabdwxlbkfqmtjuwwa.supabase.co";
 const PUBLIC_SUPABASE_KEY = "sb_publishable_kzopFoXWx_DBRo8giCgGDg_ITMsOsbV";
@@ -20,15 +21,6 @@ async function userSupabase(path, token, options = {}) {
   const text = await response.text();
   if (!response.ok) throw new Error(`Supabase ${response.status}: ${text.slice(0, 500)}`);
   return text ? JSON.parse(text) : null;
-}
-
-function tokens(value) {
-  return [...new Set(String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").match(/[a-z0-9+#.]{3,}/g) || [])];
-}
-
-function list(value) {
-  if (Array.isArray(value)) return value.filter(Boolean);
-  return String(value || "").split(/[,;\n]/).map((item) => item.trim()).filter(Boolean);
 }
 
 function normalized(value) {
@@ -54,118 +46,8 @@ function opportunityKey(job) {
   return `${normalized(job.title || job.role_title)}::${normalized(job.company_name)}`;
 }
 
-function isFullyRemote(job) {
-  const location = normalized(job.location);
-  const remoteType = normalized(job.remote_type);
-  const combined = `${location} ${remoteType}`;
-  return /\b(remote|remoto|remota|worldwide|anywhere|from anywhere)\b/.test(combined)
-    && !/\b(hybrid|ibrid[oa]|on site|onsite|in office|office based)\b/.test(combined);
-}
-
-function fieldMatches(values, field) {
-  const normalizedField = normalized(field);
-  if (!normalizedField) return [];
-  return values.filter((value) => {
-    const preference = normalized(value);
-    return preference && (normalizedField.includes(preference) || preference.includes(normalizedField));
-  });
-}
-
-function phraseMatches(value, haystackSet, haystackText) {
-  const words = String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").match(/[a-z0-9+#.]+/g) || [];
-  if (!words.length) return false;
-  return words.every((word) => (word.length >= 3 ? haystackSet.has(word) : new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(haystackText)));
-}
-
-function roleMatches(value, job) {
-  const title = normalized(job.title || "");
-  const role = normalized(value);
-  if (!title || !role) return false;
-  if (title.includes(role) || role.includes(title)) return true;
-  const stop = new Set(["and", "the", "for", "with", "di", "del", "della", "per", "senior", "junior", "specialist", "manager", "lead", "head", "associate", "executive"]);
-  const aliases = { growth: "marketing", digital: "marketing", communications: "communication", comunicazione: "communication", commerciale: "sales", vendite: "sales", recruitment: "recruiting", recruiter: "recruiting", talent: "recruiting", hr: "humanresources", risorse: "humanresources", umane: "humanresources", operations: "operation", operativo: "operation", customer: "customer", clienti: "customer", finance: "financial", finanziario: "financial" };
-  const canonical = (text) => new Set(text.split(" ").filter((word) => word.length >= 3 && !stop.has(word)).map((word) => aliases[word] || word));
-  const expected = canonical(role);
-  const actual = canonical(title);
-  if (!expected.size) return false;
-  const overlap = [...expected].filter((word) => actual.has(word)).length;
-  return overlap >= Math.min(2, expected.size);
-}
-
-function isGenericRemoteLocation(job) {
-  const loc = normalized(job.location);
-  if (!loc) return true;
-  const genericWords = new Set(["remote", "remoto", "remota", "worldwide", "anywhere", "global", "international", "eu", "europe", "emea", "fully"]);
-  const words = loc.split(" ").filter(Boolean);
-  return words.length > 0 && words.every((word) => genericWords.has(word));
-}
-
-let cachedCountryNames;
-function getCountryNames() {
-  if (cachedCountryNames) return cachedCountryNames;
-  const namesByCountry = new Map();
-  const locales = ["en", "it", "fr", "de", "es", "nl", "pt"];
-  const displayNames = locales.map((locale) => new Intl.DisplayNames([locale], { type: "region" }));
-  for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
-    const code = String.fromCharCode(a, b);
-    const names = new Set([normalized(code)]);
-    for (const display of displayNames) {
-      const label = display.of(code);
-      if (label && normalized(label) !== normalized(code)) names.add(normalized(label));
-    }
-    if (names.size > 1) for (const name of names) namesByCountry.set(name, names);
-  }
-  cachedCountryNames = namesByCountry;
-  return namesByCountry;
-}
-
 function scoreJob(job, preferences) {
-  const haystackText = normalized(`${job.title} ${job.company_name} ${job.industry || ""}`);
-  const haystack = new Set(tokens(`${job.title} ${job.company_name} ${job.industry || ""}`));
-  const groups = [["roles", list(preferences.target_roles)], ["sectors", list(preferences.target_sectors)]];
-  const preferredLocations = list(preferences.locations);
-  const preferredWorkModes = list(preferences.work_modes);
-  const matched = {};
-  let score = 5;
-  for (const [name, values] of groups) {
-    const hits = values.filter((value) => name === "roles" ? roleMatches(value, job) : phraseMatches(value, haystack, haystackText));
-    if (hits.length) { matched[name] = hits; score += name === "roles" ? 2 : 0.75; }
-  }
-  const remote = isFullyRemote(job);
-  const generic = isGenericRemoteLocation(job);
-  const combinedLocation = normalized(`${job.location || ""} ${job.remote_type || ""}`);
-  const hybrid = /\b(hybrid|ibrid[oa])\b/.test(combinedLocation);
-  const countryNames = getCountryNames();
-  const locationText = normalized(job.location);
-  const locationHits = preferredLocations.filter((value) => {
-    const place = normalized(value);
-    if (!place || !locationText) return false;
-    const alternatives = countryNames.get(place) || new Set([place]);
-    return [...alternatives].some((candidate) => candidate.length >= 2 &&
-      (` ${locationText} `).includes(` ${candidate} `));
-  });
-  const workModeHits = fieldMatches(preferredWorkModes, `${job.location || ""} ${job.remote_type || ""}`);
-  const remoteAllowed = remote && preferredWorkModes.some((value) => /\b(remote|remoto|remota)\b/.test(normalized(value)));
-  const hybridAllowed = hybrid && preferredWorkModes.some((value) => /\bhybrid\b/.test(normalized(value)));
-  const onsiteAllowed = !remote && !hybrid && preferredWorkModes.some((value) => /\bon[\s-]?site\b/.test(normalized(value)));
-  if (locationHits.length) matched.locations = locationHits;
-  else if (remote && generic && remoteAllowed) matched.locations = ["Fully remote"];
-  if (workModeHits.length) matched.work_modes = workModeHits;
-  else if (remoteAllowed) matched.work_modes = ["Remote"];
-  else if (hybridAllowed) matched.work_modes = ["Hybrid"];
-  else if (onsiteAllowed) matched.work_modes = ["On-site"];
-  if (matched.locations?.length) score += 0.75;
-  if (matched.work_modes?.length) score += 0.75;
-  const published = job.published_at ? new Date(job.published_at).getTime() : 0;
-  if (published > Date.now() - 7 * 86400000) score += 0.5;
-  if (job.salary_text || job.salary_min || job.salary_max) score += 0.25;
-  const rolesConfigured = list(preferences.target_roles).length > 0;
-  const sectorsConfigured = list(preferences.target_sectors).length > 0;
-  const roleOrSectorOk = rolesConfigured ? Boolean(matched.roles?.length) : (sectorsConfigured ? Boolean(matched.sectors?.length) : true);
-  const matchesPreferences = roleOrSectorOk
-    && (!preferredLocations.length || Boolean(matched.locations?.length))
-    && (!preferredWorkModes.length || Boolean(matched.work_modes?.length));
-  return { fit: Math.max(0, Math.min(10, Number(score.toFixed(1)))), matched, matchesPreferences };
+  return matching.scoreJob(job, preferences);
 }
 
 async function authenticatedUser(req) {
@@ -189,10 +71,10 @@ async function catalogRows() {
 }
 
 function legacyJob(userId, job, result, companyId) {
-  const why = Object.entries(result.matched).map(([group, values]) => `${group}: ${values.join(", ")}`);
+  const why = Object.entries(result.matched).map(([group, values]) => `${matching.GROUP_LABELS[group] || group}: ${values.join(", ")}`);
   return {
     user_id: userId, ...(job.id && /^[0-9a-f-]{36}$/i.test(job.id) ? { catalog_job_id: job.id } : {}), title: job.title, role_title: job.title,
-    company_name: job.company_name, company_id: companyId || null, location: job.location || job.remote_type || "N/A",
+    company_name: job.company_name, company_id: companyId || null, location: [job.location, job.remote_type && !matching.normalized(job.location).includes(matching.normalized(job.remote_type)) ? job.remote_type : ""].filter(Boolean).join(" · ") || "N/A",
     fit_score: result.fit, status: "NEW", priority: result.fit >= 8 ? "APPLY" : "REVIEW",
     source: job.source, url: job.source_url, is_saved: false,
     why_fit: why.length ? why : ["Annuncio recente compatibile con la ricerca attiva"],
@@ -244,6 +126,10 @@ module.exports = async function handler(req, res) {
     const requested = Math.max(1, Math.min(20, Number(req.body?.limit) || 6));
     const preferences = (await userSupabase(`search_preferences?user_id=eq.${user.id}&select=*&limit=1`, token))?.[0] || {};
     const config = supabaseConfig();
+    // Searches built from this user's roles and places run alongside the shared catalog.
+    const targetedPromise = matching.hasCriteria(preferences)
+      ? fetchTargeted(queriesFromPreferences([preferences]), { timeoutMs: 7000 }).catch((error) => ({ jobs: [], errors: [error.message] }))
+      : Promise.resolve({ jobs: [], errors: [] });
     let catalog;
     let excluded = new Set();
     let excludedKeys = new Set();
@@ -251,14 +137,22 @@ module.exports = async function handler(req, res) {
       const existingMatches = await supabase(`user_job_matches?user_id=eq.${user.id}&select=job_id`);
       excluded = new Set((existingMatches || []).map((row) => row.job_id));
       catalog = (await catalogRows()).filter(isRecent);
-      if (!catalog?.length || catalog.filter((job) => !excluded.has(job.id)).length < requested) { await refreshCatalog(); catalog = (await catalogRows()).filter(isRecent); }
+      const targeted = await targetedPromise;
+      if (targeted.jobs.length) {
+        const { stored } = await upsertCatalog(targeted.jobs);
+        const known = new Set(catalog.map((job) => job.id));
+        catalog.push(...stored.filter((job) => !known.has(job.id) && isRecent(job)));
+      }
+      const compatibleLeft = () => catalog.filter((job) => !excluded.has(job.id) && scoreJob(job, preferences).matchesPreferences).length;
+      if (!catalog?.length || compatibleLeft() < requested) { await refreshCatalog({ queries: queriesFromPreferences([preferences]) }); catalog = (await catalogRows()).filter(isRecent); }
     } else {
       const sourceResult = await fetchSources();
       console.log("[opportunities] direct source refresh", {
         sources: sourceResult.results.map((result) => `${result.source}:${result.jobs.length}`),
         errors: sourceResult.errors
       });
-      catalog = sourceResult.results.flatMap((result) => result.jobs).filter(usable);
+      const targeted = await targetedPromise;
+      catalog = sourceResult.results.flatMap((result) => result.jobs).filter(usable).concat(targeted.jobs);
       const existingJobs = await userSupabase(`jobs?user_id=eq.${user.id}&select=url,title,role_title,company_name`, token);
       const proposalHistory = await userSupabase(`user_opportunity_history?user_id=eq.${user.id}&select=opportunity_key,source_url`, token);
       excluded = new Set((existingJobs || []).map((row) => stableUrl(row.url)));
@@ -267,6 +161,10 @@ module.exports = async function handler(req, res) {
       (proposalHistory || []).forEach((row) => excludedKeys.add(row.opportunity_key));
     }
     const minFit = Number(preferences.min_fit_score) || 0;
+    if (!matching.hasCriteria(preferences)) return res.status(200).json({
+      jobs: [], count: 0, reason: "missing_preferences",
+      message: "Imposta almeno un ruolo, una location o una modalità di lavoro in Preferenze e salva: le proposte vengono scelte su quei criteri."
+    });
     let ranked = (catalog || []).map((job) => ({ job, result: scoreJob(job, preferences) }))
       .filter(({ job, result }) => {
         const wasAlreadyProposed = config.hasServiceRole

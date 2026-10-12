@@ -303,7 +303,12 @@ Cordiali saluti,
       3.5 + Math.min(3.5, roleMatches.length * 1.25) + Math.min(1.5, sectorMatches.length * 0.75) +
       Math.min(1, locationMatches.length * 0.5) + Math.min(0.5, requirementSignals * 0.15)
     ));
-    const strongest = [...roleMatches, ...sectorMatches].slice(0, 4);
+    const shared = window.JobFinderMatching && matchingPreferences()
+      ? window.JobFinderMatching.scoreJob({ title, company_name: company, location, description }, preferences)
+      : null;
+    const strongest = shared
+      ? [...(shared.matched.roles || []), ...(shared.matched.sectors || [])].slice(0, 4)
+      : [...roleMatches, ...sectorMatches].slice(0, 4);
     const why = strongest.length
       ? `Compatibilità rilevata con ${strongest.join(", ")}. Collega questi elementi a risultati misurabili del tuo CV e alle priorità descritte nell’annuncio.`
       : "Compatibilità da validare: collega le responsabilità principali dell’annuncio a risultati misurabili e competenze realmente presenti nel tuo CV.";
@@ -311,7 +316,7 @@ Cordiali saluti,
       ? "Verifica i requisiti obbligatori dell’annuncio non coperti dal CV. Non dichiarare competenze mancanti: valorizza esperienze trasferibili e un piano di apprendimento concreto."
       : "Descrizione non importata: incollala per ottenere un’analisi più affidabile di requisiti e gap.";
     const angle = `Presenta il profilo come soluzione alle priorità di ${company || "questa azienda"}, con esempi concreti di impatto, collaborazione ed execution.`;
-    return { score: Math.round(score * 10) / 10, why, gaps, angle, matches: strongest };
+    return { score: shared ? shared.fit : Math.round(score * 10) / 10, why, gaps, angle, matches: strongest };
   }
 
   function suggestedCoverLetter(job, language = "it") {
@@ -985,8 +990,71 @@ Cordiali saluti,
     return valueOf(job, "jobs", "title", "Ruolo non indicato");
   }
 
+  // ---- Preference matching (same rules as the server, see shared/matching.js) ----
+  const matchCache = new Map();
+  let matchCacheKey = "";
+
+  function matchingPreferences() {
+    const preferences = currentPreferences();
+    const Matching = window.JobFinderMatching;
+    if (!Matching || preferences.isDefault || !Matching.hasCriteria(preferences)) return null;
+    return preferences;
+  }
+
+  function preferenceMatch(job) {
+    const preferences = matchingPreferences();
+    if (!preferences || !job) return null;
+    const key = JSON.stringify([preferences.roles, preferences.sectors, preferences.locations, preferences.workModes, preferences.minFit]);
+    if (key !== matchCacheKey) { matchCache.clear(); matchCacheKey = key; }
+    const cacheId = `${job.id}:${valueOf(job, "jobs", "updatedAt", "")}`;
+    if (!matchCache.has(cacheId)) {
+      matchCache.set(cacheId, window.JobFinderMatching.scoreJob({
+        title: jobTitle(job),
+        company_name: companyNameForJob(job),
+        industry: valueOf(job, "jobs", "industry", ""),
+        location: valueOf(job, "jobs", "location", ""),
+        description: rawJobDescriptionText(job),
+        company_description: valueOf(job, "jobs", "companyDescription", ""),
+        salary_text: valueOf(job, "jobs", "salary", "")
+      }, preferences));
+    }
+    return matchCache.get(cacheId);
+  }
+
+  // A new proposal that no longer fits the saved preferences (or the minimum Fit Score).
+  // Jobs you already chose, saved or applied to are never hidden.
+  function isOffPreference(job) {
+    if (opportunityStage(job) !== "review") return false;
+    const match = preferenceMatch(job);
+    if (!match) return false;
+    return !match.matchesPreferences || jobFit(job) < matchingPreferences().minFit;
+  }
+
+  function activeJobs() {
+    return state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED" && !isOffPreference(job));
+  }
+
+  function preferenceChipsMarkup(job) {
+    const match = preferenceMatch(job);
+    if (!match) return "";
+    const labels = window.JobFinderMatching.GROUP_LABELS;
+    const hits = Object.entries(match.matched).flatMap(([group, values]) => values.slice(0, 2).map((value) =>
+      `<span class="preference-chip preference-chip--hit" title="${escapeAttribute(labels[group] || group)}">${icon("check")}${escapeHtml(value)}</span>`));
+    // Once you chose a job, a mismatch is no longer actionable: only show what matches.
+    const inReview = opportunityStage(job) === "review";
+    if (!inReview && !match.matchesPreferences) {
+      return hits.length ? `<div class="opportunity-card__preferences"><strong>Criteri corrispondenti</strong><div>${hits.join("")}</div></div>` : "";
+    }
+    const misses = match.missing.map((group) =>
+      `<span class="preference-chip preference-chip--miss">Fuori ${escapeHtml(String(labels[group] || group).toLowerCase())}</span>`);
+    const notes = match.notes.map((note) => `<span class="preference-chip preference-chip--note">${escapeHtml(note)}</span>`);
+    if (!hits.length && !misses.length && !notes.length) return "";
+    return `<div class="opportunity-card__preferences"><strong>${match.matchesPreferences ? "In linea con le tue preferenze" : "Non in linea con le preferenze attuali"}</strong><div>${hits.join("")}${misses.join("")}${notes.join("")}</div></div>`;
+  }
+
   function jobFit(job) {
-    const base = asNumber(valueOf(job, "jobs", "fitScore", 0), 0);
+    const live = preferenceMatch(job);
+    const base = live ? live.fit : asNumber(valueOf(job, "jobs", "fitScore", 0), 0);
     const searchable = normalizedTokens(`${jobTitle(job)} ${companyNameForJob(job)} ${valueOf(job, "jobs", "location", "")} ${jobDescriptionText(job)}`);
     const penalty = Math.min(2, preferenceLearningProfile().reduce((total, item) => {
       const dislikedTokens = new Set(normalizedTokens(`${item.title || ""} ${item.company || ""} ${item.industry || ""} ${item.location || ""} ${item.notes || ""}`));
@@ -1566,7 +1634,7 @@ Cordiali saluti,
   }
 
   function updateNavigationCounts() {
-    const visibleJobs = state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED");
+    const visibleJobs = activeJobs();
     const openFollowups = state.data.followups.filter((followup) => !Boolean(valueOf(followup, "followups", "completed", false)));
     $("navOpportunityCount").textContent = String(visibleJobs.length);
     $("navFollowupCount").textContent = String(openFollowups.length);
@@ -1762,7 +1830,7 @@ Cordiali saluti,
   }
 
   function reviewStageJobs(jobs, byNewest) {
-    return jobs.filter((job) => opportunityStage(job) === "review").sort(byNewest);
+    return jobs.filter((job) => opportunityStage(job) === "review" && !isOffPreference(job)).sort(byNewest);
   }
 
   function excludeCurrentSuggestionsFromRefresh() {
@@ -1956,8 +2024,8 @@ Cordiali saluti,
         showToast(`${imported.length} annunci reali importati e analizzati dal testo completo.`, "success", "Nuove opportunità pronte");
         return;
       }
-      if (result.reason === "no_matching_opportunities") {
-        showToast(result.message, "warning", "Nessun’altra opportunità compatibile");
+      if (result.message) {
+        showToast(result.message, "warning", result.reason === "missing_preferences" ? "Preferenze mancanti" : "Nessun’altra opportunità compatibile");
         return;
       }
     } catch (error) {
@@ -1986,8 +2054,10 @@ Cordiali saluti,
     const priority = $("opportunityPriorityFilter")?.value || "";
     const company = $("opportunityCompanyFilter")?.value || "";
     const location = $("opportunityLocationFilter")?.value || "";
+    const onlyMatching = ($("opportunityPreferenceFilter")?.value || "match") === "match";
     let jobs = state.data.jobs
       .filter((job) => jobStatus(job) !== "CLOSED")
+      .filter((job) => !onlyMatching || !isOffPreference(job))
       .filter((job) => jobFit(job) >= minFit)
       .filter((job) => !status || jobStatus(job) === status)
       .filter((job) => !priority || jobPriority(job) === priority)
@@ -2001,12 +2071,17 @@ Cordiali saluti,
     return jobs.sort((a, b) => jobFit(b) - jobFit(a));
   }
 
+  function offPreferenceCount() {
+    return state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED" && isOffPreference(job)).length;
+  }
+
   function renderOpportunities(options = {}) {
     if (!options.preserveFilters) renderOpportunityFilters();
     renderKpiFilterNotice("opportunityKpiFilterNotice", "opportunities");
     const jobs = filteredJobs();
-    $("opportunityHeroCount").textContent = String(state.data.jobs.length);
+    $("opportunityHeroCount").textContent = String(activeJobs().length);
     $("opportunityResultCount").textContent = `${jobs.length} ${jobs.length === 1 ? "risultato" : "risultati"}`;
+    renderPreferenceSummary();
     const groups = [
       { stage: "review", title: "Da valutare", copy: "Nuove opportunità: scegli se ti interessano, applica ora, salvale per dopo oppure cancellale.", icon: "search" },
       { stage: "to-apply", title: "Da applicare", copy: "Posizioni che hai scelto: le prioritarie e con Fit Score più alto sono mostrate per prime.", icon: "clock" },
@@ -2020,7 +2095,32 @@ Cordiali saluti,
             <div class="opportunities-grid">${groupedJobs.length ? groupedJobs.map(renderOpportunityCard).join("") : `<div class="opportunity-flow-group__empty">Nessuna opportunità in questa fase.</div>`}</div>
           </section>`;
         }).join("")
-      : emptyState("Nessuna opportunità trovata", state.data.jobs.length ? "Prova ad abbassare il Fit minimo o ad azzerare i filtri." : "La tabella jobs è vuota. Le nuove opportunità compariranno qui automaticamente.", state.data.jobs.length ? { name: "clear-filters", label: "Azzera filtri", icon: "refresh" } : null);
+      : emptyState("Nessuna opportunità trovata", state.data.jobs.length ? "Prova ad abbassare il Fit minimo, ad azzerare i filtri o premi “Nuove proposte” per cercare annunci in linea con le preferenze." : "La tabella jobs è vuota. Le nuove opportunità compariranno qui automaticamente.", state.data.jobs.length ? { name: "clear-filters", label: "Azzera filtri", icon: "refresh" } : null);
+  }
+
+  function renderPreferenceSummary() {
+    const host = $("opportunityPreferenceSummary");
+    if (!host) return;
+    const preferences = currentPreferences();
+    const hidden = offPreferenceCount();
+    const showingAll = $("opportunityPreferenceFilter")?.value === "all";
+    if (!matchingPreferences()) {
+      host.innerHTML = `<span>Le proposte non sono ancora filtrate: imposta ruoli, location e modalità di lavoro.</span><button type="button" data-route="preferences">Imposta preferenze</button>`;
+      return;
+    }
+    const parts = [
+      preferences.roles.length ? `<b>Ruoli</b> ${escapeHtml(preferences.roles.join(", "))}` : "",
+      preferences.sectors.length ? `<b>Settori</b> ${escapeHtml(preferences.sectors.join(", "))}` : "",
+      preferences.locations.length ? `<b>Location</b> ${escapeHtml(preferences.locations.join(", "))}` : "",
+      preferences.workModes.length ? `<b>Modalità</b> ${escapeHtml(preferences.workModes.join(", "))}` : "",
+      preferences.minFit ? `<b>Fit minimo</b> ${asNumber(preferences.minFit, 0).toFixed(1)}` : ""
+    ].filter(Boolean);
+    const hiddenNote = hidden
+      ? (showingAll
+        ? ` · ${hidden} propost${hidden === 1 ? "a" : "e"} fuori criteri evidenziat${hidden === 1 ? "a" : "e"}`
+        : ` · ${hidden} propost${hidden === 1 ? "a nascosta perché non è" : "e nascoste perché non sono"} più in linea`)
+      : "";
+    host.innerHTML = `<span>${parts.join(" · ")}${hiddenNote}</span><button type="button" data-route="preferences">Modifica</button>`;
   }
 
   function renderOpportunityCard(job) {
@@ -2035,7 +2135,7 @@ Cordiali saluti,
       : `<div class="top-opportunity__selected-state">${decision}<button class="top-opportunity__change-state" type="button" data-action="edit-dashboard-state" data-id="${escapeAttribute(job.id)}">Cambia stato</button></div>`;
     const secondaryStatus = ["NEW", "APPLY", "APPLIED"].includes(jobStatus(job)) ? "" : statusBadge(jobStatus(job));
     return `
-      <article class="opportunity-card opportunity-card--clickable" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
+      <article class="opportunity-card opportunity-card--clickable${isOffPreference(job) ? " opportunity-card--off-preference" : ""}" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}">
         <div class="opportunity-card__top ${decision && !editingState ? "opportunity-card__top--decided" : ""}">
           <div class="company-logo">${companyLogoContent(job)}</div>
           <div class="opportunity-copy">
@@ -2051,6 +2151,7 @@ Cordiali saluti,
           <span>${icon("link")}${escapeHtml(source)}</span>
           ${salaryMarkup(job)}
         </div>
+        ${preferenceChipsMarkup(job)}
         <div class="opportunity-company-brief">
           <span class="opportunity-company-brief__logo company-logo">${companyLogoContent(job)}</span>
           <div><strong>${escapeHtml(companyIndustry(job))}</strong><p>${escapeHtml(companyOverview(job))}</p></div>
@@ -2955,7 +3056,8 @@ Cordiali saluti,
       "opportunityStatusFilter",
       "opportunityPriorityFilter",
       "opportunityCompanyFilter",
-      "opportunityLocationFilter"
+      "opportunityLocationFilter",
+      "opportunityPreferenceFilter"
     ].forEach((id) => $(id)?.addEventListener("change", () => renderOpportunities({ preserveFilters: true })));
     $("preferenceMinFit")?.addEventListener("input", () => {
       $("preferenceMinFitOutput").textContent = asNumber($("preferenceMinFit").value, 7).toFixed(1);
@@ -3227,6 +3329,7 @@ Cordiali saluti,
     $("opportunityPriorityFilter").value = "";
     $("opportunityCompanyFilter").value = "";
     $("opportunityLocationFilter").value = "";
+    if ($("opportunityPreferenceFilter")) $("opportunityPreferenceFilter").value = "match";
     renderOpportunities({ preserveFilters: true });
   }
 
@@ -4135,8 +4238,13 @@ Cordiali saluti,
       });
       if (metadataError) throw metadataError;
       if (userData?.user) state.user = userData.user;
-      renderPreferences();
-      showToast(state.optionalErrors.preferences ? "Motivazioni e competenze salvate su questo dispositivo." : "Preferenze e personalizzazione salvate.", "success", "Preferenze aggiornate");
+      matchCache.clear();
+      renderAll();
+      const hidden = offPreferenceCount();
+      const message = state.optionalErrors.preferences
+        ? "Motivazioni e competenze salvate su questo dispositivo."
+        : `Preferenze salvate. Opportunità e Fit Score sono stati ricalcolati${hidden ? `: ${hidden} propost${hidden === 1 ? "a non più in linea è stata nascosta" : "e non più in linea sono state nascoste"}` : ""}. Usa “Nuove proposte” per cercare annunci con i nuovi criteri.`;
+      showToast(message, "success", "Preferenze aggiornate");
     } catch (error) {
       showToast(humanizeError(error, "il salvataggio delle preferenze"), "error", "Preferenze non salvate");
     } finally {

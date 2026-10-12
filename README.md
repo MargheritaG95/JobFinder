@@ -191,3 +191,15 @@ more unseen vacancies; a fixed four-hour cron can be enabled on Vercel Pro.
 “Nuove proposte” authenticates the current user,
 loads their `search_preferences`, ranks unseen catalog vacancies and writes only
 their private matches to the existing dashboard-compatible `jobs` table.
+
+## Selezione delle opportunità in base alle preferenze
+
+Le regole di corrispondenza stanno in `shared/matching.js` e sono usate sia dall'API (`/api/opportunities`, `/api/catalog-refresh`) sia dalla pagina Opportunità, così la proposta scelta dal server e il Fit Score mostrato coincidono.
+
+- **Ruolo** (obbligatorio se indicato): tutte le parole chiave del ruolo devono comparire nel titolo, con sinonimi IT/EN (es. "Responsabile prodotto" = "Product Manager"); una funzione diversa ("Product Designer") non conta come "Product Manager".
+- **Settore**: cercato in titolo, settore, azienda e descrizione, con famiglie di sinonimi (Tech, AI, Automotive, Fintech…). È un bonus se hai indicato ruoli, obbligatorio se indichi solo settori.
+- **Location**: Paesi in tutte le lingue, città con nomi IT/EN (Milano = Milan), regioni italiane. Se scegli una città, per ruoli in sede/ibridi conta la città; il Paese vale per i ruoli remote (anche "Remote - Europe").
+- **Modalità**: Remote / Hybrid / On-site (anche Remoto, Ibrido, In sede).
+- Le proposte "Da valutare" che non rispettano più le preferenze o il Fit minimo vengono nascoste (filtro "Preferenze" per rivederle); dopo il salvataggio delle preferenze tutto viene ricalcolato subito.
+
+Ricerche mirate: se sono configurate `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` e/o `JOOBLE_API_KEY` (più `JOOBLE_API_KEY_<PAESE>` per i domini nazionali), "Nuove proposte" e il refresh notturno cercano i ruoli dell'utente nei Paesi e nelle città preferite, oltre ai feed generici remote.

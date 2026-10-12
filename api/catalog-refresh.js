@@ -1,4 +1,4 @@
-const { refreshCatalog, supabase } = require("./_lib/catalog");
+const { refreshCatalog, queriesFromPreferences, supabase } = require("./_lib/catalog");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -7,7 +7,15 @@ module.exports = async function handler(req, res) {
   }
   const startedAt = new Date().toISOString();
   try {
-    const result = await refreshCatalog();
+    // Search the keyword APIs for what users are actually looking for (roles × countries/cities).
+    let queries = [];
+    try {
+      const rows = await supabase("search_preferences?select=target_roles,locations&limit=200");
+      queries = queriesFromPreferences(rows || [], { maxRoles: 3, maxQueries: 40 });
+    } catch (error) {
+      console.warn("[catalog-refresh] preferences unavailable, generic refresh only", error.message);
+    }
+    const result = await refreshCatalog({ queries });
     await supabase("source_import_runs", { method: "POST", body: JSON.stringify({
       source: result.sources.join(","), started_at: startedAt, finished_at: new Date().toISOString(),
       status: result.errors.length ? "partial" : "success", fetched_count: result.fetched,

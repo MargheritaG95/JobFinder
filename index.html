@@ -383,6 +383,7 @@
             </div>
 
             <div id="opportunityKpiFilterNotice" class="kpi-filter-notice is-hidden"></div>
+            <div id="opportunityPreferenceSummary" class="preference-summary" aria-live="polite"></div>
             <section class="filter-bar" aria-label="Filtri opportunità">
               <label class="compact-field">
                 <span>Fit minimo</span>
@@ -397,6 +398,7 @@
               <label class="compact-field"><span>Priorità</span><select id="opportunityPriorityFilter"><option value="">Tutte</option></select></label>
               <label class="compact-field"><span>Azienda</span><select id="opportunityCompanyFilter"><option value="">Tutte</option></select></label>
               <label class="compact-field"><span>Location</span><select id="opportunityLocationFilter"><option value="">Tutte</option></select></label>
+              <label class="compact-field"><span>Preferenze</span><select id="opportunityPreferenceFilter"><option value="match" selected>Solo in linea</option><option value="all">Mostra anche fuori criteri</option></select></label>
               <button id="clearOpportunityFiltersButton" class="button button--ghost" type="button">Azzera filtri</button>
             </section>
             <div class="result-line"><strong id="opportunityResultCount">0 risultati</strong><span>Organizzati per prossima azione</span></div>
@@ -507,13 +509,13 @@
                     <div class="compact-field"><label for="preferenceCountries">Paesi</label><select id="preferenceCountries" multiple size="7" aria-label="Seleziona più Paesi"></select></div>
                     <div class="compact-field"><label for="preferenceCityCountry">Città del Paese selezionato</label><select id="preferenceCityCountry" aria-label="Paese per le città"><option value="">Seleziona prima un Paese</option></select><select id="preferenceCitySelect" aria-label="Città disponibili"><option value="">Seleziona una città</option></select><input id="preferenceCityInput" list="preferenceCitySuggestions" placeholder="Oppure scrivi una città" autocomplete="off" /><datalist id="preferenceCitySuggestions"><option value="Milano"></option><option value="Roma"></option><option value="Bruxelles"></option><option value="Parigi"></option><option value="Berlino"></option><option value="Amsterdam"></option><option value="Londra"></option><option value="Barcellona"></option><option value="Zurigo"></option><option value="Vienna"></option></datalist><button type="button" class="button" id="addPreferenceCity">+ Aggiungi</button></div>
                     <div id="preferenceCityChips" aria-live="polite"></div>
-                    <small>Seleziona più Paesi con Ctrl/Cmd + clic, poi scegli le città dal secondo menu. Puoi anche inserire una città manualmente.</small>
+                    <small>Seleziona più Paesi con Ctrl/Cmd + clic, poi scegli le città dal secondo menu. Puoi anche inserire una città manualmente. Se scegli una città, per i ruoli in sede o ibridi conta la città; il Paese resta valido per i ruoli da remoto.</small>
                     <textarea id="preferenceLocations" rows="3" hidden></textarea>
                   </div>
                 </label>
                 <label class="field">
                   <span>Modalità di lavoro</span>
-                  <small>Es. Remote, Hybrid, On-site.</small>
+                  <small>Es. Remote, Hybrid, On-site (anche Remoto, Ibrido, In sede). Se indichi solo Remote, gli annunci in sede vengono esclusi.</small>
                   <textarea id="preferenceWorkModes" rows="5" placeholder="Remote&#10;Hybrid"></textarea>
                 </label>
               </div>
@@ -784,6 +786,7 @@
 
     <script src="config.js?v=20260907.45" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="app.js?v=20260909.56" defer></script>
+    <script src="shared/matching.js?v=20261012.1" defer></script>
+    <script src="app.js?v=20261012.1" defer></script>
   </body>
 </html>

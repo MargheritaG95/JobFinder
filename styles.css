@@ -3077,3 +3077,19 @@ textarea::placeholder {
   .location-picker { padding: 12px; }
   .location-picker select { min-height: 140px; }
 }
+
+/* Preference matching on the opportunities page */
+.preference-summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: -6px 0 16px; padding: 10px 13px; border: 1px solid var(--blue-100); border-radius: 10px; color: #35527d; background: var(--blue-50); font-size: .66rem; line-height: 1.5; }
+.preference-summary:empty { display: none; }
+.preference-summary b { font-weight: 800; }
+.preference-summary button { flex: none; border: 0; color: var(--blue-600); background: transparent; font: inherit; font-weight: 800; cursor: pointer; }
+.opportunity-card__preferences { margin: 10px 0 0; }
+.opportunity-card__preferences > strong { display: block; margin-bottom: 6px; color: var(--muted); font-size: .58rem; letter-spacing: .04em; text-transform: uppercase; }
+.opportunity-card__preferences > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.preference-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 21px; padding: 0 8px; border-radius: 99px; font-size: .6rem; font-weight: 700; }
+.preference-chip .icon { width: 11px; height: 11px; }
+.preference-chip--hit { color: var(--green); background: var(--green-soft); }
+.preference-chip--miss { color: var(--amber); background: var(--amber-soft); }
+.preference-chip--note { color: var(--muted); background: #f2f4f7; }
+.opportunity-card--off-preference { opacity: .72; border-style: dashed; }
+@media (max-width: 640px) { .preference-summary { flex-direction: column; align-items: flex-start; } }

@@ -1,4 +1,4 @@
-const { fetchSources, fetchBoards, boardFromUrl, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
+const { rotateQueries, fetchSources, fetchBoards, boardFromUrl, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
 const matching = require("../shared/matching");
 
 const PUBLIC_SUPABASE_URL = "https://moyabdwxlbkfqmtjuwwa.supabase.co";
@@ -138,9 +138,16 @@ module.exports = async function handler(req, res) {
     }
     const config = supabaseConfig();
     // Searches built from this user's roles and places run alongside the shared catalog.
+    // Every role × country and role × city combination, in fair order; JSearch walks through it
+    // three queries per click, continuing where this user's previous click stopped.
+    const allQueries = queriesFromPreferences([preferences], { maxQueries: 80 });
+    const rotation = rotateQueries(allQueries, req.body?.jsearchOffset, 3);
+    const jsearchInfo = process.env.JSEARCH_API_KEY
+      ? { jsearchNextOffset: rotation.nextOffset, jsearchSearched: rotation.picked.map((query) => `${query.what} · ${query.where || query.country.toUpperCase()}`), jsearchTotal: allQueries.length }
+      : {};
     const targetedPromise = matching.hasCriteria(preferences)
-      ? fetchTargeted(queriesFromPreferences([preferences]), {
-        timeoutMs: 7000, jsearchLimit: 3,
+      ? fetchTargeted(allQueries.slice(0, 20), {
+        timeoutMs: 7000, jsearchQueries: rotation.picked,
         userIp: String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "127.0.0.1",
         userAgent: String(req.headers["user-agent"] || "JobFinder/2.0").slice(0, 200)
       }).catch((error) => ({ jobs: [], errors: [error.message] }))
@@ -217,6 +224,7 @@ module.exports = async function handler(req, res) {
     }
     ranked = diversified;
     if (!ranked.length) return res.status(200).json({
+      ...jsearchInfo,
       jobs: [],
       count: 0,
       reason: "no_matching_opportunities",
@@ -251,7 +259,7 @@ module.exports = async function handler(req, res) {
       const rows = await userSupabase("jobs", token, { method: "POST", body: JSON.stringify(legacyJob(user.id, item.job, item.result, companyId)), headers: { Prefer: "return=representation" } });
       if (rows?.[0]) created.push(rows[0]);
     }
-    return res.status(200).json({ jobs: created, count: created.length, catalogMatches: ranked.length });
+    return res.status(200).json({ jobs: created, count: created.length, catalogMatches: ranked.length, ...jsearchInfo });
   } catch (error) {
     console.error("[opportunities] refresh failed", { message: error.message, stack: error.stack });
     return res.status(error.status || 500).json({ error: error.message });

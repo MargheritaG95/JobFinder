@@ -395,11 +395,24 @@ function joobleKey(region) {
  * elsewhere in Europe, so this is what fills the catalog with relevant listings.
  * queries: [{ what: "Product Manager", country: "it", where: "Milano" }]
  */
-async function fetchTargeted(queries, { timeoutMs = 8000, jsearchLimit = 0, userIp = "127.0.0.1", userAgent = "JobFinder/2.0" } = {}) {
+async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], userIp = "127.0.0.1", userAgent = "JobFinder/2.0" } = {}) {
   const tasks = [];
   const seen = new Set();
-  let jsearchCalls = 0;
   const signal = () => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
+  // JSearch (Google for Jobs → LinkedIn, Glassdoor, Indeed…) is paid per call: it only runs the
+  // few queries chosen by the caller, which rotates them so every role and place gets its turn.
+  if (process.env.JSEARCH_API_KEY) {
+    const host = process.env.JSEARCH_API_HOST || "jsearch.p.rapidapi.com";
+    for (const query of jsearchQueries) {
+      const country = String(query.country || "").toLowerCase();
+      const what = compact(query.what);
+      const where = compact(query.where);
+      if (!what || !/^[a-z]{2}$/.test(country)) continue;
+      const params = new URLSearchParams({ query: `${what} in ${where || countryLabelEn(country) || country}`, page: "1", num_pages: "1", country, date_posted: "month" });
+      tasks.push(getJson(`https://${host}/search?${params}`, { signal: signal(), headers: { "X-RapidAPI-Key": process.env.JSEARCH_API_KEY, "X-RapidAPI-Host": host } })
+        .then((data) => ({ source: `JSearch:${country}:${what}:${where}`, jobs: (data.data || []).map((job) => normalizeJSearch(job, country)) })));
+    }
+  }
   for (const query of queries) {
     const country = String(query.country || "").toLowerCase();
     const what = compact(query.what);
@@ -425,14 +438,6 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchLimit = 0, user
         method: "POST", headers: { "Content-Type": "application/json" }, signal: signal(),
         body: JSON.stringify({ keywords: what, location: where || countryLabel(country) || "", page: "1", ResultOnPage: "50" })
       }).then((data) => ({ source: `Jooble:${country}:${what}`, jobs: (data.jobs || []).map((job) => normalizeJooble(job, country)) })));
-    }
-    // JSearch (Google for Jobs → LinkedIn, Glassdoor, Indeed…): paid per call, so only a few per request.
-    if (process.env.JSEARCH_API_KEY && jsearchCalls < jsearchLimit) {
-      jsearchCalls += 1;
-      const host = process.env.JSEARCH_API_HOST || "jsearch.p.rapidapi.com";
-      const params = new URLSearchParams({ query: `${what} in ${where || countryLabelEn(country) || country}`, page: "1", num_pages: "1", country, date_posted: "month" });
-      tasks.push(getJson(`https://${host}/search?${params}`, { signal: signal(), headers: { "X-RapidAPI-Key": process.env.JSEARCH_API_KEY, "X-RapidAPI-Host": host } })
-        .then((data) => ({ source: `JSearch:${country}:${what}`, jobs: (data.data || []).map((job) => normalizeJSearch(job, country)) })));
     }
     if (process.env.CAREERJET_AFFID && CAREERJET_LOCALES[country]) {
       const params = new URLSearchParams({
@@ -597,4 +602,15 @@ async function refreshCatalog({ queries = [] } = {}) {
   return { jobs: stored, fetched: jobs.length, accepted, sources: results.concat(targeted.results).map((r) => r.source), errors: errors.concat(targeted.errors) };
 }
 
-module.exports = { stripHtml, fetchSources, fetchBoards, boardFromUrl, parseWwr, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent };
+/**
+ * Picks the next `count` queries for this user, starting at `offset` and wrapping around.
+ * Returns the queries and the offset to send next time.
+ */
+function rotateQueries(queries, offset, count = 3) {
+  if (!queries.length) return { picked: [], nextOffset: 0 };
+  const start = ((Number(offset) || 0) % queries.length + queries.length) % queries.length;
+  const picked = Array.from({ length: Math.min(count, queries.length) }, (_, index) => queries[(start + index) % queries.length]);
+  return { picked, nextOffset: (start + picked.length) % queries.length };
+}
+
+module.exports = { stripHtml, rotateQueries, fetchSources, fetchBoards, boardFromUrl, parseWwr, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent };

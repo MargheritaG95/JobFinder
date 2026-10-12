@@ -1996,7 +1996,13 @@ Cordiali saluti,
     return insertRecord("jobs", payload);
   }
 
+  function jsearchOffsetKey() {
+    return `jobfinder:jsearch-offset:${state.user?.id || "anonymous"}`;
+  }
+
   async function fetchFreshOpportunities(preferences) {
+    let jsearchOffset = 0;
+    try { jsearchOffset = Number(window.localStorage.getItem(jsearchOffsetKey())) || 0; } catch (_) { jsearchOffset = 0; }
     const { data: sessionData, error: sessionError } = await state.client.auth.getSession();
     if (sessionError) throw sessionError;
     const token = sessionData.session?.access_token;
@@ -2009,6 +2015,7 @@ Cordiali saluti,
       // falls back to these if it cannot read them (e.g. right after saving).
       body: JSON.stringify({
         limit: preferences.dailyCount,
+        jsearchOffset,
         preferences: preferences.isDefault ? null : {
           target_roles: preferences.roles, target_sectors: preferences.sectors,
           locations: preferences.locations, work_modes: preferences.workModes, min_fit_score: preferences.minFit
@@ -2018,7 +2025,11 @@ Cordiali saluti,
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || `Servizio opportunità non disponibile (HTTP ${response.status}).`);
-    const imported = toList(body.jobs);
+    // Next click continues the LinkedIn / Glassdoor / Indeed searches where this one stopped.
+    if (body.jsearchNextOffset !== undefined) {
+      try { window.localStorage.setItem(jsearchOffsetKey(), String(body.jsearchNextOffset)); } catch (_) { /* restarts from the first search */ }
+    }
+    const imported = Array.isArray(body.jobs) ? body.jobs : [];
     imported.forEach((job) => {
       if (!state.data.jobs.some((current) => String(current.id) === String(job.id))) state.data.jobs.push(job);
     });

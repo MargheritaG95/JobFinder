@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
     let queries = [];
     try {
       const rows = await supabase("search_preferences?select=target_roles,locations&limit=200");
-      queries = queriesFromPreferences(rows || [], { maxRoles: 3, maxQueries: 40 });
+      queries = queriesFromPreferences(rows || [], { maxRoles: 5, maxQueries: 60, maxPerUser: 12 });
     } catch (error) {
       console.warn("[catalog-refresh] preferences unavailable, generic refresh only", error.message);
     }

@@ -186,6 +186,8 @@
   const PLACE_INDEX = new Map();
   PLACES.forEach(([country, ...names]) => names.forEach((name) => PLACE_INDEX.set(normalized(name), { country, names: names.map(normalized) })));
 
+  // Exceptional / deprecated region codes that share names with real countries ("France" → FX).
+  const DEPRECATED_CODES = new Set(["FX", "EU", "EZ", "UN", "QO", "XA", "XB", "ZZ", "AN", "BU", "CS", "DD", "NT", "SU", "TP", "YU", "ZR", "IC", "EA", "CP", "DG", "TA", "AC"]);
   let countryIndex = null;
   function countries() {
     if (countryIndex) return countryIndex;
@@ -203,12 +205,12 @@
           if (label && label !== code) names.add(normalized(label));
         } catch (_) { /* ignore */ }
       });
-      if (!names.size) continue;
+      if (!names.size || DEPRECATED_CODES.has(code)) continue;
       if (code === "GB") ["uk", "united kingdom", "great britain", "england", "scotland", "wales"].forEach((n) => names.add(n));
       if (code === "US") ["usa", "us", "united states", "united states of america", "america", "stati uniti"].forEach((n) => names.add(n));
       if (code === "NL") ["holland", "olanda"].forEach((n) => names.add(n));
       byCode.set(code, [...names]);
-      names.forEach((name) => byName.set(name, code));
+      names.forEach((name) => { if (!byName.has(name)) byName.set(name, code); });
     }
     countryIndex = { byName, byCode };
     return countryIndex;

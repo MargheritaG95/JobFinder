@@ -385,8 +385,8 @@ function normalizeLever(job, site) {
 const ADZUNA_COUNTRIES = new Set("gb us at au be br ca ch de es fr in it mx nl nz pl sg za".split(" "));
 
 function joobleKey(region) {
-  if (region === "us") return process.env.JOOBLE_API_KEY || "";
-  return process.env[`JOOBLE_API_KEY_${region.toUpperCase()}`] || (region === "it" ? process.env.JOOBLE_API_KEY || "" : "");
+  // A country-specific key wins; otherwise the main key is used on that country's Jooble domain.
+  return process.env[`JOOBLE_API_KEY_${region.toUpperCase()}`] || process.env.JOOBLE_API_KEY || "";
 }
 
 /**
@@ -451,21 +451,49 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchLimit = 0, user
   return { results, errors, jobs };
 }
 
-/** Builds targeted queries from one or more users' search_preferences rows. */
-function queriesFromPreferences(rows, { maxRoles = 4, maxQueries = 12 } = {}) {
-  const queries = [];
-  for (const row of rows) {
+/**
+ * Builds targeted queries from one or more users' search_preferences rows.
+ * Coverage is fair whatever the user chose: first every role in every chosen country,
+ * then every role in every chosen city (cities matched to their own country),
+ * interleaved so no role, country or city is starved by the cap.
+ */
+function queriesFromPreferences(rows, { maxRoles = 5, maxQueries = 20, maxPerUser = maxQueries } = {}) {
+  const perUser = rows.map((row) => {
     const roles = matching.list(row.target_roles).slice(0, maxRoles);
-    const countries = matching.preferredCountryCodes(row).map((code) => code.toLowerCase());
     const cities = matching.preferredCities(row);
-    for (const what of roles) for (const country of countries.length ? countries : ["it"]) {
-      queries.push({ what, country, where: "" });
-      // A city search per country brings local on-site / hybrid roles that the national feed buries.
-      const city = cities.find((item) => item.country ? item.country.toLowerCase() === country : countries.length <= 1);
-      if (city) queries.push({ what, country, where: city.name });
+    const countries = matching.preferredCountryCodes(row).map((code) => code.toLowerCase());
+    // A city of unknown country belongs to the only chosen country, if there is just one.
+    const cityQueries = cities
+      .map((city) => ({ name: city.name, country: city.country ? city.country.toLowerCase() : (countries.length === 1 ? countries[0] : "") }))
+      .filter((city) => city.country);
+    const countryList = countries.length ? countries : [...new Set(cityQueries.map((city) => city.country))];
+    const national = [];
+    const local = [];
+    for (const what of roles) {
+      for (const country of countryList) national.push({ what, country, where: "" });
+      for (const city of cityQueries) local.push({ what, country: city.country, where: city.name });
     }
+    // Interleave: role1/country1, role2/country1 … so each slice covers all roles and places.
+    const order = (items) => {
+      const byPlace = new Map();
+      items.forEach((item) => {
+        const key = `${item.country}|${item.where}`;
+        if (!byPlace.has(key)) byPlace.set(key, []);
+        byPlace.get(key).push(item);
+      });
+      const lanes = [...byPlace.values()];
+      const result = [];
+      for (let index = 0; lanes.some((lane) => index < lane.length); index += 1) lanes.forEach((lane) => { if (lane[index]) result.push(lane[index]); });
+      return result;
+    };
+    return order(national).concat(order(local)).slice(0, maxPerUser);
+  });
+  // Several users (nightly refresh): take one query from each in turn.
+  const queries = [];
+  for (let index = 0; perUser.some((list) => index < list.length) && queries.length < maxQueries; index += 1) {
+    perUser.forEach((list) => { if (list[index] && queries.length < maxQueries) queries.push(list[index]); });
   }
-  return queries.slice(0, maxQueries);
+  return queries;
 }
 
 function museOffset() {

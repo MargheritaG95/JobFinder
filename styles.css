@@ -376,6 +376,7 @@ h3 {
 
 .field {
   display: grid;
+  align-content: start;
   gap: 7px;
   color: #344054;
   font-size: 0.79rem;
@@ -2997,86 +2998,57 @@ textarea::placeholder {
 .icon-button--danger { color: #c43d4d; border-color: #f0b8bf; background: #fff8f9; }
 .icon-button--danger:hover { background: #fff0f2; border-color: #d96572; }
 
-/* Location preferences — consistent with the existing form system */
-.location-picker {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: #f8faff;
+/* Location preferences — searchable country and city multi-select */
+.location-picker { min-width: 0; }
+.location-picker__combos { display: grid; gap: 14px; min-width: 0; }
+.location-combo { position: relative; display: grid; gap: 7px; min-width: 0; }
+.location-combo__label { color: #344054; font-size: .79rem; font-weight: 650; }
+.location-combo__control {
+  position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  min-height: 46px; padding: 6px 34px 6px 8px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); background: #fff; cursor: text;
 }
-.location-picker .compact-field {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
+.location-combo.is-open .location-combo__control { border-color: var(--blue-500); box-shadow: 0 0 0 4px rgba(59,130,246,.09); }
+.location-combo.is-disabled .location-combo__control { background: #f5f7fa; cursor: not-allowed; }
+.location-combo__search { flex: 1 1 140px; min-width: 120px; min-height: 32px; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; font-size: .85rem; }
+.location-combo__search:disabled { cursor: not-allowed; }
+.location-combo__search:focus-visible { outline: 0; }
+.location-combo__caret { position: absolute; right: 12px; top: 14px; color: var(--muted-2); font-size: .8rem; pointer-events: none; }
+.location-combo__menu {
+  display: none; flex: 1 0 100%; max-height: 240px; overflow-y: auto; margin: 4px 0 0; padding: 4px 0 0;
+  border-top: 1px solid var(--border); background: #fff;
 }
-.location-picker .compact-field > label {
-  color: #344054;
-  font-size: .79rem;
-  font-weight: 650;
+.location-combo.is-open .location-combo__menu { display: block; }
+.location-combo__option {
+  display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 6px 9px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; font-size: .84rem; text-align: left; cursor: pointer;
 }
-.location-picker select,
-.location-picker input {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  color: var(--ink);
-  font: inherit;
-  outline: none;
+.location-combo__option:hover { background: var(--blue-50); }
+.location-combo__option.is-selected { color: var(--blue-600); font-weight: 650; }
+.location-combo__check { display: inline-grid; place-items: center; flex: none; width: 17px; height: 17px; border: 1px solid #c9d3e3; border-radius: 4px; font-size: .7rem; }
+.location-combo__option.is-selected .location-combo__check { border-color: var(--blue-600); color: #fff; background: var(--blue-600); }
+.location-combo__empty { padding: 10px; color: var(--muted-2); font-size: .8rem; }
+.location-combo__hint { color: var(--muted-2); font-size: .72rem; font-weight: 400; line-height: 1.5; }
+.location-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 3px 9px 3px 11px;
+  border: 1px solid #c9d8f2; border-radius: 999px; background: #eaf1ff; color: #28518a; font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer;
 }
-.location-picker select {
-  min-height: 166px;
-  padding: 8px;
-  font-size: .85rem;
-}
-.location-picker select option {
-  padding: 7px 9px;
-  border-radius: 5px;
-}
-.location-picker input {
-  min-height: 44px;
-  padding: 0 12px;
-}
-.location-picker select:focus,
-.location-picker input:focus {
-  border-color: var(--blue-500);
-  box-shadow: 0 0 0 4px rgba(59,130,246,.09);
-}
-.location-picker #addPreferenceCity {
-  justify-self: start;
-  margin-top: 2px;
-}
-.location-picker #preferenceCityChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-.location-picker #preferenceCityChips:empty { display: none; }
-.location-picker #preferenceCityChips button {
-  min-height: 32px;
-  padding: 5px 11px;
-  border: 1px solid #c9d8f2;
-  border-radius: 999px;
-  background: #eaf1ff;
-  color: #28518a;
-  font-size: .78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.location-picker > small {
-  color: var(--muted-2);
-  font-size: .72rem;
-  font-weight: 400;
-  line-height: 1.5;
-}
-@media (max-width: 600px) {
-  .location-picker { padding: 12px; }
-  .location-picker select { min-height: 140px; }
-}
+.location-chip--city { border-color: #cfe9de; background: var(--green-soft); color: #17694f; }
+.location-chip small { font-size: .62rem; opacity: .7; }
+.location-chip span { font-size: .95rem; line-height: 1; opacity: .7; }
+.location-chip:hover span { opacity: 1; }
+
+/* "Cerca anche su" — LinkedIn / Glassdoor / Indeed / Google Jobs searches from preferences */
+.external-search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: -6px 0 16px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 10px; background: #fff; font-size: .68rem; }
+.external-search:empty { display: none; }
+.external-search__title { color: #344054; font-weight: 800; }
+.external-search select { min-height: 32px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: #fff; color: var(--ink); font-size: .68rem; }
+.external-search__links { display: flex; flex-wrap: wrap; gap: 6px; }
+.external-search__link { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 11px; border: 1px solid #c9d8f2; border-radius: 999px; color: #28518a; background: #eaf1ff; font-weight: 700; text-decoration: none; }
+.external-search__link:hover { background: #dceaff; }
+.external-search__link .icon { width: 11px; height: 11px; }
+.external-search small { flex: 1 0 100%; color: var(--muted-2); font-size: .64rem; }
+.external-search small button { border: 0; padding: 0; color: var(--blue-600); background: transparent; font: inherit; font-weight: 800; cursor: pointer; }
 
 /* Preference matching on the opportunities page */
 .preference-summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: -6px 0 16px; padding: 10px 13px; border: 1px solid var(--blue-100); border-radius: 10px; color: #35527d; background: var(--blue-50); font-size: .66rem; line-height: 1.5; }

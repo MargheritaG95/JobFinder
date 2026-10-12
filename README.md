@@ -202,4 +202,11 @@ Le regole di corrispondenza stanno in `shared/matching.js` e sono usate sia dall
 - **Modalità**: Remote / Hybrid / On-site (anche Remoto, Ibrido, In sede).
 - Le proposte "Da valutare" che non rispettano più le preferenze o il Fit minimo vengono nascoste (filtro "Preferenze" per rivederle); dopo il salvataggio delle preferenze tutto viene ricalcolato subito.
 
+Fonti di opportunità:
+
+- sempre attive (feed pubblici): Remotive, Arbeitnow, Jobicy, Himalayas, RemoteOK, The Muse, Working Nomads;
+- **JSearch** (`JSEARCH_API_KEY`, chiave RapidAPI; opzionale `JSEARCH_API_HOST`): legge Google for Jobs e porta annunci pubblicati su **LinkedIn, Glassdoor, Indeed** e siti aziendali, cercando i ruoli dell'utente nei suoi Paesi/città. Il piano gratuito ha 200 chiamate al mese: ne usiamo al massimo 3 per "Nuove proposte" e nessuna nel refresh notturno;
+- **Adzuna** (`ADZUNA_APP_ID` + `ADZUNA_APP_KEY`), **Jooble** (`JOOBLE_API_KEY`, `JOOBLE_API_KEY_<PAESE>`), **Careerjet** (`CAREERJET_AFFID`): ricerche per ruolo e luogo in Italia ed Europa;
+- LinkedIn, Glassdoor e Indeed non offrono API pubbliche e il loro scraping viola i termini d'uso: nella pagina Opportunità il riquadro "Cerca anche su" apre le loro ricerche già filtrate con ruolo e luogo, e "Importa annuncio" porta dentro un annuncio trovato lì.
+
 Ricerche mirate: se sono configurate `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` e/o `JOOBLE_API_KEY` (più `JOOBLE_API_KEY_<PAESE>` per i domini nazionali), "Nuove proposte" e il refresh notturno cercano i ruoli dell'utente nei Paesi e nelle città preferite, oltre ai feed generici remote.

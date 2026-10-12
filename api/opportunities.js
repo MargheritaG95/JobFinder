@@ -128,7 +128,11 @@ module.exports = async function handler(req, res) {
     const config = supabaseConfig();
     // Searches built from this user's roles and places run alongside the shared catalog.
     const targetedPromise = matching.hasCriteria(preferences)
-      ? fetchTargeted(queriesFromPreferences([preferences]), { timeoutMs: 7000 }).catch((error) => ({ jobs: [], errors: [error.message] }))
+      ? fetchTargeted(queriesFromPreferences([preferences]), {
+        timeoutMs: 7000, jsearchLimit: 3,
+        userIp: String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "127.0.0.1",
+        userAgent: String(req.headers["user-agent"] || "JobFinder/2.0").slice(0, 200)
+      }).catch((error) => ({ jobs: [], errors: [error.message] }))
       : Promise.resolve({ jobs: [], errors: [] });
     let catalog;
     let excluded = new Set();

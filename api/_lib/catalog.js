@@ -7,6 +7,7 @@ const JOBICY_URL = "https://jobicy.com/api/v2/remote-jobs?count=200";
 const HIMALAYAS_URL = "https://himalayas.app/jobs/api?limit=200";
 const REMOTEOK_URL = "https://remoteok.com/api";
 const MUSE_URL = "https://www.themuse.com/api/public/jobs";
+const WORKING_NOMADS_URL = "https://www.workingnomads.com/api/exposed_jobs/";
 
 function decodeHtmlEntities(value) {
   const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
@@ -212,6 +213,51 @@ function normalizeJooble(job, region) {
   });
 }
 
+function countryLabelEn(code) {
+  try { return new Intl.DisplayNames(["en"], { type: "region" }).of(String(code || "").toUpperCase()) || null; }
+  catch (_) { return null; }
+}
+
+// JSearch reads Google for Jobs, so listings come from LinkedIn, Glassdoor, Indeed, company sites…
+// The publisher is kept as the visible source (e.g. "LinkedIn").
+function normalizeJSearch(job, country) {
+  const posted = job.job_posted_at_datetime_utc || (job.job_posted_at_timestamp ? job.job_posted_at_timestamp * 1000 : null);
+  const place = [job.job_city, job.job_state].filter(Boolean).join(", ");
+  const salary = job.job_min_salary || job.job_max_salary
+    ? `${job.job_salary_currency || ""} ${job.job_min_salary || ""}${job.job_max_salary ? ` – ${job.job_max_salary}` : ""}${job.job_salary_period ? ` / ${String(job.job_salary_period).toLowerCase()}` : ""}`.trim()
+    : null;
+  return enrich({
+    source: compact(job.job_publisher) || "Google Jobs", source_job_id: `jsearch:${job.job_id}`,
+    source_url: job.job_apply_link || job.job_google_link,
+    title: compact(job.job_title), company_name: compact(job.employer_name),
+    company_logo_url: job.employer_logo || null, company_website: job.employer_website || null,
+    location: withCountry(place, countryLabel(job.job_country || country)),
+    remote_type: job.job_is_remote ? "Remote" : null, description: job.job_description,
+    salary_text: salary, salary_min: job.job_min_salary || null, salary_max: job.job_max_salary || null, salary_currency: job.job_salary_currency || null,
+    employment_type: compact(job.job_employment_type) || null, published_at: asIso(posted), raw_data: { job_id: job.job_id, job_publisher: job.job_publisher }
+  });
+}
+
+function normalizeCareerjet(job, country) {
+  return enrich({
+    source: "Careerjet", source_job_id: `${country}:${job.url}`, source_url: job.url,
+    title: compact(job.title), company_name: compact(job.company), company_logo_url: null,
+    location: withCountry(job.locations, countryLabel(country)), description: job.description,
+    salary_text: compact(job.salary) || null, published_at: asIso(job.date), raw_data: job
+  });
+}
+
+function normalizeWorkingNomads(job) {
+  return enrich({
+    source: "Working Nomads", source_job_id: String(job.url), source_url: job.url,
+    title: compact(job.title), company_name: compact(job.company_name), company_logo_url: null,
+    industry: compact(job.category_name) || null, location: compact(job.location) || "Remote", remote_type: "Remote",
+    description: job.description, published_at: asIso(job.pub_date), raw_data: job
+  });
+}
+
+const CAREERJET_LOCALES = { it: "it_IT", gb: "en_GB", ie: "en_IE", us: "en_US", de: "de_DE", at: "de_AT", ch: "de_CH", fr: "fr_FR", be: "fr_BE", lu: "fr_LU", es: "es_ES", pt: "pt_PT", nl: "nl_NL", pl: "pl_PL", se: "sv_SE", dk: "da_DK", no: "no_NO", fi: "fi_FI", cz: "cs_CZ", gr: "el_GR", hu: "hu_HU", ro: "ro_RO" };
+
 function displaySlug(slug) {
   return String(slug || "").replace(/[-_]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -246,9 +292,10 @@ function joobleKey(region) {
  * elsewhere in Europe, so this is what fills the catalog with relevant listings.
  * queries: [{ what: "Product Manager", country: "it", where: "Milano" }]
  */
-async function fetchTargeted(queries, { timeoutMs = 8000 } = {}) {
+async function fetchTargeted(queries, { timeoutMs = 8000, jsearchLimit = 0, userIp = "127.0.0.1", userAgent = "JobFinder/2.0" } = {}) {
   const tasks = [];
   const seen = new Set();
+  let jsearchCalls = 0;
   const signal = () => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
   for (const query of queries) {
     const country = String(query.country || "").toLowerCase();
@@ -276,11 +323,29 @@ async function fetchTargeted(queries, { timeoutMs = 8000 } = {}) {
         body: JSON.stringify({ keywords: what, location: where || countryLabel(country) || "", page: "1", ResultOnPage: "50" })
       }).then((data) => ({ source: `Jooble:${country}:${what}`, jobs: (data.jobs || []).map((job) => normalizeJooble(job, country)) })));
     }
+    // JSearch (Google for Jobs → LinkedIn, Glassdoor, Indeed…): paid per call, so only a few per request.
+    if (process.env.JSEARCH_API_KEY && jsearchCalls < jsearchLimit) {
+      jsearchCalls += 1;
+      const host = process.env.JSEARCH_API_HOST || "jsearch.p.rapidapi.com";
+      const params = new URLSearchParams({ query: `${what} in ${where || countryLabelEn(country) || country}`, page: "1", num_pages: "1", country, date_posted: "month" });
+      tasks.push(getJson(`https://${host}/search?${params}`, { signal: signal(), headers: { "X-RapidAPI-Key": process.env.JSEARCH_API_KEY, "X-RapidAPI-Host": host } })
+        .then((data) => ({ source: `JSearch:${country}:${what}`, jobs: (data.data || []).map((job) => normalizeJSearch(job, country)) })));
+    }
+    if (process.env.CAREERJET_AFFID && CAREERJET_LOCALES[country]) {
+      const params = new URLSearchParams({
+        locale_code: CAREERJET_LOCALES[country], keywords: what, location: where || countryLabelEn(country) || "",
+        affid: process.env.CAREERJET_AFFID, user_ip: userIp, user_agent: userAgent,
+        url: process.env.CAREERJET_REFERER || "https://margheritag95.github.io/JobFinder/", sort: "date", pagesize: "50"
+      });
+      tasks.push(getJson(`https://public.api.careerjet.net/search?${params}`, { signal: signal() })
+        .then((data) => ({ source: `Careerjet:${country}:${what}`, jobs: (data.jobs || []).map((job) => normalizeCareerjet(job, country)) })));
+    }
   }
   const settled = await Promise.allSettled(tasks);
   const results = settled.filter((item) => item.status === "fulfilled").map((item) => item.value);
   const errors = settled.filter((item) => item.status === "rejected").map((item) => item.reason?.message || String(item.reason));
-  return { results, errors, jobs: results.flatMap((result) => result.jobs).filter(usable) };
+  const jobs = [...new Map(results.flatMap((result) => result.jobs).filter(usable).map((job) => [job.source_url, job])).values()];
+  return { results, errors, jobs };
 }
 
 /** Builds targeted queries from one or more users' search_preferences rows. */
@@ -314,6 +379,7 @@ async function fetchSources() {
     getJson(JOBICY_URL).then((data) => ({ source: "Jobicy", jobs: (data.jobs || []).map(normalizeJobicy) })),
     getJson(HIMALAYAS_URL).then((data) => ({ source: "Himalayas", jobs: (data.jobs || []).map(normalizeHimalayas) })),
     getJson(REMOTEOK_URL).then((data) => ({ source: "RemoteOK", jobs: (Array.isArray(data) ? data : []).filter((job) => job.id).map(normalizeRemoteOk) })),
+    getJson(WORKING_NOMADS_URL).then((data) => ({ source: "WorkingNomads", jobs: (Array.isArray(data) ? data : []).map(normalizeWorkingNomads) })),
     ...Array.from({ length: 5 }, (_, i) => i).map((page) => getJson(`${MUSE_URL}?page=${page}`).then((data) => ({ source: `TheMuse:${page}`, jobs: (data.results || []).map(normalizeMuse) })))
   ];
   if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) {

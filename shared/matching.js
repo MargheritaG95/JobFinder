@@ -399,10 +399,24 @@
       .map((name) => ({ name, country: PLACE_INDEX.get(normalized(name))?.country || null }));
   }
 
+  /** ISO country of a known city/region name in any supported language ("Milano" / "Milan" -> "IT"). */
+  function placeCountry(name) {
+    return PLACE_INDEX.get(normalized(name))?.country || null;
+  }
+
+  /** True when two names refer to the same known place ("Milano" vs "Milan"). */
+  function samePlace(a, b) {
+    const x = normalized(a);
+    const y = normalized(b);
+    if (x === y) return true;
+    const place = PLACE_INDEX.get(x);
+    return Boolean(place && place.names.includes(y));
+  }
+
   const GROUP_LABELS = { roles: "Ruolo", sectors: "Settore", locations: "Location", work_modes: "Modalità" };
 
   return {
     normalized, list, scoreJob, readPreferences, hasCriteria, jobWorkMode, preferredModes,
-    preferredCountryCodes, preferredCities, roleMatch, GROUP_LABELS, MODE_LABELS
+    preferredCountryCodes, preferredCities, roleMatch, placeCountry, samePlace, GROUP_LABELS, MODE_LABELS
   };
 });

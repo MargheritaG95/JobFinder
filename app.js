@@ -2098,7 +2098,53 @@ Cordiali saluti,
       : emptyState("Nessuna opportunità trovata", state.data.jobs.length ? "Prova ad abbassare il Fit minimo, ad azzerare i filtri o premi “Nuove proposte” per cercare annunci in linea con le preferenze." : "La tabella jobs è vuota. Le nuove opportunità compariranno qui automaticamente.", state.data.jobs.length ? { name: "clear-filters", label: "Azzera filtri", icon: "refresh" } : null);
   }
 
+  const INDEED_DOMAINS = { IT: "it.indeed.com", GB: "uk.indeed.com", IE: "ie.indeed.com", DE: "de.indeed.com", AT: "at.indeed.com", CH: "ch.indeed.com", FR: "fr.indeed.com", BE: "be.indeed.com", NL: "nl.indeed.com", LU: "lu.indeed.com", ES: "es.indeed.com", PT: "pt.indeed.com", PL: "pl.indeed.com", SE: "se.indeed.com", DK: "dk.indeed.com", US: "www.indeed.com", CA: "ca.indeed.com" };
+
+  // LinkedIn, Glassdoor and Indeed have no public job API: open their own search, pre-filled
+  // with your preferences, and bring an interesting listing in with "Importa annuncio".
+  function externalSearchLinks(role, place) {
+    const q = encodeURIComponent(role);
+    const l = encodeURIComponent(place);
+    const country = countryByName(place)?.code || window.JobFinderMatching?.placeCountry(place) || "";
+    const indeed = INDEED_DOMAINS[country] || "www.indeed.com";
+    return [
+      { label: "LinkedIn", url: `https://www.linkedin.com/jobs/search/?keywords=${q}&location=${l}&f_TPR=r604800&sortBy=DD` },
+      { label: "Glassdoor", url: `https://www.glassdoor.com/Job/jobs.htm?sc.keyword=${q}&locKeyword=${l}&fromAge=14` },
+      { label: "Indeed", url: `https://${indeed}/jobs?q=${q}&l=${l}&fromage=14&sort=date` },
+      { label: "Google Jobs", url: `https://www.google.com/search?q=${encodeURIComponent(`${role} ${place}`)}&ibp=htl;jobs` }
+    ];
+  }
+
+  function renderExternalSearch() {
+    const host = $("opportunityExternalSearch");
+    if (!host) return;
+    const preferences = currentPreferences();
+    const roles = preferences.roles.length ? preferences.roles : [];
+    const places = preferences.locations.length ? preferences.locations : [];
+    if (!roles.length) { host.innerHTML = ""; return; }
+    const role = host.dataset.role && roles.includes(host.dataset.role) ? host.dataset.role : roles[0];
+    const place = host.dataset.place !== undefined && (host.dataset.place === "" || places.includes(host.dataset.place)) ? host.dataset.place : (places.find((value) => !countryByName(value)) || places[0] || "");
+    host.dataset.role = role;
+    host.dataset.place = place;
+    const select = (name, values, current, emptyLabel) => `<select data-external-search="${name}" aria-label="${name === "role" ? "Ruolo" : "Luogo"}">${emptyLabel ? `<option value="">${emptyLabel}</option>` : ""}${values.map((value) => `<option value="${escapeAttribute(value)}" ${value === current ? "selected" : ""}>${escapeHtml(value)}</option>`).join("")}</select>`;
+    host.innerHTML = `
+      <span class="external-search__title">Cerca anche su</span>
+      ${select("role", roles, role)}
+      ${select("place", places, place, "Ovunque")}
+      <div class="external-search__links">${externalSearchLinks(role, place).map((link) => `<a class="external-search__link" href="${escapeAttribute(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.label)}${icon("external")}</a>`).join("")}</div>
+      <small>Trovato un annuncio interessante? Copia il link e usa <button type="button" data-action="import-opportunity">Importa annuncio</button> per valutarlo con le tue preferenze.</small>`;
+  }
+
+  document.addEventListener("change", (event) => {
+    const kind = event.target?.dataset?.externalSearch;
+    if (!kind) return;
+    const host = $("opportunityExternalSearch");
+    host.dataset[kind] = event.target.value;
+    renderExternalSearch();
+  });
+
   function renderPreferenceSummary() {
+    renderExternalSearch();
     const host = $("opportunityPreferenceSummary");
     if (!host) return;
     const preferences = currentPreferences();
@@ -2512,113 +2558,236 @@ Cordiali saluti,
       : emptyState("Nessuna opportunità da valutare", "Il feedback sarà disponibile quando la tabella jobs conterrà almeno un’opportunità.");
   }
 
-  const cityListsCache = new Map();
-  let cityRequestVersion = 0;
-  function syncCityCountryOptions() {
-    const countrySelect = $("preferenceCountries");
-    const cityCountry = $("preferenceCityCountry");
-    if (!countrySelect || !cityCountry) return;
-    const previous = cityCountry.value;
-    cityCountry.replaceChildren(new Option("Seleziona un Paese", ""));
-    [...countrySelect.selectedOptions].forEach((option) => cityCountry.add(new Option(option.text, option.value)));
-    cityCountry.value = [...cityCountry.options].some((option) => option.value === previous) ? previous : (cityCountry.options[1]?.value || "");
-    loadCitiesForCountry();
+  // ---- Location preferences: searchable country multi-select → cities of those countries only ----
+  const cityListsCache = new Map(); // ISO code -> [city]
+  const cityCountryOf = new Map();  // lower-case city -> ISO code
+  const locationPicker = { countries: [], cities: [], open: null, loading: new Set(), failed: new Set() };
+
+  function normForSearch(text) {
+    return window.JobFinderMatching ? window.JobFinderMatching.normalized(text) : String(text || "").toLowerCase();
   }
-  async function loadCitiesForCountry() {
-    const country = $("preferenceCityCountry")?.value || "";
-    const select = $("preferenceCitySelect");
-    if (!select) return;
-    const version = ++cityRequestVersion;
-    select.replaceChildren(new Option(country ? "Caricamento città…" : "Seleziona prima un Paese", ""));
-    select.disabled = true;
+
+  function countryCatalog() {
+    if (countryCatalog.items) return countryCatalog.items;
+    const it = new Intl.DisplayNames(["it"], { type: "region" });
+    const en = new Intl.DisplayNames(["en"], { type: "region" });
+    const items = [];
+    for (let a = 65; a <= 90; a += 1) for (let b = 65; b <= 90; b += 1) {
+      const code = String.fromCharCode(a, b);
+      let name = "";
+      try { name = it.of(code); } catch (_) { name = ""; }
+      if (!name || name === code || ["EU", "UN", "EZ", "QO", "XA", "XB", "ZZ"].includes(code)) continue;
+      items.push({ code, name, english: en.of(code) || name });
+    }
+    countryCatalog.items = items.sort((x, y) => x.name.localeCompare(y.name, "it"));
+    return countryCatalog.items;
+  }
+
+  function countryByName(value) {
+    const key = normForSearch(value);
+    return countryCatalog().find((item) => normForSearch(item.name) === key || normForSearch(item.english) === key) || null;
+  }
+
+  function cityCountry(city) {
+    return cityCountryOf.get(String(city).toLowerCase()) || window.JobFinderMatching?.placeCountry(city) || null;
+  }
+
+  function sameCity(a, b) {
+    return window.JobFinderMatching ? window.JobFinderMatching.samePlace(a, b) : String(a).toLowerCase() === String(b).toLowerCase();
+  }
+
+  function countryName(code) {
+    return countryCatalog().find((item) => item.code === code)?.name || code;
+  }
+
+  async function loadCitiesFor(code) {
+    if (cityListsCache.has(code) || locationPicker.loading.has(code)) return;
+    const country = countryCatalog().find((item) => item.code === code);
     if (!country) return;
+    locationPicker.loading.add(code);
+    renderLocationPicker();
     try {
-      let cities = cityListsCache.get(country);
-      if (!cities) {
-        const response = await fetch("https://countriesnow.space/api/v0.1/countries/cities", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ country: new Intl.DisplayNames(["en"], { type: "region" }).of([...$("preferenceCountries").options].find((option) => option.value === country)?.dataset.code || country) || country })
-        });
-        if (!response.ok) throw new Error("Servizio città non disponibile");
-        const data = await response.json();
-        if (data.error || !Array.isArray(data.data)) throw new Error("Elenco città non disponibile");
-        cities = [...new Set(data.data.filter(Boolean))].sort((a, b) => a.localeCompare(b, "it"));
-        cityListsCache.set(country, cities);
-      }
-      if (version !== cityRequestVersion) return;
-      select.replaceChildren(new Option("Seleziona una città", ""));
-      cities.forEach((city) => select.add(new Option(city, city)));
-      select.disabled = false;
-    } catch (_) {
-      if (version !== cityRequestVersion) return;
-      select.replaceChildren(new Option("Elenco non disponibile: scrivi la città sotto", ""));
-    }
-  }
-  document.addEventListener("change", (event) => {
-    if (event.target?.id === "preferenceCountries") syncCityCountryOptions();
-    if (event.target?.id === "preferenceCityCountry") loadCitiesForCountry();
-  });
-  let selectedPreferenceCities = [];
-  function setupLocationPicker(preferences) {
-    const select = $("preferenceCountries");
-    if (!select) return;
-    if (!select.options.length) {
-      const regions = new Intl.DisplayNames(["it"], { type: "region" });
-      const options = [];
-      for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
-        const code = String.fromCharCode(a, b);
-        const name = regions.of(code);
-        if (name && name !== code) options.push({ name, code });
-      }
-      options.sort((a, b) => a.name.localeCompare(b.name, "it")).forEach(({ name, code }) => { const option = new Option(name, name); option.dataset.code = code; select.add(option); });
-    }
-    const locations = toList(preferences.locations);
-    const normalizedCountry = (value) => String(value).trim().toLocaleLowerCase("it");
-    const countrySet = new Set([...select.options].map((option) => normalizedCountry(option.value)));
-    selectedPreferenceCities = locations.filter((value) => !countrySet.has(normalizedCountry(value)));
-    [...select.options].forEach((option) => { option.selected = locations.some((value) => normalizedCountry(value) === normalizedCountry(option.value)); });
-    renderPreferenceCityChips();
-    syncCityCountryOptions();
-  }
-  function renderPreferenceCityChips() {
-    const host = $("preferenceCityChips");
-    if (!host) return;
-    host.replaceChildren();
-    selectedPreferenceCities.forEach((city) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "button";
-      button.textContent = city + " ×";
-      button.title = "Rimuovi " + city;
-      button.addEventListener("click", () => {
-        selectedPreferenceCities = selectedPreferenceCities.filter((item) => item !== city);
-        renderPreferenceCityChips();
+      const response = await fetch("https://countriesnow.space/api/v0.1/countries/cities", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ country: country.english })
       });
-      host.append(button);
-    });
-  }
-  function addPreferenceCity() {
-    const input = $("preferenceCityInput");
-    const city = String(input?.value || $("preferenceCitySelect")?.value || "").trim();
-    if (city && !selectedPreferenceCities.some((item) => item.toLowerCase() === city.toLowerCase())) {
-      selectedPreferenceCities.push(city);
-      renderPreferenceCityChips();
+      const data = await response.json();
+      if (!response.ok || data.error || !Array.isArray(data.data)) throw new Error("Elenco città non disponibile");
+      const cities = [...new Set(data.data.map((city) => String(city).trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, "it"));
+      cityListsCache.set(code, cities);
+      cities.forEach((city) => { if (!cityCountryOf.has(city.toLowerCase())) cityCountryOf.set(city.toLowerCase(), code); });
+      locationPicker.failed.delete(code);
+    } catch (_) {
+      locationPicker.failed.add(code);
+    } finally {
+      locationPicker.loading.delete(code);
+      renderLocationPicker();
     }
-    if (input) input.value = "";
-    if ($("preferenceCitySelect")) $("preferenceCitySelect").value = "";
   }
+
+  function setupLocationPicker(preferences) {
+    if (!$("preferenceLocationPicker")) return;
+    const countries = [];
+    const cities = [];
+    toList(preferences.locations).forEach((value) => {
+      const country = countryByName(value);
+      if (country) { if (!countries.includes(country.code)) countries.push(country.code); }
+      else if (!cities.some((city) => sameCity(city, value))) cities.push(value);
+    });
+    locationPicker.countries = countries;
+    locationPicker.cities = cities;
+    renderLocationPicker();
+    countries.forEach((code) => loadCitiesFor(code));
+  }
+
+  function availableCities() {
+    return locationPicker.countries.flatMap((code) => (cityListsCache.get(code) || []).map((city) => ({ city, code })));
+  }
+
+  function comboMarkup(kind, { label, placeholder, chips, disabled, hint }) {
+    const isOpen = locationPicker.open === kind;
+    return `
+      <div class="location-combo ${isOpen ? "is-open" : ""} ${disabled ? "is-disabled" : ""}" data-combo="${kind}">
+        <span class="location-combo__label">${label}</span>
+        <div class="location-combo__control">
+          ${chips}
+          <input type="text" class="location-combo__search" data-combo-search="${kind}" placeholder="${escapeAttribute(placeholder)}" ${disabled ? "disabled" : ""} autocomplete="off" aria-label="${escapeAttribute(label)}" />
+          <span class="location-combo__caret" aria-hidden="true">▾</span>
+          <div class="location-combo__menu" role="listbox" aria-multiselectable="true" data-combo-menu="${kind}"></div>
+        </div>
+        ${hint ? `<small class="location-combo__hint">${hint}</small>` : ""}
+      </div>`;
+  }
+
+  function renderLocationPicker() {
+    const host = $("preferenceLocationPicker");
+    if (!host) return;
+    const active = document.activeElement;
+    const focused = active && host.contains(active) ? active.dataset.comboSearch || "" : "";
+    const query = focused ? active.value : "";
+    const countryChips = locationPicker.countries.map((code) => `<button type="button" class="location-chip" data-remove-country="${code}" title="Rimuovi ${escapeAttribute(countryName(code))}">${escapeHtml(countryName(code))}<span aria-hidden="true">×</span></button>`).join("");
+    const cityChips = locationPicker.cities.map((city) => {
+      const code = cityCountry(city);
+      return `<button type="button" class="location-chip location-chip--city" data-remove-city="${escapeAttribute(city)}" title="Rimuovi ${escapeAttribute(city)}">${escapeHtml(city)}${code && locationPicker.countries.length > 1 ? `<small>${escapeHtml(code)}</small>` : ""}<span aria-hidden="true">×</span></button>`;
+    }).join("");
+    const loading = [...locationPicker.loading].map(countryName);
+    const failed = [...locationPicker.failed].map(countryName);
+    const cityHint = !locationPicker.countries.length
+      ? "Scegli prima almeno un Paese: qui compariranno solo le sue città."
+      : loading.length ? `Caricamento città di ${escapeHtml(loading.join(", "))}…`
+      : failed.length ? `Elenco città non disponibile per ${escapeHtml(failed.join(", "))}: scrivi il nome e premi Invio.`
+      : "Nessuna città selezionata = tutto il Paese. Con una città, i ruoli in sede o ibridi devono essere lì; il Paese resta valido per i ruoli da remoto.";
+    host.innerHTML = comboMarkup("country", { label: "Paesi", placeholder: locationPicker.countries.length ? "Aggiungi un Paese…" : "Cerca un Paese…", chips: countryChips })
+      + comboMarkup("city", { label: "Città", placeholder: locationPicker.countries.length ? "Cerca una città…" : "Seleziona prima un Paese", chips: cityChips, disabled: !locationPicker.countries.length, hint: cityHint });
+    if (focused) {
+      const input = host.querySelector(`[data-combo-search="${focused}"]`);
+      if (input && !input.disabled) { input.value = query; input.focus(); }
+    }
+    renderLocationMenu(locationPicker.open, query);
+  }
+
+  function renderLocationMenu(kind, query = "") {
+    const menu = $("preferenceLocationPicker")?.querySelector(`[data-combo-menu="${kind}"]`);
+    if (!menu) return;
+    const q = normForSearch(query);
+    let options = [];
+    if (kind === "country") {
+      options = countryCatalog()
+        .filter((item) => !q || normForSearch(item.name).includes(q) || normForSearch(item.english).includes(q))
+        .sort((x, y) => (q ? Number(!normForSearch(x.name).startsWith(q)) - Number(!normForSearch(y.name).startsWith(q)) : 0) || x.name.localeCompare(y.name, "it"))
+        .slice(0, 100)
+        .map((item) => ({ value: item.code, label: item.name, selected: locationPicker.countries.includes(item.code) }));
+    } else {
+      const multipleCountries = locationPicker.countries.length > 1;
+      options = availableCities()
+        .filter(({ city }) => !q || normForSearch(city).includes(q))
+        .sort((x, y) => (q ? Number(!normForSearch(x.city).startsWith(q)) - Number(!normForSearch(y.city).startsWith(q)) : 0) || x.city.localeCompare(y.city, "it"))
+        .slice(0, 100)
+        .map(({ city, code }) => ({ value: city, label: multipleCountries ? `${city} · ${countryName(code)}` : city, selected: locationPicker.cities.some((item) => sameCity(item, city)) }));
+      const typed = String(query || "").trim();
+      if (typed && !options.some((option) => normForSearch(option.value) === q)) options.push({ value: typed, label: `Aggiungi “${typed}”`, selected: false });
+    }
+    menu.innerHTML = options.length
+      ? options.map((option) => `<button type="button" role="option" class="location-combo__option ${option.selected ? "is-selected" : ""}" aria-selected="${option.selected}" data-combo-option="${kind}" data-value="${escapeAttribute(option.value)}"><span class="location-combo__check">${option.selected ? "✓" : ""}</span>${escapeHtml(option.label)}</button>`).join("")
+      : `<div class="location-combo__empty">${kind === "city" && locationPicker.loading.size ? "Caricamento città…" : "Nessun risultato"}</div>`;
+  }
+
+  function toggleLocationOption(kind, value) {
+    if (kind === "country") {
+      if (locationPicker.countries.includes(value)) {
+        locationPicker.countries = locationPicker.countries.filter((code) => code !== value);
+        // The cities of a removed country go with it.
+        locationPicker.cities = locationPicker.cities.filter((city) => cityCountry(city) !== value);
+        if (!locationPicker.countries.length) { locationPicker.cities = []; if (locationPicker.open === "city") locationPicker.open = null; }
+      } else {
+        locationPicker.countries.push(value);
+        loadCitiesFor(value);
+      }
+    } else if (locationPicker.cities.some((city) => sameCity(city, value))) {
+      locationPicker.cities = locationPicker.cities.filter((city) => !sameCity(city, value));
+    } else {
+      locationPicker.cities.push(value);
+    }
+    renderLocationPicker();
+  }
+
+  document.addEventListener("mousedown", (event) => {
+    // Keep focus in the search box while picking options, so the menu stays open for multiple picks.
+    if (event.target.closest?.("[data-combo-option]")) event.preventDefault();
+  });
   document.addEventListener("click", (event) => {
-    if (event.target?.id === "addPreferenceCity") addPreferenceCity();
+    const host = $("preferenceLocationPicker");
+    if (!host) return;
+    const option = event.target.closest("[data-combo-option]");
+    const removeCountry = event.target.closest("[data-remove-country]");
+    const removeCity = event.target.closest("[data-remove-city]");
+    if (option && host.contains(option)) {
+      const kind = option.dataset.comboOption;
+      const search = host.querySelector(`[data-combo-search="${kind}"]`);
+      if (search) search.value = "";
+      locationPicker.open = kind;
+      toggleLocationOption(kind, option.dataset.value);
+      host.querySelector(`[data-combo-search="${kind}"]`)?.focus();
+      return;
+    }
+    if (removeCountry && host.contains(removeCountry)) { toggleLocationOption("country", removeCountry.dataset.removeCountry); return; }
+    if (removeCity && host.contains(removeCity)) { toggleLocationOption("city", removeCity.dataset.removeCity); return; }
+    const combo = event.target.closest("[data-combo]");
+    const next = combo && host.contains(combo) && !combo.classList.contains("is-disabled") ? combo.dataset.combo : null;
+    if (next !== locationPicker.open) {
+      locationPicker.open = next;
+      host.querySelectorAll("[data-combo]").forEach((node) => node.classList.toggle("is-open", node.dataset.combo === next));
+      if (next) {
+        const search = host.querySelector(`[data-combo-search="${next}"]`);
+        renderLocationMenu(next, search?.value || "");
+        search?.focus();
+      }
+    }
+  });
+  document.addEventListener("input", (event) => {
+    const kind = event.target?.dataset?.comboSearch;
+    if (!kind) return;
+    locationPicker.open = kind;
+    event.target.closest("[data-combo]")?.classList.add("is-open");
+    renderLocationMenu(kind, event.target.value);
   });
   document.addEventListener("keydown", (event) => {
-    if (event.target?.id === "preferenceCityInput" && event.key === "Enter") {
+    const kind = event.target?.dataset?.comboSearch;
+    if (!kind) return;
+    if (event.key === "Enter") {
       event.preventDefault();
-      addPreferenceCity();
+      const first = $("preferenceLocationPicker")?.querySelector(`[data-combo-menu="${kind}"] [data-combo-option]`);
+      if (first && event.target.value.trim()) { event.target.value = ""; toggleLocationOption(kind, first.dataset.value); }
+    } else if (event.key === "Escape") {
+      locationPicker.open = null;
+      event.target.closest("[data-combo]")?.classList.remove("is-open");
+    } else if (event.key === "Backspace" && !event.target.value) {
+      const list = kind === "country" ? locationPicker.countries : locationPicker.cities;
+      if (list.length) toggleLocationOption(kind, list[list.length - 1]);
     }
   });
 
   function selectedPreferenceLocations() {
-    return [...new Set([...$("preferenceCountries").selectedOptions].map((option) => option.value).concat(selectedPreferenceCities))];
+    return [...new Set(locationPicker.countries.map(countryName).concat(locationPicker.cities))];
   }
 
   function renderPreferences() {

@@ -142,7 +142,7 @@ module.exports = async function handler(req, res) {
     // three queries per click, continuing where this user's previous click stopped.
     const allQueries = queriesFromPreferences([preferences], { maxQueries: 80 });
     const rotation = rotateQueries(allQueries, req.body?.jsearchOffset, 3);
-    const jsearchInfo = process.env.JSEARCH_API_KEY
+    const jsearchInfo = (process.env.OPENWEBNINJA_API_KEY || process.env.JSEARCH_API_KEY)
       ? { jsearchNextOffset: rotation.nextOffset, jsearchSearched: rotation.picked.map((query) => `${query.what} · ${query.where || query.country.toUpperCase()}`), jsearchTotal: allQueries.length }
       : {};
     const targetedPromise = matching.hasCriteria(preferences)

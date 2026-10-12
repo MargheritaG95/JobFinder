@@ -401,15 +401,20 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], u
   const signal = () => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
   // JSearch (Google for Jobs → LinkedIn, Glassdoor, Indeed…) is paid per call: it only runs the
   // few queries chosen by the caller, which rotates them so every role and place gets its turn.
-  if (process.env.JSEARCH_API_KEY) {
+  // Two ways to reach JSearch: directly from OpenWeb Ninja (OPENWEBNINJA_API_KEY, x-api-key header)
+  // or through RapidAPI (JSEARCH_API_KEY). The direct key wins when both are set.
+  const direct = process.env.OPENWEBNINJA_API_KEY;
+  if (direct || process.env.JSEARCH_API_KEY) {
     const host = process.env.JSEARCH_API_HOST || "jsearch.p.rapidapi.com";
+    const endpoint = direct ? (process.env.OPENWEBNINJA_JSEARCH_URL || "https://api.openwebninja.com/jsearch/search") : `https://${host}/search`;
+    const headers = direct ? { "x-api-key": direct } : { "X-RapidAPI-Key": process.env.JSEARCH_API_KEY, "X-RapidAPI-Host": host };
     for (const query of jsearchQueries) {
       const country = String(query.country || "").toLowerCase();
       const what = compact(query.what);
       const where = compact(query.where);
       if (!what || !/^[a-z]{2}$/.test(country)) continue;
       const params = new URLSearchParams({ query: `${what} in ${where || countryLabelEn(country) || country}`, page: "1", num_pages: "1", country, date_posted: "month" });
-      tasks.push(getJson(`https://${host}/search?${params}`, { signal: signal(), headers: { "X-RapidAPI-Key": process.env.JSEARCH_API_KEY, "X-RapidAPI-Host": host } })
+      tasks.push(getJson(`${endpoint}?${params}`, { signal: signal(), headers })
         .then((data) => ({ source: `JSearch:${country}:${what}:${where}`, jobs: (data.data || []).map((job) => normalizeJSearch(job, country)) })));
     }
   }

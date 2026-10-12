@@ -1023,8 +1023,19 @@ Cordiali saluti,
 
   // A new proposal that no longer fits the saved preferences (or the minimum Fit Score).
   // Jobs you already chose, saved or applied to are never hidden.
+  // Feeds the app reads by itself. Anything else (LinkedIn alerts, Easy Apply, JobTeaser,
+  // career sites, "Importa annuncio") was brought in by you and is never hidden.
+  const AUTOMATIC_SOURCES = new Set(["remotive", "arbeitnow", "jobicy", "himalayas", "remoteok", "themuse", "the muse", "adzuna", "jooble", "working nomads", "we work remotely", "ashby", "careerjet"]);
+
+  function isAutomaticProposal(job) {
+    const whyFit = valueOf(job, "jobs", "whyFit", "");
+    // The opportunities API stores why_fit as a list ("Ruolo: …"); manual imports store a sentence.
+    if (Array.isArray(whyFit) || /^\s*\[/.test(String(whyFit || ""))) return true;
+    return AUTOMATIC_SOURCES.has(String(valueOf(job, "jobs", "source", "")).trim().toLowerCase());
+  }
+
   function isOffPreference(job) {
-    if (opportunityStage(job) !== "review") return false;
+    if (opportunityStage(job) !== "review" || !isAutomaticProposal(job)) return false;
     const match = preferenceMatch(job);
     if (!match) return false;
     return !match.matchesPreferences || jobFit(job) < matchingPreferences().minFit;

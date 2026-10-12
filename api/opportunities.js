@@ -77,6 +77,21 @@ function phraseMatches(value, haystackSet, haystackText) {
   return words.every((word) => (word.length >= 3 ? haystackSet.has(word) : new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(haystackText)));
 }
 
+function roleMatches(value, job) {
+  const title = normalized(job.title || "");
+  const role = normalized(value);
+  if (!title || !role) return false;
+  if (title.includes(role) || role.includes(title)) return true;
+  const stop = new Set(["and", "the", "for", "with", "di", "del", "della", "per", "senior", "junior", "specialist", "manager", "lead", "head", "associate", "executive"]);
+  const aliases = { growth: "marketing", digital: "marketing", communications: "communication", comunicazione: "communication", commerciale: "sales", vendite: "sales", recruitment: "recruiting", recruiter: "recruiting", talent: "recruiting", hr: "humanresources", risorse: "humanresources", umane: "humanresources", operations: "operation", operativo: "operation", customer: "customer", clienti: "customer", finance: "financial", finanziario: "financial" };
+  const canonical = (text) => new Set(text.split(" ").filter((word) => word.length >= 3 && !stop.has(word)).map((word) => aliases[word] || word));
+  const expected = canonical(role);
+  const actual = canonical(title);
+  if (!expected.size) return false;
+  const overlap = [...expected].filter((word) => actual.has(word)).length;
+  return overlap >= Math.min(2, expected.size);
+}
+
 function isGenericRemoteLocation(job) {
   const loc = normalized(job.location);
   if (!loc) return true;
@@ -94,7 +109,7 @@ function scoreJob(job, preferences) {
   const matched = {};
   let score = 5;
   for (const [name, values] of groups) {
-    const hits = values.filter((value) => phraseMatches(value, haystack, haystackText));
+    const hits = values.filter((value) => name === "roles" ? roleMatches(value, job) : phraseMatches(value, haystack, haystackText));
     if (hits.length) { matched[name] = hits; score += name === "roles" ? 2 : 0.75; }
   }
   const remote = isFullyRemote(job);

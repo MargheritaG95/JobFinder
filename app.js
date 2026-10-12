@@ -1949,7 +1949,10 @@ Cordiali saluti,
       const imported = result.imported;
       if (imported.length) {
         window.localStorage.setItem(opportunityRefreshKey(), JSON.stringify(refresh));
+        state.dashboardFilter = null;
+        ["opportunityFitFilter", "opportunityStatusFilter", "opportunityPriorityFilter", "opportunityCompanyFilter", "opportunityLocationFilter"].forEach((id) => { const field = $(id); if (field) field.value = id === "opportunityFitFilter" ? "0" : ""; });
         renderAll();
+        navigate("opportunities");
         showToast(`${imported.length} annunci reali importati e analizzati dal testo completo.`, "success", "Nuove opportunità pronte");
         return;
       }

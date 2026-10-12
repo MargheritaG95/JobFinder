@@ -100,6 +100,25 @@ function isGenericRemoteLocation(job) {
   return words.length > 0 && words.every((word) => genericWords.has(word));
 }
 
+let cachedCountryNames;
+function getCountryNames() {
+  if (cachedCountryNames) return cachedCountryNames;
+  const namesByCountry = new Map();
+  const locales = ["en", "it", "fr", "de", "es", "nl", "pt"];
+  const displayNames = locales.map((locale) => new Intl.DisplayNames([locale], { type: "region" }));
+  for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
+    const code = String.fromCharCode(a, b);
+    const names = new Set([normalized(code)]);
+    for (const display of displayNames) {
+      const label = display.of(code);
+      if (label && normalized(label) !== normalized(code)) names.add(normalized(label));
+    }
+    if (names.size > 1) for (const name of names) namesByCountry.set(name, names);
+  }
+  cachedCountryNames = namesByCountry;
+  return namesByCountry;
+}
+
 function scoreJob(job, preferences) {
   const haystackText = normalized(`${job.title} ${job.company_name} ${job.industry || ""}`);
   const haystack = new Set(tokens(`${job.title} ${job.company_name} ${job.industry || ""}`));
@@ -116,17 +135,7 @@ function scoreJob(job, preferences) {
   const generic = isGenericRemoteLocation(job);
   const combinedLocation = normalized(`${job.location || ""} ${job.remote_type || ""}`);
   const hybrid = /\b(hybrid|ibrid[oa])\b/.test(combinedLocation);
-  const countryNames = new Map();
-  const countryLocales = ["en", "it", "fr", "de", "es", "nl", "pt"];
-  for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
-    const code = String.fromCharCode(a, b);
-    const names = new Set([normalized(code)]);
-    for (const locale of countryLocales) {
-      const label = new Intl.DisplayNames([locale], { type: "region" }).of(code);
-      if (label && normalized(label) !== normalized(code)) names.add(normalized(label));
-    }
-    if (names.size > 1) for (const name of names) countryNames.set(name, names);
-  }
+  const countryNames = getCountryNames();
   const locationText = normalized(job.location);
   const locationHits = preferredLocations.filter((value) => {
     const place = normalized(value);

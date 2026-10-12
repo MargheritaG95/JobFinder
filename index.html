@@ -503,7 +503,13 @@
                 <label class="field">
                   <span>Località</span>
                   <small>Uno per riga oppure separati da virgola.</small>
-                  <textarea id="preferenceLocations" rows="5" placeholder="Milano&#10;Remote Italy&#10;EU"></textarea>
+                  <div class="location-picker">
+                    <label class="compact-field"><span>Paesi (selezione multipla)</span><select id="preferenceCountries" multiple size="7" aria-label="Seleziona più Paesi"></select></label>
+                    <label class="compact-field"><span>Aggiungi una città</span><input id="preferenceCityInput" list="preferenceCitySuggestions" placeholder="Cerca o scrivi una città" autocomplete="off" /><datalist id="preferenceCitySuggestions"><option value="Milano"></option><option value="Roma"></option><option value="Bruxelles"></option><option value="Parigi"></option><option value="Berlino"></option><option value="Amsterdam"></option><option value="Londra"></option><option value="Barcellona"></option><option value="Zurigo"></option><option value="Vienna"></option></datalist><button type="button" class="button" id="addPreferenceCity">Aggiungi città</button></label>
+                    <div id="preferenceCityChips" aria-live="polite"></div>
+                    <small>Puoi selezionare più Paesi con Ctrl/Cmd + clic e aggiungere più città. Le località sono alternative.</small>
+                    <textarea id="preferenceLocations" rows="3" hidden></textarea>
+                  </div>
                 </label>
                 <label class="field">
                   <span>Modalità di lavoro</span>

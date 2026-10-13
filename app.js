@@ -104,6 +104,51 @@ Cordiali saluti,
   ];
   const OPTIONAL_ENTITIES = new Set(["preferences"]);
   const RESOURCE_CATEGORIES = ["cv", "cover letter", "messaggio recruiter"];
+  // ---- CVs (Risorse, category "CV"): several versions, one chosen per application ----
+  function cvResources() {
+    return state.data.answerBank.filter((item) => normalizeStatus(valueOf(item, "answerBank", "category", ""), "") === "CV");
+  }
+
+  function referenceCvResource() {
+    return state.data.answerBank.find((item) => normalizeStatus(valueOf(item, "answerBank", "title", ""), "") === "CV DI RIFERIMENTO")
+      || cvResources()[0] || null;
+  }
+
+  function cvByTitle(title) {
+    const key = String(title || "").trim().toLowerCase();
+    return key ? cvResources().find((item) => String(valueOf(item, "answerBank", "title", "")).trim().toLowerCase() === key) || null : null;
+  }
+
+  // The CV whose text overlaps most with the listing: proposed when no CV was chosen yet.
+  function bestCvForJob(job) {
+    const cvs = cvResources();
+    if (cvs.length < 2) return cvs[0] || null;
+    const jobWords = new Set(`${jobTitle(job)} ${jobDescriptionText(job)}`.toLowerCase().match(/[a-zà-ÿ]{4,}/g) || []);
+    return cvs.map((item) => {
+      const words = new Set(String(valueOf(item, "answerBank", "content", "")).toLowerCase().match(/[a-zà-ÿ]{4,}/g) || []);
+      return { item, score: [...words].filter((word) => jobWords.has(word)).length };
+    }).sort((a, b) => b.score - a.score)[0].item;
+  }
+
+  // CV text used by the Copilot for this job: the one chosen in the Copilot, else the best match.
+  function cvTextForJob(job) {
+    const open = job && String(state.selectedJobId) === String(job.id) ? $("copilotCv")?.value : "";
+    const application = job ? getApplicationForJob(job.id) : null;
+    const chosen = cvByTitle(open) || cvByTitle(valueOf(application, "applications", "cvUsed", "")) || (job ? bestCvForJob(job) : null);
+    const text = chosen ? String(valueOf(chosen, "answerBank", "content", "") || "") : "";
+    return text || currentPreferences().profileCvText;
+  }
+
+  function renderCopilotCvOptions(selected) {
+    const select = $("copilotCv");
+    if (!select) return;
+    const titles = cvResources().map((item) => String(valueOf(item, "answerBank", "title", "CV")).trim()).filter(Boolean);
+    if (selected && !titles.some((title) => title.toLowerCase() === String(selected).toLowerCase())) titles.push(selected);
+    select.replaceChildren(new Option(titles.length ? "Seleziona" : "Aggiungi un CV in Risorse", ""));
+    titles.forEach((title) => select.add(new Option(title, title)));
+    select.value = selected && titles.includes(selected) ? selected : "";
+  }
+
   function isResourceCategory(category) {
     return RESOURCE_CATEGORIES.includes(String(category || "").trim().toLowerCase());
   }
@@ -320,7 +365,7 @@ Cordiali saluti,
   }
 
   function suggestedCoverLetter(job, language = "it") {
-    const preferences = currentPreferences();
+    const preferences = { ...currentPreferences(), profileCvText: cvTextForJob(job) };
     const name = valueOf(state.profile, "profiles", "name", "").trim() || "[Nome e cognome]";
     const company = companyNameForJob(job);
     const role = jobTitle(job);
@@ -1210,11 +1255,7 @@ Cordiali saluti,
     const record = state.data.preferences[0] || null;
     const metadata = state.user?.user_metadata?.jobfinder_personalization;
     const local = metadata && typeof metadata === "object" ? metadata : localPersonalization();
-    const cvResource = state.data.answerBank.find((item) => {
-      const category = normalizeStatus(valueOf(item, "answerBank", "category", ""), "");
-      const title = normalizeStatus(valueOf(item, "answerBank", "title", ""), "");
-      return category === "CV" || title === "CV DI RIFERIMENTO";
-    });
+    const cvResource = referenceCvResource();
     const accountCv = cvResource ? String(valueOf(cvResource, "answerBank", "content", "") || "") : "";
     if (!record) return { ...DEFAULT_PREFERENCES, ...local, onlyMultinationals: false, isDefault: true, record: null };
     return {
@@ -3007,7 +3048,7 @@ Cordiali saluti,
   }
 
   function suggestedCopilotContent(job, language = "it") {
-    const preferences = currentPreferences();
+    const preferences = { ...currentPreferences(), profileCvText: cvTextForJob(job) };
     const company = companyNameForJob(job);
     const role = jobTitle(job);
     const roleMatches = preferences.roles.filter((target) => role.toLowerCase().includes(target.toLowerCase().split(" ")[0])).slice(0, 3);
@@ -3188,7 +3229,8 @@ Cordiali saluti,
     $("copilotWhyFit").value = writtenText(valueOf(application, "applications", "whyFit", "")) || writtenText(localDraft.whyFit) || suggestions.why;
     $("copilotGaps").value = writtenText(valueOf(application, "applications", "gaps", "")) || writtenText(localDraft.gaps) || suggestions.gaps;
     $("copilotAngle").value = writtenText(valueOf(application, "applications", "angle", "")) || writtenText(localDraft.angle) || suggestions.angle;
-    $("copilotCv").value = valueOf(application, "applications", "cvUsed", localDraft.cvUsed || valueOf(job, "jobs", "recommendedCv", ""));
+    const bestCv = bestCvForJob(job);
+    renderCopilotCvOptions(writtenText(valueOf(application, "applications", "cvUsed", "")) || writtenText(localDraft.cvUsed) || (bestCv ? String(valueOf(bestCv, "answerBank", "title", "")) : "") || writtenText(valueOf(job, "jobs", "recommendedCv", "")));
     $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", localDraft.preparationStatus || "draft");
     const savedRecruiterNote = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || "");
     $("copilotRecruiterNote").value = resolvedRecruiterNote(savedRecruiterNote, suggestions.note);
@@ -3343,6 +3385,8 @@ Cordiali saluti,
     $("preferencesForm")?.addEventListener("submit", savePreferences);
     $("copilotForm")?.addEventListener("submit", saveApplicationFromCopilot);
     $("copilotLanguage")?.addEventListener("change", regenerateCopilotTexts);
+    // A different CV → Why you fit, gap, angle, recruiter message and cover letter rebuilt from it.
+    $("copilotCv")?.addEventListener("change", () => { if ($("copilotCv").value) regenerateCopilotTexts("cv"); });
     $("closeDialogButton")?.addEventListener("click", closeDialog);
     $("appDialog")?.addEventListener("close", () => document.body.classList.remove("dialog-open"));
     $("appDialog")?.addEventListener("click", (event) => {
@@ -3913,7 +3957,7 @@ Cordiali saluti,
     document.querySelectorAll(".kanban-card.is-dragging, .kanban-card.is-drag-target").forEach((card) => card.classList.remove("is-dragging", "is-drag-target"));
   }
 
-  function regenerateCopilotTexts() {
+  function regenerateCopilotTexts(reason) {
     const job = getJobById(state.selectedJobId);
     if (!job) return;
     const language = $("copilotLanguage")?.value || "it";
@@ -3924,7 +3968,8 @@ Cordiali saluti,
     $("copilotRecruiterNote").value = suggestions.note;
     $("copilotCoverLetter").value = suggestedCoverLetter(job, language);
     $("copilotCoverLetterSource").textContent = "Basata sul tuo template di riferimento (o su un modello generico), adattata all’annuncio e completata secondo le linee guida.";
-    showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
+    if (reason === "cv") showToast(`Testi rigenerati dal CV “${$("copilotCv").value}”.`, "success", "CV cambiato");
+    else showToast(language === "en" ? "Recruiter message and cover letter generated in English." : "Messaggio recruiter e cover letter generati in italiano.", "success", "Testi aggiornati");
   }
 
   function setCopilotLanguage(language) {
@@ -4618,11 +4663,9 @@ Cordiali saluti,
 
   async function saveReferenceCv(content) {
     const text = String(content || "").trim();
-    const existing = state.data.answerBank.find((item) => {
-      const category = normalizeStatus(valueOf(item, "answerBank", "category", ""), "");
-      const title = normalizeStatus(valueOf(item, "answerBank", "title", ""), "");
-      return category === "CV" || title === "CV DI RIFERIMENTO";
-    });
+    // Only the "CV di riferimento" is written from Preferenze: other CVs in Risorse stay untouched.
+    const existing = state.data.answerBank.find((item) => normalizeStatus(valueOf(item, "answerBank", "title", ""), "") === "CV DI RIFERIMENTO")
+      || (cvResources().length === 1 ? cvResources()[0] : null);
     if (!text && !existing) return null;
     const payload = {};
     setMapped(payload, "answerBank", "title", "CV di riferimento");
@@ -4922,7 +4965,7 @@ Cordiali saluti,
 
   function openTemplateForm(template = null, defaultCategory = null) {
     const isEdit = Boolean(template);
-    const categories = ["Messaggio recruiter", "Cover letter", "Domanda application", "Follow-up", "Ringraziamento", "Altro"];
+    const categories = ["CV", "Cover letter", "Messaggio recruiter", "Domanda application", "Follow-up", "Ringraziamento", "Altro"];
     const currentCategory = valueOf(template, "answerBank", "category", defaultCategory || categories[0]);
     openDialog({
       eyebrow: isEdit ? "MODIFICA TEMPLATE" : "NUOVO TEMPLATE",

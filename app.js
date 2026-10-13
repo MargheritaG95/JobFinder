@@ -4986,25 +4986,36 @@ Cordiali saluti,
   async function submitCompanyCleanup(form) {
     const ids = [...form.querySelectorAll('input[name="remove"]:checked')].map((input) => input.value);
     let removed = 0;
+    const skipped = [];
     for (const id of ids) {
+      const company = getCompanyById(id);
+      const name = String(valueOf(company, "companies", "name", "Azienda"));
+      // Never touch a company that still has opportunities you kept or applications:
+      // depending on the database, deleting it could delete them too.
+      const linkedJobs = state.data.jobs.filter((item) => String(valueOf(item, "jobs", "companyId", "")) === String(id));
+      const keptJob = linkedJobs.some((job) => opportunityStage(job) !== "review" || valueOf(job, "jobs", "saved", false) || getApplicationForJob(job.id));
+      const linkedApplications = state.data.applications.filter((item) => String(valueOf(item, "applications", "companyId", "")) === String(id));
+      if (keptJob || linkedApplications.length) { skipped.push(name); continue; }
       try {
-        // Detach first, so jobs and applications keep working without the company record.
-        for (const job of state.data.jobs.filter((item) => String(valueOf(item, "jobs", "companyId", "")) === String(id))) {
-          await updateRecord("jobs", job.id, { [fieldName("jobs", "companyId")]: null }).catch(() => null);
+        let detached = true;
+        for (const job of linkedJobs) {
+          try { await updateRecord("jobs", job.id, { [fieldName("jobs", "companyId")]: null }); }
+          catch (error) { detached = false; console.warn("Job could not be detached", job.id, error); }
         }
-        for (const application of state.data.applications.filter((item) => String(valueOf(item, "applications", "companyId", "")) === String(id))) {
-          await updateRecord("applications", application.id, { [fieldName("applications", "companyId")]: null }).catch(() => null);
-        }
+        if (!detached) { skipped.push(name); continue; }
         await deleteRecord("companies", id);
         removed += 1;
       } catch (error) {
+        skipped.push(name);
         console.warn("Company could not be removed", id, error);
       }
     }
     closeDialog();
     matchCache.clear();
     renderAll();
-    showToast(removed === ids.length ? `${removed} aziende rimosse dalle Aziende target.` : `${removed} di ${ids.length} aziende rimosse; le altre sono ancora collegate a dati che non posso staccare.`, removed === ids.length ? "success" : "warning", "Aziende target aggiornate");
+    showToast(skipped.length
+      ? `${removed} aziende rimosse. Non rimosse perché collegate a opportunità salvate o candidature: ${skipped.slice(0, 6).join(", ")}${skipped.length > 6 ? "…" : ""}.`
+      : `${removed} aziende rimosse dalle Aziende target.`, skipped.length ? "warning" : "success", "Aziende target aggiornate");
   }
 
   function openDeleteTemplateConfirmation(templateId) {

@@ -588,14 +588,27 @@ async function supabase(path, options = {}) {
 async function upsertCatalog(jobs) {
   const deduped = [...new Map(jobs.map((job) => [job.source_url, job])).values()];
   const stored = [];
+  const row = (job) => ({ ...job, company_logo_url: job.company_logo_url || null, company_website: job.company_website || null, industry: job.industry || null, location: job.location || null, remote_type: job.remote_type || null, salary_text: job.salary_text || null, salary_min: job.salary_min || null, salary_max: job.salary_max || null, salary_currency: job.salary_currency || null, employment_type: job.employment_type || null, seniority: job.seniority || null, experience_required: job.experience_required || null, company_description: job.company_description || null, source_updated_at: job.source_updated_at || null });
+  const write = (batch) => supabase("job_catalog?on_conflict=source,source_job_id", {
+    method: "POST", body: JSON.stringify(batch.map(row)),
+    headers: { Prefer: "resolution=merge-duplicates,return=representation" }
+  });
+  let failed = 0;
   for (let offset = 0; offset < deduped.length; offset += 75) {
-    const rows = await supabase("job_catalog?on_conflict=source,source_job_id", {
-      method: "POST", body: JSON.stringify(deduped.slice(offset, offset + 75).map((job) => ({ ...job, company_logo_url: job.company_logo_url || null, industry: job.industry || null, location: job.location || null, remote_type: job.remote_type || null, salary_text: job.salary_text || null, salary_min: job.salary_min || null, salary_max: job.salary_max || null, salary_currency: job.salary_currency || null, employment_type: job.employment_type || null, seniority: job.seniority || null, experience_required: job.experience_required || null, company_description: job.company_description || null, source_updated_at: job.source_updated_at || null }))),
-      headers: { Prefer: "resolution=merge-duplicates,return=representation" }
-    });
-    stored.push(...(rows || []));
+    const batch = deduped.slice(offset, offset + 75);
+    try {
+      stored.push(...((await write(batch)) || []));
+    } catch (error) {
+      // One bad row (e.g. the same link already stored under another source) must not
+      // throw away the whole batch: retry row by row and skip only the offending ones.
+      console.warn("[catalog] batch upsert failed, retrying row by row", error.message);
+      for (const job of batch) {
+        try { stored.push(...((await write([job])) || [])); }
+        catch (_) { failed += 1; }
+      }
+    }
   }
-  return { stored, accepted: deduped.length };
+  return { stored, accepted: deduped.length, failed };
 }
 
 async function refreshCatalog({ queries = [] } = {}) {

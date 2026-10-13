@@ -1996,6 +1996,43 @@ Cordiali saluti,
     return insertRecord("jobs", payload);
   }
 
+  function searchDiagnosticsKey() {
+    return `jobfinder:search-diagnostics:${state.user?.id || "anonymous"}`;
+  }
+
+  function lastSearchDiagnostics() {
+    if (state.searchDiagnostics) return state.searchDiagnostics;
+    try { return JSON.parse(window.localStorage.getItem(searchDiagnosticsKey()) || "null"); } catch (_) { return null; }
+  }
+
+  // "Dettagli ultima ricerca": what each source returned and why listings were discarded.
+  function renderSearchDiagnostics() {
+    const host = $("opportunitySearchDiagnostics");
+    if (!host) return;
+    const diag = lastSearchDiagnostics();
+    if (!diag || !diag.stats) { host.innerHTML = ""; return; }
+    const stats = diag.stats;
+    const sources = Object.entries(diag.sources || {}).sort((a, b) => b[1] - a[1]);
+    const catalog = Object.entries(diag.catalogBySource || {}).sort((a, b) => b[1] - a[1]).slice(0, 14);
+    const row = (label, value) => `<li><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></li>`;
+    const reasons = [
+      ["Già proposti in passato", stats.giaProposti], ["Ruolo diverso", stats.fuoriRuolo], ["Settore diverso", stats.fuoriSettore],
+      ["Paese / città diversi", stats.fuoriLocation], ["Modalità diversa", stats.fuoriModalita], ["Sotto il Fit minimo", stats.sottoFitMinimo]
+    ].filter(([, value]) => value);
+    host.innerHTML = `
+      <details class="search-diagnostics">
+        <summary>Dettagli ultima ricerca · ${escapeHtml(formatDateTime(diag.at))} · <strong>${stats.compatibili}</strong> compatibili su ${stats.letti} annunci letti${stats.importati !== undefined ? `, ${stats.importati} nuovi` : ""}</summary>
+        <div class="search-diagnostics__grid">
+          <section><h4>Annunci letti ora per fonte</h4><ul>${sources.length ? sources.map(([name, count]) => row(name, count)).join("") : "<li><span>Nessuna fonte ha risposto in questa ricerca</span></li>"}</ul></section>
+          ${catalog.length ? `<section><h4>Catalogo condiviso per fonte</h4><ul>${catalog.map(([name, count]) => row(name, count)).join("")}</ul></section>` : ""}
+          <section><h4>Annunci scartati</h4><ul>${reasons.length ? reasons.map(([label, value]) => row(label, value)).join("") : "<li><span>Nessuno</span></li>"}</ul></section>
+          ${diag.jsearch?.length ? `<section><h4>Ricerche LinkedIn / Glassdoor / Indeed</h4><ul>${diag.jsearch.map((item) => `<li><span>${escapeHtml(item)}</span></li>`).join("")}${row("Annunci ricevuti", diag.sources?.JSearch ?? 0)}</ul></section>` : ""}
+        </div>
+        ${diag.esempiScartati?.length ? `<h4>Esempi: ruolo giusto ma scartati</h4><ul class="search-diagnostics__samples">${diag.esempiScartati.map((item) => `<li>${escapeHtml(item.titolo)} — ${escapeHtml(item.luogo)} <small>(${escapeHtml(item.fonte || "")}; ${escapeHtml(item.scartato)})</small></li>`).join("")}</ul>` : ""}
+        ${diag.errors?.length ? `<h4>Fonti con errori</h4><ul class="search-diagnostics__errors">${diag.errors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ul>` : ""}
+      </details>`;
+  }
+
   function jsearchOffsetKey() {
     return `jobfinder:jsearch-offset:${state.user?.id || "anonymous"}`;
   }
@@ -2025,6 +2062,10 @@ Cordiali saluti,
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || `Servizio opportunità non disponibile (HTTP ${response.status}).`);
+    if (body.diagnostics) {
+      state.searchDiagnostics = body.diagnostics;
+      try { window.localStorage.setItem(searchDiagnosticsKey(), JSON.stringify(body.diagnostics)); } catch (_) { /* shown for this session only */ }
+    }
     // Next click continues the LinkedIn / Glassdoor / Indeed searches where this one stopped.
     if (body.jsearchNextOffset !== undefined) {
       try { window.localStorage.setItem(jsearchOffsetKey(), String(body.jsearchNextOffset)); } catch (_) { /* restarts from the first search */ }
@@ -2183,6 +2224,7 @@ Cordiali saluti,
 
   function renderPreferenceSummary() {
     renderExternalSearch();
+    renderSearchDiagnostics();
     const host = $("opportunityPreferenceSummary");
     if (!host) return;
     const preferences = currentPreferences();

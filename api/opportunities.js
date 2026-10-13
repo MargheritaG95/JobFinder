@@ -62,10 +62,13 @@ async function authenticatedUser(req) {
 async function catalogRows() {
   const since = new Date(Date.now() - 40 * 86400000).toISOString();
   const pages = [];
-  for (let offset = 0; offset < 10000; offset += 1000) {
-    const batch = await supabase(`job_catalog?select=*&is_active=eq.true&published_at=gte.${encodeURIComponent(since)}&order=published_at.desc.nullslast&limit=1000&offset=${offset}`);
+  // "order=published_at.desc" matches the partial index; ".nullslast" did not, forcing a full sort
+  // of the catalog and a statement timeout. Smaller pages and a cap keep each query fast.
+  const PAGE = 400;
+  for (let offset = 0; offset < 3200; offset += PAGE) {
+    const batch = await supabase(`job_catalog?select=*&is_active=eq.true&published_at=gte.${encodeURIComponent(since)}&order=published_at.desc&limit=${PAGE}&offset=${offset}`);
     pages.push(...(batch || []));
-    if (!batch || batch.length < 1000) break;
+    if (!batch || batch.length < PAGE) break;
   }
   return pages;
 }
@@ -122,6 +125,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   res.setHeader("Cache-Control", "no-store");
   try {
+    const startedAt = Date.now();
     const user = await authenticatedUser(req);
     const token = String(req.headers.authorization).replace(/^Bearer\s+/i, "");
     const requested = Math.max(1, Math.min(50, Number(req.body?.limit) || 5));
@@ -197,7 +201,8 @@ module.exports = async function handler(req, res) {
         catalog.push(...stored.filter((job) => !known.has(job.id) && isRecent(job)));
       }
       const compatibleLeft = () => catalog.filter((job) => !excluded.has(job.id) && scoreJob(job, preferences).matchesPreferences).length;
-      if (!catalog?.length || compatibleLeft() < requested) {
+      // The slow catalog refresh only runs when the catalog is empty, or when there is still time left.
+      if (!catalog?.length || (compatibleLeft() < requested && Date.now() - startedAt < 9000)) {
         try { track(await refreshCatalog({ queries: queriesFromPreferences([preferences]) })); }
         catch (error) { diag.errors.push(`Aggiornamento catalogo: ${String(error.message).slice(0, 160)}`); }
         catalog = (await catalogRows()).filter(isRecent);
@@ -229,6 +234,9 @@ module.exports = async function handler(req, res) {
     const missingKey = { roles: "fuoriRuolo", sectors: "fuoriSettore", locations: "fuoriLocation", work_modes: "fuoriModalita", company: "nonMultinazionali" };
     stats.daAziendeTarget = 0;
     const samples = [];
+    // Near matches: the role fits but sector, place or work mode do not (or are not stated). They only
+    // fill the list when strict matches are fewer than requested, so early results are not almost empty.
+    const nearMatches = [];
     let ranked = (catalog || []).map((job) => ({ job, result: scoreJob(job, preferences) }))
       .filter(({ job, result }) => {
         const wasAlreadyProposed = config.hasServiceRole
@@ -236,6 +244,8 @@ module.exports = async function handler(req, res) {
           : excluded.has(stableUrl(job.source_url)) || excludedKeys.has(opportunityKey(job));
         if (wasAlreadyProposed) { stats.giaProposti += 1; return false; }
         if (!result.matchesPreferences) {
+          const roleOk = !matching.list(preferences.target_roles).length || Boolean(result.matched.roles);
+          if (roleOk && Object.keys(result.matched).length) nearMatches.push({ job, result });
           result.missing.forEach((group) => { if (missingKey[group]) stats[missingKey[group]] += 1; });
           // Right role, wrong place or mode: the most useful examples to understand the filters.
           if (result.matched.roles && samples.length < 6) samples.push({ titolo: job.title, luogo: job.location || "—", fonte: job.source, scartato: result.missing.map((group) => ({ roles: "ruolo", sectors: "settore", locations: "luogo", work_modes: "modalità", company: "non multinazionale" })[group] || group).join(", ") });
@@ -247,6 +257,11 @@ module.exports = async function handler(req, res) {
       })
       // Paese/città, then ruolo, settore, modalità (see shared/matching.js scoreJob).
       .sort((a, b) => b.result.rank - a.result.rank);
+    stats.quasiCompatibili = nearMatches.length;
+    if (ranked.length < requested && nearMatches.length) {
+      nearMatches.sort((a, b) => b.result.rank - a.result.rank);
+      ranked = ranked.concat(nearMatches.slice(0, requested - ranked.length + 10));
+    }
     console.log("[opportunities] matching summary", {
       mode: config.hasServiceRole ? "catalog" : "direct-fallback",
       catalog: (catalog || []).length,

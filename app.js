@@ -1034,8 +1034,12 @@ Cordiali saluti,
     return AUTOMATIC_SOURCES.has(String(valueOf(job, "jobs", "source", "")).trim().toLowerCase());
   }
 
+  const DROPPED_SOURCES = new Set(["remotive", "jobicy", "himalayas", "remoteok", "working nomads", "we work remotely"]);
+
   function isOffPreference(job) {
     if (opportunityStage(job) !== "review" || !isAutomaticProposal(job)) return false;
+    // Proposals from the remote-only boards that are no longer used.
+    if (DROPPED_SOURCES.has(String(valueOf(job, "jobs", "source", "")).trim().toLowerCase())) return true;
     const match = preferenceMatch(job);
     if (!match) return false;
     return !match.matchesPreferences;
@@ -1201,7 +1205,7 @@ Cordiali saluti,
       return category === "CV" || title === "CV DI RIFERIMENTO";
     });
     const accountCv = cvResource ? String(valueOf(cvResource, "answerBank", "content", "") || "") : "";
-    if (!record) return { ...DEFAULT_PREFERENCES, ...local, onlyMultinationals: local.onlyMultinationals !== false, isDefault: true, record: null };
+    if (!record) return { ...DEFAULT_PREFERENCES, ...local, onlyMultinationals: false, isDefault: true, record: null };
     return {
       roles: toList(valueOf(record, "preferences", "roles", [])),
       sectors: toList(valueOf(record, "preferences", "sectors", [])),
@@ -1217,7 +1221,7 @@ Cordiali saluti,
       careerChangeReason: local.careerChangeReason || DEFAULT_PREFERENCES.careerChangeReason,
       careerChangeReasonEn: local.careerChangeReasonEn || DEFAULT_PREFERENCES.careerChangeReasonEn,
       companyValues: local.companyValues || DEFAULT_PREFERENCES.companyValues,
-      onlyMultinationals: local.onlyMultinationals !== false,
+      onlyMultinationals: false,
       targetCompanies: state.data.companies.map((company) => String(valueOf(company, "companies", "name", "")).trim()).filter(Boolean),
       isDefault: false,
       record
@@ -2029,7 +2033,7 @@ Cordiali saluti,
     const row = (label, value) => `<li><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></li>`;
     const reasons = [
       ["Già proposti in passato", stats.giaProposti], ["Ruolo diverso", stats.fuoriRuolo], ["Settore diverso", stats.fuoriSettore],
-      ["Paese / città diversi", stats.fuoriLocation], ["Modalità diversa", stats.fuoriModalita], ["Non multinazionali", stats.nonMultinazionali]
+      ["Paese / città diversi", stats.fuoriLocation], ["Modalità diversa", stats.fuoriModalita]
     ].filter(([, value]) => value);
     host.innerHTML = `
       <details class="search-diagnostics">
@@ -2251,8 +2255,7 @@ Cordiali saluti,
       preferences.roles.length ? `<b>Ruoli</b> ${escapeHtml(preferences.roles.join(", "))}` : "",
       preferences.sectors.length ? `<b>Settori</b> ${escapeHtml(preferences.sectors.join(", "))}` : "",
       preferences.locations.length ? `<b>Location</b> ${escapeHtml(preferences.locations.join(", "))}` : "",
-      preferences.workModes.length ? `<b>Modalità</b> ${escapeHtml(preferences.workModes.join(", "))}` : "",
-      preferences.onlyMultinationals ? "<b>Solo multinazionali</b>" : ""
+      preferences.workModes.length ? `<b>Modalità</b> ${escapeHtml(preferences.workModes.join(", "))}` : ""
     ].filter(Boolean);
     const hiddenNote = hidden
       ? (showingAll
@@ -2899,7 +2902,6 @@ Cordiali saluti,
     $("preferenceMinFit").value = String(preferences.minFit);
     $("preferenceMinFitOutput").textContent = asNumber(preferences.minFit, 7).toFixed(1);
     $("preferenceAiLearning").checked = preferences.aiLearning;
-    if ($("preferenceOnlyMultinationals")) $("preferenceOnlyMultinationals").checked = preferences.onlyMultinationals !== false;
     $("preferenceDeliveryTime").value = preferences.deliveryTime;
     $("preferenceDailyCount").value = String(preferences.dailyCount);
     const notice = $("preferencesSourceNotice");
@@ -4496,7 +4498,7 @@ Cordiali saluti,
       ["jobfinder:preference-learning", "jobfinder:jsearch-offset", "jobfinder:opportunity-refresh", "jobfinder:search-diagnostics", "jobfinder:lifecycle-cleanup"]
         .forEach((prefix) => { try { window.localStorage.removeItem(`${prefix}:${userId}`); } catch (_) { /* nothing stored */ } });
       state.searchDiagnostics = null;
-      const personalization = { ...(state.user?.user_metadata?.jobfinder_personalization || localPersonalization()), onlyMultinationals: true };
+      const personalization = { ...(state.user?.user_metadata?.jobfinder_personalization || localPersonalization()), onlyMultinationals: false };
       try { saveLocalPersonalization(personalization); } catch (_) { /* account copy below */ }
       const { data: userData } = await state.client.auth.updateUser({ data: { jobfinder_personalization: personalization } });
       if (userData?.user) state.user = userData.user;
@@ -4526,7 +4528,7 @@ Cordiali saluti,
       careerChangeReason: $("preferenceCareerChangeReason").value.trim(),
       careerChangeReasonEn: $("preferenceCareerChangeReasonEn").value.trim(),
       companyValues: $("preferenceCompanyValues").value.trim(),
-      onlyMultinationals: Boolean($("preferenceOnlyMultinationals")?.checked)
+      onlyMultinationals: false
     };
     try {
       saveLocalPersonalization(personalization);

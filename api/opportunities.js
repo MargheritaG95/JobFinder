@@ -1,4 +1,4 @@
-const { rotateQueries, fetchSources, fetchBoards, boardFromUrl, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
+const { isRemoteOnlySource, rotateQueries, fetchSources, fetchBoards, boardFromUrl, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent } = require("./_lib/catalog");
 const matching = require("../shared/matching");
 
 const PUBLIC_SUPABASE_URL = "https://moyabdwxlbkfqmtjuwwa.supabase.co";
@@ -138,9 +138,7 @@ module.exports = async function handler(req, res) {
       };
     }
     // "Solo multinazionali" lives in the user's account settings, so the app sends it with each request.
-    if (sent && typeof sent === "object" && sent.only_multinationals !== undefined) {
-      preferences = { ...preferences, only_multinationals: Boolean(sent.only_multinationals) };
-    }
+    preferences = { ...preferences, only_multinationals: false };
     // Aziende target: the companies the user chose to focus on. They get dedicated searches,
     // a higher Fit and always pass the "solo multinazionali" filter.
     const ownCompanies = (await userSupabase(`companies?user_id=eq.${user.id}&select=id,name,website&limit=500`, token).catch(() => [])) || [];
@@ -161,7 +159,7 @@ module.exports = async function handler(req, res) {
     // Every role × country and role × city combination, in fair order; JSearch walks through it
     // three queries per click, continuing where this user's previous click stopped.
     const allQueries = queriesFromPreferences([preferences], { maxQueries: 80 });
-    const rotation = rotateQueries(allQueries, req.body?.jsearchOffset, 3);
+    const rotation = rotateQueries(allQueries, req.body?.jsearchOffset, 5);
     const jsearchInfo = (process.env.OPENWEBNINJA_API_KEY || process.env.JSEARCH_API_KEY)
       ? { jsearchNextOffset: rotation.nextOffset, jsearchSearched: rotation.picked.map((query) => `${query.what} · ${query.where || query.country.toUpperCase()}`), jsearchTotal: allQueries.length }
       : {};
@@ -221,6 +219,7 @@ module.exports = async function handler(req, res) {
       jobs: [], count: 0, reason: "missing_preferences", diagnostics: diag,
       message: "Imposta almeno un ruolo, una location o una modalità di lavoro in Preferenze e salva: le proposte vengono scelte su quei criteri."
     });
+    catalog = (catalog || []).filter((job) => !isRemoteOnlySource(job.source));
     const stats = { letti: (catalog || []).length, giaProposti: 0, fuoriRuolo: 0, fuoriSettore: 0, fuoriLocation: 0, fuoriModalita: 0, nonMultinazionali: 0, compatibili: 0 };
     const missingKey = { roles: "fuoriRuolo", sectors: "fuoriSettore", locations: "fuoriLocation", work_modes: "fuoriModalita", company: "nonMultinazionali" };
     stats.daAziendeTarget = 0;

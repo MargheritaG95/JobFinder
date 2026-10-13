@@ -204,7 +204,7 @@ Le regole di corrispondenza stanno in `shared/matching.js` e sono usate sia dall
 
 Fonti di opportunità:
 
-- sempre attive (feed pubblici, senza chiave): Remotive, Arbeitnow, Jobicy, Himalayas, RemoteOK, The Muse, Working Nomads, We Work Remotely e le pagine lavoro pubbliche di Airbnb, Datadog, MongoDB, Stripe, Elastic (Greenhouse), Spotify (Lever), Notion (Ashby) — elenco modificabile con `GREENHOUSE_BOARDS`, `LEVER_SITES`, `ASHBY_BOARDS`;
+- sempre attive (senza chiave): Arbeitnow, The Muse e le pagine lavoro pubbliche di Airbnb, Datadog, MongoDB, Stripe, Elastic (Greenhouse), Spotify (Lever), Notion (Ashby) — elenco modificabile con `GREENHOUSE_BOARDS`, `LEVER_SITES`, `ASHBY_BOARDS`. Le bacheche solo da remoto (Remotive, Jobicy, Himalayas, RemoteOK, Working Nomads, We Work Remotely) non sono più usate;
 - aziende seguite: se salvi o importi un annuncio pubblicato su Greenhouse, Lever o Ashby, oppure inserisci come sito di un'azienda target la sua pagina lavoro su queste piattaforme, a ogni "Nuove proposte" vengono lette tutte le posizioni aperte di quell'azienda;
 - **JSearch**: chiave diretta OpenWeb Ninja (`OPENWEBNINJA_API_KEY`, da app.openwebninja.com, 100 ricerche/mese gratis) oppure chiave RapidAPI (`JSEARCH_API_KEY`; opzionale `JSEARCH_API_HOST`): legge Google for Jobs e porta annunci pubblicati su **LinkedIn, Glassdoor, Indeed** e siti aziendali, cercando i ruoli dell'utente nei suoi Paesi/città. Il piano gratuito ha 200 chiamate al mese: ne usiamo al massimo 3 per "Nuove proposte" e nessuna nel refresh notturno;
 - **Adzuna** (`ADZUNA_APP_ID` + `ADZUNA_APP_KEY`), **Jooble** (`JOOBLE_API_KEY`, `JOOBLE_API_KEY_<PAESE>`), **Careerjet** (`CAREERJET_AFFID`): ricerche per ruolo e luogo in Italia ed Europa;

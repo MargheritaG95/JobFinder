@@ -541,13 +541,10 @@ function museOffset() {
 }
 
 async function fetchSources() {
+  // Remote-only boards (Remotive, Jobicy, Himalayas, RemoteOK, Working Nomads, We Work Remotely)
+  // are no longer read: they listed mostly startup remote roles, not on-site / hybrid jobs.
   const tasks = [
-    getJson(REMOTIVE_URL).then((data) => ({ source: "Remotive", jobs: (data.jobs || []).map(normalizeRemotive) })),
     ...[1, 2, 3, 4, 5, 6].map((page) => getJson(`${ARBEITNOW_URL}?page=${page}`).then((data) => ({ source: `Arbeitnow:${page}`, jobs: (data.data || []).map(normalizeArbeitnow) }))),
-    getJson(JOBICY_URL).then((data) => ({ source: "Jobicy", jobs: (data.jobs || []).map(normalizeJobicy) })),
-    getJson(HIMALAYAS_URL).then((data) => ({ source: "Himalayas", jobs: (data.jobs || []).map(normalizeHimalayas) })),
-    getJson(REMOTEOK_URL).then((data) => ({ source: "RemoteOK", jobs: (Array.isArray(data) ? data : []).filter((job) => job.id).map(normalizeRemoteOk) })),
-    getJson(WORKING_NOMADS_URL).then((data) => ({ source: "WorkingNomads", jobs: (Array.isArray(data) ? data : []).map(normalizeWorkingNomads) })),
     ...Array.from({ length: 5 }, (_, i) => i).map((page) => getJson(`${MUSE_URL}?page=${page}`).then((data) => ({ source: `TheMuse:${page}`, jobs: (data.results || []).map(normalizeMuse) })))
   ];
   if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) {
@@ -575,7 +572,6 @@ async function fetchSources() {
       }).then((data) => ({ source: `Jooble:${region}`, jobs: (data.jobs || []).map((job) => normalizeJooble(job, region)) })));
     }
   }
-  tasks.push(getText(WWR_URL).then((xml) => ({ source: "WeWorkRemotely", jobs: parseWwr(xml) })));
   for (const board of configuredBoards()) tasks.push(boardTask(board));
   const settled = await Promise.allSettled(tasks);
   const results = settled.filter((item) => item.status === "fulfilled").map((item) => item.value);
@@ -658,4 +654,10 @@ function rotateQueries(queries, offset, count = 3) {
   return { picked, nextOffset: (start + picked.length) % queries.length };
 }
 
-module.exports = { stripHtml, rotateQueries, fetchSources, fetchBoards, boardFromUrl, parseWwr, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent };
+// Sources dropped from the catalog: rows already stored from them are ignored.
+const REMOTE_ONLY_SOURCES = new Set(["remotive", "jobicy", "himalayas", "remoteok", "working nomads", "workingnomads", "we work remotely", "weworkremotely"]);
+function isRemoteOnlySource(source) {
+  return REMOTE_ONLY_SOURCES.has(String(source || "").trim().toLowerCase());
+}
+
+module.exports = { stripHtml, isRemoteOnlySource, rotateQueries, fetchSources, fetchBoards, boardFromUrl, parseWwr, fetchTargeted, queriesFromPreferences, upsertCatalog, refreshCatalog, supabase, usable, isRecent };

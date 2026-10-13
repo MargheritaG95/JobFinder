@@ -1066,11 +1066,17 @@ Cordiali saluti,
   function jobFit(job) {
     const live = preferenceMatch(job);
     const base = live ? live.fit : asNumber(valueOf(job, "jobs", "fitScore", 0), 0);
-    const searchable = normalizedTokens(`${jobTitle(job)} ${companyNameForJob(job)} ${valueOf(job, "jobs", "location", "")} ${jobDescriptionText(job)}`);
-    const penalty = Math.min(2, preferenceLearningProfile().reduce((total, item) => {
-      const dislikedTokens = new Set(normalizedTokens(`${item.title || ""} ${item.company || ""} ${item.industry || ""} ${item.location || ""} ${item.notes || ""}`));
-      const overlap = searchable.filter((token) => dislikedTokens.has(token)).length;
-      return total + Math.min(0.6, overlap * 0.12);
+    // Learning from discarded opportunities: only a similar title (≥2 distinctive words in
+    // common) or the same company lowers the score. Generic words such as "remote", "senior"
+    // or "world" used to match every listing and flattened every Fit Score to the same value.
+    const GENERIC = new Set(["senior", "junior", "lead", "head", "remote", "hybrid", "anywhere", "world", "worldwide", "global", "international", "europe", "emea", "full", "time", "part", "team", "work", "job", "role", "the", "and", "for", "with", "manager", "specialist", "associate", "intern", "milano", "italia", "italy"]);
+    const distinctive = (text) => new Set(normalizedTokens(text).filter((token) => !GENERIC.has(token)));
+    const titleTokens = distinctive(jobTitle(job));
+    const company = companyNameForJob(job).trim().toLowerCase();
+    const penalty = Math.min(1.5, preferenceLearningProfile().reduce((total, item) => {
+      const sameCompany = company && String(item.company || "").trim().toLowerCase() === company;
+      const shared = [...distinctive(item.title || "")].filter((token) => titleTokens.has(token)).length;
+      return total + (sameCompany ? 0.5 : 0) + (shared >= 2 ? 0.5 : 0);
     }, 0));
     return Math.max(0, Math.min(10, base - penalty));
   }

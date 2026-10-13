@@ -95,19 +95,35 @@
   }
 
   // ------------------------------------------------------------------ roles
+  // Job functions that are interchangeable in titles ("Product Lead" is a "Product Manager" role).
+  const FUNCTION_EQUIVALENTS = [
+    ["manager", "lead", "head", "owner"],
+    ["specialist", "associate", "executive", "coordinator", "officer", "representative", "agent"],
+    ["consultant", "advisor", "partner"],
+    ["engineer", "developer", "architect"],
+    ["analyst", "scientist"]
+  ];
+  function functionFamily(word) {
+    const group = FUNCTION_EQUIVALENTS.find((items) => items.includes(word));
+    return group || [word];
+  }
+
   function roleMatch(role, title) {
     const titleWords = new Set(canonicalWords(title));
+    // "Lead" / "Head" are seniority words in SENIORITY, but in titles they act as a function too.
     const roleWords = canonicalWords(role).filter((word) => !CONNECTORS.has(word) && !SENIORITY.has(word));
     if (!roleWords.length || !titleWords.size) return null;
     const core = roleWords.filter((word) => !FUNCTION_WORDS.has(word));
     const functions = roleWords.filter((word) => FUNCTION_WORDS.has(word));
-    const required = core.length ? core : functions;
-    if (!required.every((word) => titleWords.has(word))) return null;
-    const functionHit = !functions.length || functions.some((word) => titleWords.has(word));
-    // "Product Manager" must not match "Product Designer": a different job function is a different role.
-    const titleFunctions = [...titleWords].filter((word) => FUNCTION_WORDS.has(word));
-    if (!functionHit && titleFunctions.length) return null;
-    return { value: role, strength: functionHit ? "strong" : "partial" };
+    // Every distinctive word of the role must be in the title ("Business Analyst" needs "business").
+    if (!(core.length ? core : functions).every((word) => titleWords.has(word) || functionFamily(word).some((alt) => titleWords.has(alt)))) return null;
+    if (!functions.length) return { value: role, strength: "strong" };
+    // A role that names a function needs that function (or an equivalent) in the title:
+    // "Business Analyst" must not match "Senior Business Recruiter", "Product Manager" not "Product Designer".
+    const exact = functions.some((word) => titleWords.has(word));
+    const equivalent = functions.some((word) => functionFamily(word).some((alt) => titleWords.has(alt)));
+    if (!exact && !equivalent) return null;
+    return { value: role, strength: exact ? "strong" : "partial" };
   }
 
   // ---------------------------------------------------------------- sectors

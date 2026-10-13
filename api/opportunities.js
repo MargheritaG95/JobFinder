@@ -71,7 +71,8 @@ async function catalogRows() {
 }
 
 function legacyJob(userId, job, result, companyId) {
-  const why = Object.entries(result.matched).map(([group, values]) => `${matching.GROUP_LABELS[group] || group}: ${values.join(", ")}`);
+  const why = (result.criteria || []).filter((item) => item.status === "match").map((item) => `${item.label}: ${item.detail}`)
+    .concat(result.target ? [`Azienda target: ${result.target}`] : []);
   return {
     user_id: userId, ...(job.id && /^[0-9a-f-]{36}$/i.test(job.id) ? { catalog_job_id: job.id } : {}), title: job.title, role_title: job.title,
     company_name: job.company_name, company_id: companyId || null, location: [job.location, job.remote_type && !matching.normalized(job.location).includes(matching.normalized(job.remote_type)) ? job.remote_type : ""].filter(Boolean).join(" · ") || "N/A",
@@ -216,12 +217,11 @@ module.exports = async function handler(req, res) {
       excludedKeys = new Set((existingJobs || []).map(opportunityKey));
       (proposalHistory || []).forEach((row) => excludedKeys.add(row.opportunity_key));
     }
-    const minFit = Number(preferences.min_fit_score) || 0;
     if (!matching.hasCriteria(preferences)) return res.status(200).json({
       jobs: [], count: 0, reason: "missing_preferences", diagnostics: diag,
       message: "Imposta almeno un ruolo, una location o una modalità di lavoro in Preferenze e salva: le proposte vengono scelte su quei criteri."
     });
-    const stats = { letti: (catalog || []).length, giaProposti: 0, fuoriRuolo: 0, fuoriSettore: 0, fuoriLocation: 0, fuoriModalita: 0, nonMultinazionali: 0, sottoFitMinimo: 0, compatibili: 0 };
+    const stats = { letti: (catalog || []).length, giaProposti: 0, fuoriRuolo: 0, fuoriSettore: 0, fuoriLocation: 0, fuoriModalita: 0, nonMultinazionali: 0, compatibili: 0 };
     const missingKey = { roles: "fuoriRuolo", sectors: "fuoriSettore", locations: "fuoriLocation", work_modes: "fuoriModalita", company: "nonMultinazionali" };
     stats.daAziendeTarget = 0;
     const samples = [];
@@ -237,12 +237,12 @@ module.exports = async function handler(req, res) {
           if (result.matched.roles && samples.length < 6) samples.push({ titolo: job.title, luogo: job.location || "—", fonte: job.source, scartato: result.missing.map((group) => ({ roles: "ruolo", sectors: "settore", locations: "luogo", work_modes: "modalità", company: "non multinazionale" })[group] || group).join(", ") });
           return false;
         }
-        if (result.fit < minFit) { stats.sottoFitMinimo += 1; return false; }
         stats.compatibili += 1;
         if (result.target) stats.daAziendeTarget += 1;
         return true;
       })
-      .sort((a, b) => b.result.fit - a.result.fit || new Date(b.job.published_at || 0) - new Date(a.job.published_at || 0));
+      // Paese/città, then ruolo, settore, modalità (see shared/matching.js scoreJob).
+      .sort((a, b) => b.result.rank - a.result.rank);
     console.log("[opportunities] matching summary", {
       mode: config.hasServiceRole ? "catalog" : "direct-fallback",
       catalog: (catalog || []).length,
@@ -268,7 +268,7 @@ module.exports = async function handler(req, res) {
       jobs: [],
       count: 0,
       reason: "no_matching_opportunities",
-      message: "Al momento non ci sono altre opportunità che soddisfano tutte le tue preferenze e il Fit Score minimo. Puoi modificare i criteri in Preferenze oppure riprovare al prossimo aggiornamento."
+      message: "Al momento non ci sono altre opportunità che rispettano Paese/città, ruoli, settori e modalità scelti. Puoi allargare i criteri in Preferenze oppure riprovare al prossimo aggiornamento."
     });
     const now = new Date().toISOString();
     if (config.hasServiceRole) {

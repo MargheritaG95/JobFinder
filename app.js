@@ -1038,49 +1038,52 @@ Cordiali saluti,
     if (opportunityStage(job) !== "review" || !isAutomaticProposal(job)) return false;
     const match = preferenceMatch(job);
     if (!match) return false;
-    return !match.matchesPreferences || jobFit(job) < matchingPreferences().minFit;
+    return !match.matchesPreferences;
   }
 
   function activeJobs() {
     return state.data.jobs.filter((job) => jobStatus(job) !== "CLOSED" && !isOffPreference(job));
   }
 
+  // Chips in order of importance: Paese/città, ruolo, settore, modalità; then the company.
   function preferenceChipsMarkup(job) {
     const match = preferenceMatch(job);
     if (!match) return "";
-    const labels = window.JobFinderMatching.GROUP_LABELS;
-    const hits = Object.entries(match.matched).flatMap(([group, values]) => values.slice(0, 2).map((value) =>
-      `<span class="preference-chip preference-chip--hit" title="${escapeAttribute(labels[group] || group)}">${icon("check")}${escapeHtml(value)}</span>`));
-    // Once you chose a job, a mismatch is no longer actionable: only show what matches.
     const inReview = opportunityStage(job) === "review";
-    if (!inReview && !match.matchesPreferences) {
-      return hits.length ? `<div class="opportunity-card__preferences"><strong>Criteri corrispondenti</strong><div>${hits.join("")}</div></div>` : "";
-    }
-    const misses = match.missing.map((group) =>
-      `<span class="preference-chip preference-chip--miss">Fuori ${escapeHtml(String(labels[group] || group).toLowerCase())}</span>`);
-    const notes = match.notes.map((note) => `<span class="preference-chip preference-chip--note">${escapeHtml(note)}</span>`);
-    if (!hits.length && !misses.length && !notes.length) return "";
-    return `<div class="opportunity-card__preferences"><strong>${match.matchesPreferences ? "In linea con le tue preferenze" : "Non in linea con le preferenze attuali"}</strong><div>${hits.join("")}${misses.join("")}${notes.join("")}</div></div>`;
+    const chips = [];
+    match.criteria.forEach((item) => {
+      if (item.status === "match") chips.push(`<span class="preference-chip preference-chip--hit" title="${escapeAttribute(item.label)}">${icon("check")}${escapeHtml(item.detail || item.label)}</span>`);
+      else if (item.status === "unknown") chips.push(`<span class="preference-chip preference-chip--note">${escapeHtml(item.label)} da verificare</span>`);
+      else if (item.status === "miss" && (inReview || match.matchesPreferences)) chips.push(`<span class="preference-chip preference-chip--miss">${escapeHtml(item.label)} diverso${item.detail ? `: ${escapeHtml(item.detail)}` : ""}</span>`);
+    });
+    if (match.target) chips.push(`<span class="preference-chip preference-chip--hit">${icon("check")}Azienda target</span>`);
+    else if (match.multinational) chips.push(`<span class="preference-chip preference-chip--hit">${icon("check")}Multinazionale</span>`);
+    else if (match.missing.includes("company") && inReview) chips.push(`<span class="preference-chip preference-chip--miss">Non multinazionale</span>`);
+    if (!chips.length) return "";
+    const heading = match.matchesPreferences ? "In linea con i tuoi criteri" : (inReview ? "Non in linea con i criteri attuali" : "Criteri");
+    return `<div class="opportunity-card__preferences"><strong>${heading}</strong><div>${chips.join("")}</div></div>`;
   }
 
+  // Sort key (not shown): Paese/città, then ruolo, settore, modalità — see shared/matching.js.
+  // Without saved criteria, the order the opportunities were stored in is kept.
   function jobFit(job) {
     const live = preferenceMatch(job);
-    const base = live ? live.fit : asNumber(valueOf(job, "jobs", "fitScore", 0), 0);
-    // Learning from discarded opportunities: only a similar title (≥2 distinctive words in
-    // common) or the same company lowers the score. Generic words such as "remote", "senior"
-    // or "world" used to match every listing and flattened every Fit Score to the same value.
-    const GENERIC = new Set(["senior", "junior", "lead", "head", "remote", "hybrid", "anywhere", "world", "worldwide", "global", "international", "europe", "emea", "full", "time", "part", "team", "work", "job", "role", "the", "and", "for", "with", "manager", "specialist", "associate", "intern", "milano", "italia", "italy"]);
-    const distinctive = (text) => new Set(normalizedTokens(text).filter((token) => !GENERIC.has(token)));
-    const titleTokens = distinctive(jobTitle(job));
-    const company = companyNameForJob(job).trim().toLowerCase();
-    // Only when "AI learning enabled" is switched on in Preferenze.
-    const learning = currentPreferences().aiLearning ? preferenceLearningProfile() : [];
-    const penalty = Math.min(1.5, learning.reduce((total, item) => {
-      const sameCompany = company && String(item.company || "").trim().toLowerCase() === company;
-      const shared = [...distinctive(item.title || "")].filter((token) => titleTokens.has(token)).length;
-      return total + (sameCompany ? 0.5 : 0) + (shared >= 2 ? 0.5 : 0);
-    }, 0));
-    return Math.max(0, Math.min(10, base - penalty));
+    if (live) return live.rank;
+    return asNumber(valueOf(job, "jobs", "fitScore", 0), 0);
+  }
+
+  // "3/4 criteri": how many of your criteria (Paese/città, ruolo, settore, modalità) the job meets.
+  function criteriaSummary(job) {
+    const live = preferenceMatch(job);
+    if (!live || !live.configured) return { label: "—", title: "Imposta i criteri in Preferenze" };
+    const title = live.criteria.filter((item) => item.status !== "unset")
+      .map((item) => `${item.label}: ${({ match: "sì", miss: "no", unknown: "da verificare" })[item.status]}${item.detail ? ` (${item.detail})` : ""}`).join(" · ");
+    return { label: `${live.met}/${live.configured}`, title };
+  }
+
+  function criteriaScoreMarkup(job) {
+    const summary = criteriaSummary(job);
+    return `<div class="fit-score" title="${escapeAttribute(summary.title)}"><strong>${escapeHtml(summary.label)}</strong><small>Criteri</small></div>`;
   }
 
   function jobStatus(job) {
@@ -1574,10 +1577,8 @@ Cordiali saluti,
     return `<span class="badge ${className}">${escapeHtml(titleCase(normalized))}</span>`;
   }
 
-  function highFitBadge(fit) {
-    if (fit >= 8) return `<span class="badge badge--fit">ALTO FIT</span>`;
-    if (fit >= 7) return `<span class="badge badge--blue">BUON FIT</span>`;
-    return `<span class="badge">FIT ${fit.toFixed(1)}</span>`;
+  function highFitBadge() {
+    return "";
   }
 
   function feedbackButtons(jobId, compact = false, exclusiveSelection = false) {
@@ -1798,7 +1799,7 @@ Cordiali saluti,
           <div class="opportunity-copy__badges">${highFitBadge(fit)}${dashboardStatus}${easyApplyBadge(job)}${priorityStarButton(job, true)}${referralButton(job, true)}${feedbackButtons(job.id, true, true)}</div>
         </div>
         <div class="top-opportunity__quick-actions ${editingState ? "is-editing" : ""}">${stageActions}</div>
-        <div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div>
+        ${criteriaScoreMarkup(job)}
       </article>
     `;
   }
@@ -1851,7 +1852,8 @@ Cordiali saluti,
   }
 
   function reviewStageJobs(jobs, byNewest) {
-    return jobs.filter((job) => opportunityStage(job) === "review" && !isOffPreference(job)).sort(byNewest);
+    // Most in line with your criteria first (Paese/città → ruolo → settore → modalità), then newest.
+    return jobs.filter((job) => opportunityStage(job) === "review" && !isOffPreference(job)).sort((a, b) => jobFit(b) - jobFit(a) || byNewest(a, b));
   }
 
   function excludeCurrentSuggestionsFromRefresh() {
@@ -2027,7 +2029,7 @@ Cordiali saluti,
     const row = (label, value) => `<li><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></li>`;
     const reasons = [
       ["Già proposti in passato", stats.giaProposti], ["Ruolo diverso", stats.fuoriRuolo], ["Settore diverso", stats.fuoriSettore],
-      ["Paese / città diversi", stats.fuoriLocation], ["Modalità diversa", stats.fuoriModalita], ["Non multinazionali", stats.nonMultinazionali], ["Sotto il Fit minimo", stats.sottoFitMinimo]
+      ["Paese / città diversi", stats.fuoriLocation], ["Modalità diversa", stats.fuoriModalita], ["Non multinazionali", stats.nonMultinazionali]
     ].filter(([, value]) => value);
     host.innerHTML = `
       <details class="search-diagnostics">
@@ -2174,7 +2176,7 @@ Cordiali saluti,
     renderPreferenceSummary();
     const groups = [
       { stage: "review", title: "Da valutare", copy: "Nuove opportunità: scegli se ti interessano, applica ora, salvale per dopo oppure cancellale.", icon: "search" },
-      { stage: "to-apply", title: "Da applicare", copy: "Posizioni che hai scelto: le prioritarie e con Fit Score più alto sono mostrate per prime.", icon: "clock" },
+      { stage: "to-apply", title: "Da applicare", copy: "Posizioni che hai scelto: le prioritarie e quelle più in linea con i tuoi criteri sono mostrate per prime.", icon: "clock" },
       { stage: "applied", title: "Candidature mandate", copy: "Application già inviate, ordinate con le prioritarie in evidenza.", icon: "check" }
     ];
     $("opportunitiesList").innerHTML = jobs.length
@@ -2185,7 +2187,7 @@ Cordiali saluti,
             <div class="opportunities-grid">${groupedJobs.length ? groupedJobs.map(renderOpportunityCard).join("") : `<div class="opportunity-flow-group__empty">Nessuna opportunità in questa fase.</div>`}</div>
           </section>`;
         }).join("")
-      : emptyState("Nessuna opportunità trovata", state.data.jobs.length ? "Prova ad abbassare il Fit minimo, ad azzerare i filtri o premi “Nuove proposte” per cercare annunci in linea con le preferenze." : "La tabella jobs è vuota. Le nuove opportunità compariranno qui automaticamente.", state.data.jobs.length ? { name: "clear-filters", label: "Azzera filtri", icon: "refresh" } : null);
+      : emptyState("Nessuna opportunità trovata", state.data.jobs.length ? "Prova ad azzerare i filtri, ad allargare i criteri in Preferenze o premi “Nuove proposte” per cercare annunci in linea con le preferenze." : "La tabella jobs è vuota. Le nuove opportunità compariranno qui automaticamente.", state.data.jobs.length ? { name: "clear-filters", label: "Azzera filtri", icon: "refresh" } : null);
   }
 
   const INDEED_DOMAINS = { IT: "it.indeed.com", GB: "uk.indeed.com", IE: "ie.indeed.com", DE: "de.indeed.com", AT: "at.indeed.com", CH: "ch.indeed.com", FR: "fr.indeed.com", BE: "be.indeed.com", NL: "nl.indeed.com", LU: "lu.indeed.com", ES: "es.indeed.com", PT: "pt.indeed.com", PL: "pl.indeed.com", SE: "se.indeed.com", DK: "dk.indeed.com", US: "www.indeed.com", CA: "ca.indeed.com" };
@@ -2250,7 +2252,6 @@ Cordiali saluti,
       preferences.sectors.length ? `<b>Settori</b> ${escapeHtml(preferences.sectors.join(", "))}` : "",
       preferences.locations.length ? `<b>Location</b> ${escapeHtml(preferences.locations.join(", "))}` : "",
       preferences.workModes.length ? `<b>Modalità</b> ${escapeHtml(preferences.workModes.join(", "))}` : "",
-      preferences.minFit ? `<b>Fit minimo</b> ${asNumber(preferences.minFit, 0).toFixed(1)}` : "",
       preferences.onlyMultinationals ? "<b>Solo multinazionali</b>" : ""
     ].filter(Boolean);
     const hiddenNote = hidden
@@ -2282,7 +2283,7 @@ Cordiali saluti,
             <div class="opportunity-copy__badges">${highFitBadge(fit)}${secondaryStatus}${priorityStarButton(job)}${referralButton(job)}${easyApplyBadge(job)}</div>
           </div>
           <div class="opportunity-card__primary-action ${editingState ? "is-editing" : ""}">${statusControls}</div>
-          <div class="opportunity-card__score-actions"><div class="fit-score"><strong>${fit.toFixed(1)}/10</strong><small>Fit score</small></div></div>
+          <div class="opportunity-card__score-actions">${criteriaScoreMarkup(job)}</div>
         </div>
         <div class="opportunity-card__meta">
           <span>${icon("building")}${escapeHtml(location)}</span>
@@ -2360,12 +2361,12 @@ Cordiali saluti,
       showToast("Non ci sono opportunità da includere nel report.", "warning", "Report non creato");
       return;
     }
-    const header = ["Ranking", "Azienda", "Cosa fa l'azienda", "Industria", "Posizione", "Stato", "Fit score", "Priorità", "Località", "RAL / stipendio", "Livello", "Esperienza", "Contratto", "Lingue", "Data candidatura", "Fonte", "Link opportunità", "Sintesi ruolo", "Responsabilità", "Why you fit", "Eventuali gap", "Your angle", "CV usato", "Preparazione", "Messaggio recruiter", "Note application"];
+    const header = ["Ranking", "Azienda", "Cosa fa l'azienda", "Industria", "Posizione", "Stato", "Criteri", "Priorità", "Località", "RAL / stipendio", "Livello", "Esperienza", "Contratto", "Lingue", "Data candidatura", "Fonte", "Link opportunità", "Sintesi ruolo", "Responsabilità", "Why you fit", "Eventuali gap", "Your angle", "CV usato", "Preparazione", "Messaggio recruiter", "Note application"];
     const rankedJobs = PIPELINE_STATES.flatMap((status) => sortPipelineJobs(jobs.filter((job) => jobStatus(job) === status), status));
     const rank = new Map(rankedJobs.map((job, index) => [String(job.id), index + 1]));
     const rows = rankedJobs.map((job) => {
       const application = getApplicationForJob(job.id);
-      return [rank.get(String(job.id)) || "", companyNameForJob(job), companyOverview(job), companyIndustry(job), jobTitle(job), rejectedState(job) ? "RIFIUTATA" : jobStatus(job), jobFit(job).toFixed(1), jobPriority(job), valueOf(job, "jobs", "location", ""), salaryFromJob(job) || "Non indicata", jobSeniority(job), jobExperience(job), jobContract(job), jobLanguages(job), valueOf(application, "applications", "appliedAt", "") ? formatDate(valueOf(application, "applications", "appliedAt", "")) : "", valueOf(job, "jobs", "source", ""), valueOf(job, "jobs", "url", ""), roleSynopsis(job), responsibilityItems(job).join(" | "), valueOf(application, "applications", "whyFit", valueOf(job, "jobs", "whyFit", "")), valueOf(application, "applications", "gaps", valueOf(job, "jobs", "gaps", "")), valueOf(application, "applications", "angle", valueOf(job, "jobs", "angle", "")), valueOf(application, "applications", "cvUsed", ""), valueOf(application, "applications", "preparationStatus", ""), valueOf(application, "applications", "recruiterNote", ""), valueOf(application, "applications", "notes", "")];
+      return [rank.get(String(job.id)) || "", companyNameForJob(job), companyOverview(job), companyIndustry(job), jobTitle(job), rejectedState(job) ? "RIFIUTATA" : jobStatus(job), criteriaSummary(job).label, jobPriority(job), valueOf(job, "jobs", "location", ""), salaryFromJob(job) || "Non indicata", jobSeniority(job), jobExperience(job), jobContract(job), jobLanguages(job), valueOf(application, "applications", "appliedAt", "") ? formatDate(valueOf(application, "applications", "appliedAt", "")) : "", valueOf(job, "jobs", "source", ""), valueOf(job, "jobs", "url", ""), roleSynopsis(job), responsibilityItems(job).join(" | "), valueOf(application, "applications", "whyFit", valueOf(job, "jobs", "whyFit", "")), valueOf(application, "applications", "gaps", valueOf(job, "jobs", "gaps", "")), valueOf(application, "applications", "angle", valueOf(job, "jobs", "angle", "")), valueOf(application, "applications", "cvUsed", ""), valueOf(application, "applications", "preparationStatus", ""), valueOf(application, "applications", "recruiterNote", ""), valueOf(application, "applications", "notes", "")];
     });
     const xmlEscape = (value) => escapeHtml(String(value ?? ""));
     const worksheetRows = [header, ...rows].map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="String">${xmlEscape(cell)}</Data></Cell>`).join("")}</Row>`).join("");
@@ -2414,7 +2415,7 @@ Cordiali saluti,
     return `
       <article class="kanban-card kanban-card--clickable" draggable="true" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" data-pipeline-job-id="${escapeAttribute(job.id)}" data-pipeline-status="${status}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}. Trascina per cambiare il ranking nella colonna.">
         <div class="kanban-card__drag-handle" title="Trascina per ordinare">⋮⋮ <span>Trascina per ordinare</span></div>
-        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="kanban-card__signals">${isPriorityJob(job) ? `<span class="pipeline-priority-star" title="Opportunità prioritaria" aria-label="Opportunità prioritaria">★</span>` : ""}${isReferralJob(job) ? `<span class="pipeline-referral-icon" title="Referral" aria-label="Referral">${icon("user")}</span>` : ""}<span class="badge badge--fit">${jobFit(job).toFixed(1)}</span></span></div>
+        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="kanban-card__signals">${isPriorityJob(job) ? `<span class="pipeline-priority-star" title="Opportunità prioritaria" aria-label="Opportunità prioritaria">★</span>` : ""}${isReferralJob(job) ? `<span class="pipeline-referral-icon" title="Referral" aria-label="Referral">${icon("user")}</span>` : ""}<span class="badge badge--fit" title="${escapeAttribute(criteriaSummary(job).title)}">${escapeHtml(criteriaSummary(job).label)}</span></span></div>
         <h3>${escapeHtml(jobTitle(job))}</h3>
         <p>${escapeHtml(companyNameForJob(job))} · ${escapeHtml(valueOf(job, "jobs", "location", "—"))}</p>
         <div class="kanban-card__footer">
@@ -2643,7 +2644,7 @@ Cordiali saluti,
       ? jobs.map((job) => `
         <article class="feedback-card">
           <span class="company-logo">${escapeHtml(initials(companyNameForJob(job)))}</span>
-          <div><h3>${escapeHtml(jobTitle(job))}</h3><p>${escapeHtml(companyNameForJob(job))} · Fit ${jobFit(job).toFixed(1)}/10</p></div>
+          <div><h3>${escapeHtml(jobTitle(job))}</h3><p>${escapeHtml(companyNameForJob(job))} · Criteri ${escapeHtml(criteriaSummary(job).label)}</p></div>
           ${feedbackButtons(job.id)}
         </article>
       `).join("")
@@ -2767,7 +2768,7 @@ Cordiali saluti,
       ? "Scegli prima almeno un Paese: qui compariranno solo le sue città."
       : loading.length ? `Caricamento città di ${escapeHtml(loading.join(", "))}…`
       : failed.length ? `Elenco città non disponibile per ${escapeHtml(failed.join(", "))}: scrivi il nome e premi Invio.`
-      : "I Paesi scelti valgono sempre per intero; le città selezionate danno priorità (Fit Score più alto) agli annunci in quelle città.";
+      : "I Paesi scelti valgono sempre per intero; gli annunci nelle città selezionate vengono mostrati per primi.";
     host.innerHTML = comboMarkup("country", { label: "Paesi", placeholder: locationPicker.countries.length ? "Aggiungi un Paese…" : "Cerca un Paese…", chips: countryChips })
       + comboMarkup("city", { label: "Città", placeholder: locationPicker.countries.length ? "Cerca una città…" : "Seleziona prima un Paese", chips: cityChips, disabled: !locationPicker.countries.length, hint: cityHint });
     if (focused) {
@@ -2946,9 +2947,9 @@ Cordiali saluti,
     const interviews = jobs.filter((job) => jobStatus(job) === "INTERVIEW").length + applications.filter((app) => normalizeStatus(valueOf(app, "applications", "status", ""), "") === "INTERVIEW" && !getJobById(valueOf(app, "applications", "jobId", ""))).length;
     const offers = jobs.filter((job) => jobStatus(job) === "OFFER").length + applications.filter((app) => normalizeStatus(valueOf(app, "applications", "status", ""), "") === "OFFER" && !getJobById(valueOf(app, "applications", "jobId", ""))).length;
     const conversion = appliedJobs.size ? Math.round((offers / appliedJobs.size) * 100) : 0;
-    const avgFit = jobs.length ? jobs.reduce((sum, job) => sum + jobFit(job), 0) / jobs.length : 0;
+    const allMet = jobs.filter((job) => { const match = preferenceMatch(job); return match && match.configured && match.met === match.configured; }).length;
     $("analyticsKpis").innerHTML = `
-      <article class="mini-kpi"><span>Fit medio</span><strong>${avgFit.toFixed(1)}</strong><small>/10</small></article>
+      <article class="mini-kpi"><span>Tutti i criteri</span><strong>${allMet}</strong><small>/${jobs.length}</small></article>
       <article class="mini-kpi"><span>Application rate</span><strong>${jobs.length ? Math.round((appliedJobs.size / jobs.length) * 100) : 0}%</strong><small>${appliedJobs.size}/${jobs.length}</small></article>
       <article class="mini-kpi"><span>Offer conversion</span><strong>${conversion}%</strong><small>su application</small></article>
     `;
@@ -2963,11 +2964,12 @@ Cordiali saluti,
       <div class="funnel-row"><span>${label}</span><span class="chart-track"><i style="width:${Math.round((count / funnelMax) * 100)}%"></i></span><strong>${count}</strong></div>
     `).join("");
 
+    const missingOf = (job) => { const match = preferenceMatch(job); return match && match.configured ? match.configured - match.met : null; };
     const fitBuckets = [
-      ["9–10", jobs.filter((job) => jobFit(job) >= 9).length],
-      ["8–8.9", jobs.filter((job) => jobFit(job) >= 8 && jobFit(job) < 9).length],
-      ["7–7.9", jobs.filter((job) => jobFit(job) >= 7 && jobFit(job) < 8).length],
-      ["Sotto 7", jobs.filter((job) => jobFit(job) < 7).length]
+      ["Tutti i criteri", jobs.filter((job) => missingOf(job) === 0).length],
+      ["Manca 1", jobs.filter((job) => missingOf(job) === 1).length],
+      ["Mancano 2+", jobs.filter((job) => missingOf(job) >= 2).length],
+      ["Senza criteri", jobs.filter((job) => missingOf(job) === null).length]
     ];
     const bucketMax = Math.max(1, ...fitBuckets.map(([, count]) => count));
     $("fitChart").innerHTML = fitBuckets.map(([label, count]) => `
@@ -3002,8 +3004,8 @@ Cordiali saluti,
     const skills = toList(preferences.profileSkills).slice(0, 4);
     const gapWords = cvGapKeywords(preferences, job);
     const why = language === "en"
-      ? (evidence ? `Fit ${fit.toFixed(1)}/10. Your CV includes directly relevant experience: ${evidence}` : `Fit ${fit.toFixed(1)}/10. The ${role} role is aligned with the target profile${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Highlight measurable outcomes, the ability to connect strategy with execution, and customer impact.`)
-      : valueOf(job, "jobs", "whyFit", "") || (evidence ? `Fit ${fit.toFixed(1)}/10. Il tuo CV riporta un’esperienza direttamente pertinente: ${evidence}` : `Fit ${fit.toFixed(1)}/10. Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`);
+      ? (evidence ? `Your CV includes directly relevant experience: ${evidence}` : `The ${role} role is aligned with the target profile${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Highlight measurable outcomes, the ability to connect strategy with execution, and customer impact.`)
+      : valueOf(job, "jobs", "whyFit", "") || (evidence ? `Il tuo CV riporta un’esperienza direttamente pertinente: ${evidence}` : `Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`);
     const gaps = language === "en"
       ? (gapWords.length ? `Your CV does not clearly mention: ${naturalListEnglish(gapWords)}. Check whether you have this experience and add it if so; otherwise prepare a concrete answer on how you would close the gap.` : "Check which technical or industry requirements are not yet covered by your profile. Address any gaps through relevant transferable experience and a concrete learning plan.")
       : valueOf(job, "jobs", "gaps", "") || (gapWords.length ? `Il tuo CV non menziona chiaramente: ${naturalList(gapWords)}. Verifica se possiedi questa esperienza e aggiungila se sì; altrimenti prepara una risposta concreta su come colmare il gap.` : "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.");
@@ -3140,7 +3142,7 @@ Cordiali saluti,
     $("copilotCompany").textContent = company;
     const emailButton = $("copilotEmailButton");
     if (emailButton) emailButton.dataset.query = `"${company}" OR "${jobTitle(job)}"`;
-    $("copilotFitScore").textContent = jobFit(job).toFixed(1);
+    $("copilotFitScore").textContent = criteriaSummary(job).label;
     const priorityButton = $("copilotPriorityButton");
     if (priorityButton) {
       const active = isPriorityJob(job);
@@ -3229,7 +3231,7 @@ Cordiali saluti,
       azienda: companyNameForJob(job),
       ruolo: jobTitle(job),
       location: valueOf(job, "jobs", "location", "[Location]"),
-      "fit score": `${jobFit(job).toFixed(1)}/10`,
+      "fit score": criteriaSummary(job).label,
       competenze: preferences.roles.slice(0, 4).join(", ") || "[Competenze]"
     };
     const content = String(valueOf(template, "answerBank", "content", ""));
@@ -4470,7 +4472,7 @@ Cordiali saluti,
   // opportunities, CV and personal texts are kept.
   async function resetSearchProfile(button) {
     if (!ensureWritable()) return;
-    const ok = window.confirm("Azzerare preferenze di ricerca, Fit Score appreso, storico degli scarti e proposte ancora da valutare?\n\nRestano: opportunità salvate o da applicare, candidature, CV e testi personali.");
+    const ok = window.confirm("Azzerare preferenze di ricerca, storico degli scarti e proposte ancora da valutare?\n\nRestano: opportunità salvate o da applicare, candidature, CV e testi personali.");
     if (!ok) return;
     setBusy(button, true, "Azzeramento…");
     const userId = state.user.id;
@@ -4504,7 +4506,7 @@ Cordiali saluti,
       navigate("preferences");
       showToast(problems.length
         ? `Azzeramento completato in parte (${problems.length} elementi non rimossi). Imposta di nuovo ruoli e Paesi e salva.`
-        : `Fatto: ${proposals.length} proposte rimosse, storico e Fit Score azzerati. Imposta ruoli e Paesi, salva, poi premi “Nuove proposte”.`,
+        : `Fatto: ${proposals.length} proposte rimosse, storico azzerato. Imposta ruoli e Paesi, salva, poi premi “Nuove proposte”.`,
         problems.length ? "warning" : "success", "Ricerca azzerata");
       if (problems.length) console.warn("Reset problems", problems);
     } catch (error) {
@@ -4537,7 +4539,7 @@ Cordiali saluti,
     setMapped(payload, "preferences", "sectors", toList($("preferenceSectors").value));
     setMapped(payload, "preferences", "locations", selectedPreferenceLocations());
     setMapped(payload, "preferences", "workModes", toList($("preferenceWorkModes").value));
-    setMapped(payload, "preferences", "minFit", asNumber($("preferenceMinFit").value, 7));
+    setMapped(payload, "preferences", "minFit", 0);
     setMapped(payload, "preferences", "aiLearning", $("preferenceAiLearning").checked);
     setMapped(payload, "preferences", "deliveryTime", $("preferenceDeliveryTime").value || "09:00");
     setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(20, asNumber($("preferenceDailyCount").value, 6))));
@@ -4561,7 +4563,7 @@ Cordiali saluti,
       const hidden = offPreferenceCount();
       const message = state.optionalErrors.preferences
         ? "Motivazioni e competenze salvate su questo dispositivo."
-        : `Preferenze salvate. Opportunità e Fit Score sono stati ricalcolati${hidden ? `: ${hidden} propost${hidden === 1 ? "a non più in linea è stata nascosta" : "e non più in linea sono state nascoste"}` : ""}. Usa “Nuove proposte” per cercare annunci con i nuovi criteri.`;
+        : `Preferenze salvate. Le opportunità sono state riordinate con i nuovi criteri${hidden ? `: ${hidden} propost${hidden === 1 ? "a non più in linea è stata nascosta" : "e non più in linea sono state nascoste"}` : ""}. Usa “Nuove proposte” per cercare annunci con i nuovi criteri.`;
       showToast(message, "success", "Preferenze aggiornate");
     } catch (error) {
       showToast(humanizeError(error, "il salvataggio delle preferenze"), "error", "Preferenze non salvate");
@@ -4633,7 +4635,7 @@ Cordiali saluti,
     setMapped(payload, "preferences", "sectors", toList(values.get("sectors")));
     setMapped(payload, "preferences", "locations", toList(values.get("locations")));
     setMapped(payload, "preferences", "workModes", toList(values.get("work_modes")));
-    setMapped(payload, "preferences", "minFit", asNumber(values.get("min_fit"), 7));
+    setMapped(payload, "preferences", "minFit", 0);
     setMapped(payload, "preferences", "aiLearning", true);
     setMapped(payload, "preferences", "deliveryTime", values.get("delivery_time") || "09:00");
     setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(20, asNumber(values.get("daily_count"), 6))));
@@ -4672,7 +4674,7 @@ Cordiali saluti,
     openDialog({
       eyebrow: "CONFIGURAZIONE INIZIALE",
       title: "Personalizza la tua ricerca",
-      body: `<p class="dialog-copy">Queste informazioni alimentano il motore di ricerca, il Fit Score e i contenuti del Copilot. Potrai modificarle in qualsiasi momento da Preferenze.</p>
+      body: `<p class="dialog-copy">Queste informazioni alimentano il motore di ricerca e i contenuti del Copilot. Potrai modificarle in qualsiasi momento da Preferenze.</p>
         <form class="form-stack onboarding-form" data-dialog-form="onboarding" novalidate>
           <div class="onboarding-progress"><span>1</span><strong>Criteri di ricerca</strong></div>
           <div class="form-grid form-grid--two">
@@ -4691,7 +4693,6 @@ Cordiali saluti,
             <label class="field"><span>Orario</span><input name="delivery_time" type="time" value="${escapeAttribute(preferences.deliveryTime)}" /></label>
             <label class="field"><span>Numero di proposte</span><input name="daily_count" type="number" min="1" max="20" value="${escapeAttribute(preferences.dailyCount)}" /></label>
           </div>
-          <label class="field range-field"><span>Fit Score minimo: <strong>${asNumber(preferences.minFit, 7).toFixed(1)}</strong></span><input name="min_fit" type="range" min="0" max="10" step="0.5" value="${escapeAttribute(preferences.minFit)}" /></label>
           <div class="notice notice--info"><strong>Come funziona</strong><span>JobFinder mostrerà solo annunci che rispettano tutti i gruppi di preferenze configurati. Se non ce ne sono altri, te lo dirà chiaramente.</span></div>
           <div class="form-actions"><button class="button button--primary button--wide" type="submit">${icon("check")}Salva e crea la mia ricerca</button></div>
         </form>`

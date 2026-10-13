@@ -418,6 +418,15 @@
    * job: { title, company_name, industry, location, remote_type, description, company_description, salary_text }
    * Returns { fit, matchesPreferences, matched, missing, workMode, notes }.
    */
+  /**
+   * Selects and ranks an opportunity by the user's criteria, in order of importance:
+   *   1. Paese / città   2. Ruoli target   3. Settori target   4. Modalità di lavoro
+   * Every configured criterion must be met (a sector or mode the listing does not state
+   * is "da verificare" and does not exclude it). Ranking compares the criteria in that
+   * order: a city match beats a country match before roles are even looked at, and so on;
+   * Aziende target, multinationals and freshness only break ties.
+   * Returns { matchesPreferences, criteria, met, configured, rank, fit, matched, missing, notes, … }.
+   */
   function scoreJob(job, rawPreferences) {
     const preferences = readPreferences(rawPreferences);
     const strongText = normalized(`${job.title || ""} ${job.industry || ""} ${job.company_name || ""} ${job.company_description || ""}`);
@@ -427,44 +436,17 @@
     const matched = {};
     const missing = [];
     const notes = [];
-    let score = 4;
+    const criteria = [];
+    const add = (key, label, status, level, detail = "") => criteria.push({ key, label, status, level, detail });
 
-    // Roles — required when configured.
-    if (preferences.roles.length) {
-      const hits = preferences.roles.map((role) => roleMatch(role, job.title)).filter(Boolean);
-      if (hits.length) {
-        matched.roles = hits.map((hit) => hit.value);
-        score += hits.some((hit) => hit.strength === "strong") ? 3 : 2.5;
-      } else missing.push("roles");
-    } else score += 1.5;
-
-    // Sectors — bonus; required only when no role is configured.
-    if (preferences.sectors.length) {
-      const hits = preferences.sectors.map((sector) => sectorMatch(sector, strongText, weakText)).filter(Boolean);
-      if (hits.length) {
-        matched.sectors = hits.map((hit) => hit.value);
-        score += hits.some((hit) => hit.strength === "strong") ? 1 : 0.5;
-      } else if (!preferences.roles.length) missing.push("sectors");
-    } else score += 0.5;
-
-    // Work mode.
-    let modeOk = true;
-    if (modes.size) {
-      if (mode !== "unknown") modeOk = modes.has(mode);
-      else modeOk = modes.has("onsite") || modes.has("hybrid");
-      if (modeOk) {
-        matched.work_modes = [mode === "unknown" ? "Modalità da verificare" : MODE_LABELS[mode]];
-        score += mode === "unknown" ? 0.25 : 0.75;
-        if (mode === "unknown") notes.push("Modalità di lavoro non indicata nell’annuncio");
-      } else missing.push("work_modes");
-    } else score += 0.5;
-
-    // Location. A worldwide remote role is fine wherever you live, if you accept remote.
-    let locationOk = true;
+    // 1. Paese / città — city 3, country 2, region or full remote 1.
     if (preferences.locations.length) {
       const hits = preferences.locations.map((place) => locationMatch(place, job, mode)).filter(Boolean);
-      if (hits.length) matched.locations = hits.map((hit) => hit.value);
-      else if (mode === "remote" && isWorldwide(job) && (!modes.size || modes.has("remote"))) {
+      let level = 0;
+      if (hits.length) {
+        matched.locations = hits.map((hit) => hit.value);
+        level = hits.some((hit) => hit.strength === "city") ? 3 : (hits.some((hit) => hit.strength === "country" || hit.strength === "strong") ? 2 : 1);
+      } else if (mode === "remote" && isWorldwide(job) && (!modes.size || modes.has("remote"))) {
         const codes = new Set();
         preferences.locations.forEach((value) => {
           const key = normalized(value);
@@ -472,31 +454,55 @@
           if (place) codes.add(place.country);
           else if (countries().byName.has(key)) codes.add(countries().byName.get(key));
         });
-        if (remoteOpenTo(job, codes)) matched.locations = ["Full remote"];
+        if (remoteOpenTo(job, codes)) { matched.locations = ["Full remote"]; level = 1; }
       }
-      locationOk = Boolean(matched.locations);
-      if (locationOk) score += hits.some((hit) => hit.strength === "city") ? 1.5 : 1;
-      else missing.push("locations");
-    } else score += 0.5;
+      if (level) add("locations", "Paese / città", "match", level, matched.locations.join(", "));
+      else { missing.push("locations"); add("locations", "Paese / città", "miss", 0); }
+    } else add("locations", "Paese / città", "unset", 0);
 
-    if (job.salary_text || job.salary_min || job.salary_max) score += 0.25;
+    // 2. Ruoli target — exact function 2, equivalent function (Manager ≈ Lead) 1.
+    if (preferences.roles.length) {
+      const hits = preferences.roles.map((role) => roleMatch(role, job.title)).filter(Boolean);
+      if (hits.length) {
+        matched.roles = hits.map((hit) => hit.value);
+        add("roles", "Ruolo", "match", hits.some((hit) => hit.strength === "strong") ? 2 : 1, matched.roles.join(", "));
+      } else { missing.push("roles"); add("roles", "Ruolo", "miss", 0); }
+    } else add("roles", "Ruolo", "unset", 0);
 
-    // Large international employers rank first; with "solo multinazionali" the others are out.
-    // Your target companies (Aziende target) come first and always pass the company filter.
+    // 3. Settori target — in title/industry/company 2, only in the description 1.
+    //    A listing that states its industry must match; one that does not is "da verificare".
+    if (preferences.sectors.length) {
+      const hits = preferences.sectors.map((sector) => sectorMatch(sector, strongText, weakText)).filter(Boolean);
+      if (hits.length) {
+        matched.sectors = hits.map((hit) => hit.value);
+        add("sectors", "Settore", "match", hits.some((hit) => hit.strength === "strong") ? 2 : 1, matched.sectors.join(", "));
+      } else if (String(job.industry || "").trim()) { missing.push("sectors"); add("sectors", "Settore", "miss", 0, String(job.industry).trim()); }
+      else { add("sectors", "Settore", "unknown", 0); notes.push("Settore non indicato nell’annuncio"); }
+    } else add("sectors", "Settore", "unset", 0);
+
+    // 4. Modalità di lavoro — stated and matching 1, not stated 0 (accepted unless you want only remote).
+    if (modes.size) {
+      if (mode !== "unknown" && modes.has(mode)) { matched.work_modes = [MODE_LABELS[mode]]; add("work_modes", "Modalità", "match", 1, MODE_LABELS[mode]); }
+      else if (mode === "unknown" && (modes.has("onsite") || modes.has("hybrid"))) { add("work_modes", "Modalità", "unknown", 0); notes.push("Modalità di lavoro non indicata nell’annuncio"); }
+      else { missing.push("work_modes"); add("work_modes", "Modalità", "miss", 0, MODE_LABELS[mode]); }
+    } else add("work_modes", "Modalità", "unset", 0);
+
+    // Company: Aziende target and multinationals only break ties; "solo multinazionali" filters.
     const target = preferences.targetCompanies.find((name) => sameCompany(name, job.company_name)) || null;
     const multinational = isMultinational(job.company_name);
-    if (target) { score += 1.5; matched.target = [target]; }
-    else if (multinational) { score += 0.75; matched.company = [String(job.company_name || "").trim()]; }
+    if (target) matched.target = [target];
+    else if (multinational) matched.company = [String(job.company_name || "").trim()];
     else if (preferences.onlyMultinationals) missing.push("company");
 
-    const roleOrSectorOk = preferences.roles.length
-      ? Boolean(matched.roles)
-      : (preferences.sectors.length ? Boolean(matched.sectors) : true);
-    const matchesPreferences = roleOrSectorOk && locationOk && modeOk && (Boolean(target) || multinational || !preferences.onlyMultinationals);
-    // An opportunity outside your criteria can never look like a strong fit.
-    if (!matchesPreferences) score = Math.min(score, 5.5 - missing.length * 0.5);
-    const fit = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
-    return { fit, matchesPreferences, matched, missing, workMode: mode, notes, multinational, target };
+    const configured = criteria.filter((item) => item.status !== "unset").length;
+    const met = criteria.filter((item) => item.status === "match").length;
+    const matchesPreferences = missing.length === 0;
+    const published = Date.parse(job.published_at || job.created_at || "") || 0;
+    const levels = criteria.map((item) => item.level); // [location, role, sector, mode]
+    const rank = levels[0] * 1e5 + levels[1] * 1e4 + levels[2] * 1e3 + levels[3] * 1e2 + (target ? 20 : 0) + (multinational ? 10 : 0) + Math.min(9, published / 1e12);
+    // Kept only for the stored legacy column: share of configured criteria met, 0–10.
+    const fit = configured ? Math.round((met / configured) * 100) / 10 : 10;
+    return { fit, matchesPreferences, criteria, met, configured, rank, matched, missing, workMode: mode, notes, multinational, target };
   }
 
   /** Country ISO codes for the preferred locations (countries and known cities). */

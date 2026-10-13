@@ -387,15 +387,7 @@
             <div id="opportunityExternalSearch" class="external-search"></div>
             <div id="opportunitySearchDiagnostics"></div>
             <section class="filter-bar" aria-label="Filtri opportunità">
-              <label class="compact-field">
-                <span>Fit minimo</span>
-                <select id="opportunityFitFilter">
-                  <option value="0" selected>Tutti</option>
-                  <option value="7">7.0+</option>
-                  <option value="8">8.0+</option>
-                  <option value="9">9.0+</option>
-                </select>
-              </label>
+              <select id="opportunityFitFilter" hidden aria-hidden="true"><option value="0" selected>Tutti</option></select>
               <label class="compact-field"><span>Status</span><select id="opportunityStatusFilter"><option value="">Tutti</option></select></label>
               <label class="compact-field"><span>Priorità</span><select id="opportunityPriorityFilter"><option value="">Tutte</option></select></label>
               <label class="compact-field"><span>Azienda</span><select id="opportunityCompanyFilter"><option value="">Tutte</option></select></label>
@@ -564,11 +556,7 @@
                 </label>
               </section>
               <div class="preference-settings">
-                <label class="field range-field">
-                  <span>Fit Score minimo: <strong id="preferenceMinFitOutput">7.0</strong></span>
-                  <input id="preferenceMinFit" type="range" min="0" max="10" step="0.5" value="7" />
-                  <span class="range-scale"><small>0</small><small>10</small></span>
-                </label>
+                <input id="preferenceMinFit" type="hidden" value="0" /><span id="preferenceMinFitOutput" hidden></span>
                 <label class="switch-control">
                   <span><strong>AI learning enabled</strong><small>Consenti al sistema di usare il feedback per il ranking, senza cambiare i campi manuali.</small></span>
                   <input id="preferenceAiLearning" type="checkbox" />
@@ -584,7 +572,7 @@
                 <div>
                   <p class="eyebrow">CONSEGNA GIORNALIERA</p>
                   <h2>Quando vuoi ricevere le nuove opportunità?</h2>
-                  <p class="muted">Dall'orario scelto, alla prima apertura della dashboard JobFinder mostra una nuova selezione basata su ruoli, settori, località, modalità di lavoro e Fit Score minimo.</p>
+                  <p class="muted">Dall'orario scelto, alla prima apertura della dashboard JobFinder mostra una nuova selezione scelta e ordinata per Paese/città, ruoli, settori e modalità di lavoro, in quest'ordine di importanza.</p>
                 </div>
                 <label class="field preference-time-field"><span>Orario</span><input id="preferenceDeliveryTime" type="time" value="09:00" /></label>
                 <label class="field preference-count-field"><span>Numero di proposte</span><input id="preferenceDailyCount" type="number" min="1" max="20" value="6" /></label>
@@ -649,7 +637,7 @@
             <div id="analyticsKpis" class="mini-kpi-row"></div>
             <div class="analytics-grid">
               <section class="panel"><div class="panel-heading"><h2>Funnel candidature</h2></div><div id="funnelChart" class="funnel-chart"></div></section>
-              <section class="panel"><div class="panel-heading"><h2>Distribuzione Fit Score</h2></div><div id="fitChart" class="bar-chart"></div></section>
+              <section class="panel"><div class="panel-heading"><h2>Criteri soddisfatti</h2></div><div id="fitChart" class="bar-chart"></div></section>
             </div>
           </section>
 
@@ -667,7 +655,7 @@
                   <div class="copilot-header-actions">
                     <button class="button button--primary copilot-open-job-button" type="button" data-action="open-job"><svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio</button>
                     <div class="copilot-score-stack">
-                      <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
+                      <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>CRITERI<br />SODDISFATTI</span></div>
                       <div class="copilot-signal-toggles"><button id="copilotPriorityButton" class="copilot-priority-toggle" type="button" data-action="toggle-priority" aria-pressed="false"><span aria-hidden="true">☆</span>Priorità</button><button id="copilotReferralButton" class="copilot-referral-toggle" type="button" data-action="toggle-referral" aria-pressed="false"><svg class="icon"><use href="#icon-user"></use></svg>Referral</button></div>
                       <div class="language-segmented" role="group" aria-label="Lingua dei testi"><button type="button" data-action="set-copilot-language" data-language="it" aria-pressed="true">IT</button><button type="button" data-action="set-copilot-language" data-language="en" aria-pressed="false">EN</button></div>
                       <select id="copilotLanguage" class="visually-hidden" aria-label="Lingua dei testi"><option value="it">IT</option><option value="en">EN</option></select>
@@ -798,7 +786,7 @@
 
     <script src="config.js?v=20260907.45" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="shared/matching.js?v=20261013.4" defer></script>
-    <script src="app.js?v=20261013.4" defer></script>
+    <script src="shared/matching.js?v=20261013.5" defer></script>
+    <script src="app.js?v=20261013.6" defer></script>
   </body>
 </html>

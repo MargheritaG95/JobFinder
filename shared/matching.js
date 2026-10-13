@@ -323,8 +323,72 @@
   const MODE_LABELS = { remote: "Remote", hybrid: "Hybrid", onsite: "On-site", unknown: "Non indicata" };
 
   // ------------------------------------------------------------- preferences
+  // ------------------------------------------------------------ multinationals
+  // Large international groups with offices in Italy / Europe. Staffing agencies are left out:
+  // they post on behalf of unnamed clients.
+  const MULTINATIONALS = [
+    // consulting & IT services
+    "Accenture", "Deloitte", "PwC", "PricewaterhouseCoopers", "EY", "Ernst & Young", "KPMG", "McKinsey", "Boston Consulting Group", "BCG", "Bain",
+    "Kearney", "Oliver Wyman", "Roland Berger", "Capgemini", "IBM", "Protiviti", "NTT Data", "Reply", "Sopra Steria", "Atos", "Cognizant",
+    "Infosys", "Tata Consultancy Services", "TCS", "Wipro", "Avanade", "Alvarez & Marsal", "Mercer", "Marsh", "Aon", "Willis Towers Watson", "WTW", "Gartner",
+    // technology & internet
+    "Google", "Alphabet", "Microsoft", "Amazon", "AWS", "Amazon Web Services", "Apple", "Meta", "Salesforce", "Oracle", "SAP", "Adobe", "Cisco", "Intel",
+    "NVIDIA", "HP", "HP Inc", "Hewlett Packard Enterprise", "HPE", "Dell", "Dell Technologies", "ServiceNow", "Workday", "Snowflake", "Databricks", "Stripe",
+    "Airbnb", "Uber", "Booking.com", "Booking Holdings", "Spotify", "Netflix", "LinkedIn", "Datadog", "MongoDB", "Elastic", "Atlassian", "Zalando",
+    "Siemens", "Ericsson", "Nokia", "Vodafone", "TIM", "Telecom Italia", "Telefonica", "Orange", "Deutsche Telekom", "Samsung", "Sony", "Philips", "Canon",
+    "Expedia", "eBay", "PayPal", "Shopify", "HubSpot", "Zendesk", "Qualtrics", "Medallia", "Twilio", "Palantir", "Experian", "Equifax", "Amadeus", "Sabre",
+    // banking, insurance, payments
+    "Generali", "Assicurazioni Generali", "Banca Generali", "Allianz", "AXA", "Zurich", "Intesa Sanpaolo", "UniCredit", "BNP Paribas", "BNL", "Societe Generale",
+    "Credit Agricole", "Deutsche Bank", "HSBC", "Barclays", "JPMorgan", "J.P. Morgan", "JPMorgan Chase", "Goldman Sachs", "Morgan Stanley", "Citi", "Citigroup",
+    "BlackRock", "Mediobanca", "Poste Italiane", "Mastercard", "Visa", "American Express", "Nexi", "Swiss Re", "Munich Re", "Unipol", "UnipolSai", "Reale Mutua",
+    "Aviva", "Prudential", "MetLife", "Chubb", "AIG", "Allianz Trade", "Moody's", "S&P Global", "Bloomberg", "London Stock Exchange Group", "LSEG",
+    "UBS", "Credit Suisse", "ING", "ABN AMRO", "Santander", "BBVA", "Fineco", "FinecoBank", "Mediolanum", "Banco BPM", "BPER", "Euronext", "Worldline", "Adyen",
+    // energy & industry
+    "Eni", "Enel", "Snam", "Terna", "Edison", "A2A", "Saipem", "TotalEnergies", "Shell", "BP", "Iberdrola", "Engie", "ExxonMobil", "Chevron", "Equinor",
+    "ABB", "Schneider Electric", "Bosch", "Robert Bosch", "Continental", "3M", "GE", "General Electric", "GE Vernova", "GE Aerospace", "Honeywell",
+    "Caterpillar", "Emerson", "Prysmian", "Saint-Gobain", "Air Liquide", "Linde", "BASF", "Dow", "Solvay", "Mapei", "Leonardo", "Fincantieri",
+    "Airbus", "Boeing", "Rolls-Royce", "Safran", "Thales", "Danfoss", "Atlas Copco", "Sandvik", "Alstom", "Hitachi", "Mitsubishi", "Toshiba", "Panasonic",
+    // automotive & mobility
+    "Stellantis", "Ferrari", "Lamborghini", "Ducati", "Maserati", "Pirelli", "Brembo", "BMW", "Mercedes-Benz", "Volkswagen", "Audi", "Porsche", "Toyota",
+    "Renault", "Tesla", "CNH", "CNH Industrial", "Iveco", "Michelin", "Bridgestone", "Volvo", "Scania", "Hyundai", "Ford", "General Motors", "Magna",
+    // consumer, luxury, retail
+    "Unilever", "Procter & Gamble", "P&G", "Nestle", "L'Oreal", "LVMH", "Kering", "Gucci", "Prada", "Armani", "Giorgio Armani", "Moncler", "Luxottica",
+    "EssilorLuxottica", "Ferrero", "Barilla", "Lavazza", "Campari", "Coca-Cola", "PepsiCo", "Danone", "Heineken", "AB InBev", "Mondelez", "Kraft Heinz",
+    "Mars", "Philip Morris", "British American Tobacco", "Diageo", "Pernod Ricard", "Henkel", "Reckitt", "Colgate-Palmolive", "Johnson & Johnson", "Kenvue",
+    "Nike", "Adidas", "Puma", "H&M", "Inditex", "Zara", "IKEA", "Decathlon", "Carrefour", "Chanel", "Hermes", "Burberry", "Richemont", "Cartier", "Bulgari",
+    "Valentino", "Dolce & Gabbana", "Salvatore Ferragamo", "Ferragamo", "Zegna", "Max Mara", "Benetton", "Calzedonia", "Estee Lauder", "Coty", "Beiersdorf",
+    // pharma & health
+    "Pfizer", "Novartis", "Roche", "Sanofi", "GSK", "GlaxoSmithKline", "AstraZeneca", "Bayer", "Merck", "MSD", "AbbVie", "Eli Lilly", "Lilly", "Novo Nordisk",
+    "Takeda", "Boehringer Ingelheim", "Menarini", "Chiesi", "Angelini", "Recordati", "Zambon", "Medtronic", "Siemens Healthineers", "GE HealthCare", "Abbott",
+    "Bristol Myers Squibb", "Amgen", "Gilead", "Biogen", "Janssen", "Stryker", "Boston Scientific", "Baxter", "Fresenius", "Thermo Fisher", "IQVIA",
+    // logistics, travel, media
+    "DHL", "UPS", "FedEx", "Maersk", "MSC", "DSV", "Kuehne+Nagel", "Kuehne + Nagel", "Accor", "Marriott", "Hilton", "Ryanair", "ITA Airways", "Lufthansa",
+    "Air France", "KLM", "easyJet", "Wolters Kluwer", "RELX", "Thomson Reuters", "Publicis", "WPP", "Omnicom", "Havas", "Dentsu", "Nielsen", "Ipsos", "Kantar",
+    "Sky", "Comcast", "Disney", "Warner Bros", "Mediaset", "MFE", "Bertelsmann"
+  ];
+  const MULTINATIONAL_SET = new Set(MULTINATIONALS.map((name) => normalized(name)));
+  const SHORT_PREFIX_OK = new Set(["ey", "ge", "hp", "bp", "dhl", "ups", "ibm", "sap", "axa", "msd", "gsk", "abb", "bmw", "aws", "pwc", "kpmg", "tcs", "ntt data", "eni", "enel", "bnp paribas", "ing", "ubs", "hsbc", "visa", "audi", "fiat", "bain"]);
+  const LEGAL_SUFFIXES = /\b(s p a|spa|s r l|srl|p l c|inc|incorporated|ltd|limited|plc|gmbh|ag|sa|nv|bv|se|llc|corp|corporation|co|company|group|gruppo|holding|holdings|italia|italy|europe|international|global|services)\b/g;
+
+  /** True for a known multinational / large group ("Accenture Italia S.p.A." → Accenture). */
+  function isMultinational(companyName) {
+    const name = normalized(companyName);
+    if (!name) return false;
+    if (MULTINATIONAL_SET.has(name)) return true;
+    const core = name.replace(LEGAL_SUFFIXES, " ").replace(/\s+/g, " ").trim();
+    if (MULTINATIONAL_SET.has(core)) return true;
+    // "Deloitte Consulting", "Amazon Italia Logistica": the group name as the leading words.
+    for (const known of MULTINATIONAL_SET) {
+      // Short names only as a prefix when unambiguous ("EY Advisory" yes, "Tim Hortons" no).
+      const prefixOk = known.length >= 5 || SHORT_PREFIX_OK.has(known);
+      if (prefixOk && name.startsWith(`${known} `)) return true;
+    }
+    return false;
+  }
+
   function readPreferences(preferences = {}) {
     return {
+      onlyMultinationals: Boolean(preferences.onlyMultinationals ?? preferences.only_multinationals),
       roles: list(preferences.roles ?? preferences.target_roles),
       sectors: list(preferences.sectors ?? preferences.target_sectors),
       locations: list(preferences.locations),
@@ -405,14 +469,19 @@
 
     if (job.salary_text || job.salary_min || job.salary_max) score += 0.25;
 
+    // Large international employers rank first; with "solo multinazionali" the others are out.
+    const multinational = isMultinational(job.company_name);
+    if (multinational) { score += 0.75; matched.company = [String(job.company_name || "").trim()]; }
+    else if (preferences.onlyMultinationals) missing.push("company");
+
     const roleOrSectorOk = preferences.roles.length
       ? Boolean(matched.roles)
       : (preferences.sectors.length ? Boolean(matched.sectors) : true);
-    const matchesPreferences = roleOrSectorOk && locationOk && modeOk;
+    const matchesPreferences = roleOrSectorOk && locationOk && modeOk && (multinational || !preferences.onlyMultinationals);
     // An opportunity outside your criteria can never look like a strong fit.
     if (!matchesPreferences) score = Math.min(score, 5.5 - missing.length * 0.5);
     const fit = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
-    return { fit, matchesPreferences, matched, missing, workMode: mode, notes };
+    return { fit, matchesPreferences, matched, missing, workMode: mode, notes, multinational };
   }
 
   /** Country ISO codes for the preferred locations (countries and known cities). */
@@ -450,10 +519,10 @@
     return Boolean(place && place.names.includes(y));
   }
 
-  const GROUP_LABELS = { roles: "Ruolo", sectors: "Settore", locations: "Location", work_modes: "Modalità" };
+  const GROUP_LABELS = { roles: "Ruolo", sectors: "Settore", locations: "Location", work_modes: "Modalità", company: "Multinazionale" };
 
   return {
     normalized, list, scoreJob, readPreferences, hasCriteria, jobWorkMode, preferredModes,
-    preferredCountryCodes, preferredCities, roleMatch, placeCountry, samePlace, GROUP_LABELS, MODE_LABELS
+    preferredCountryCodes, preferredCities, roleMatch, isMultinational, placeCountry, samePlace, GROUP_LABELS, MODE_LABELS
   };
 });

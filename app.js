@@ -1004,7 +1004,7 @@ Cordiali saluti,
   function preferenceMatch(job) {
     const preferences = matchingPreferences();
     if (!preferences || !job) return null;
-    const key = JSON.stringify([preferences.roles, preferences.sectors, preferences.locations, preferences.workModes, preferences.minFit]);
+    const key = JSON.stringify([preferences.roles, preferences.sectors, preferences.locations, preferences.workModes, preferences.minFit, preferences.onlyMultinationals]);
     if (key !== matchCacheKey) { matchCache.clear(); matchCacheKey = key; }
     const cacheId = `${job.id}:${valueOf(job, "jobs", "updatedAt", "")}`;
     if (!matchCache.has(cacheId)) {
@@ -1073,7 +1073,9 @@ Cordiali saluti,
     const distinctive = (text) => new Set(normalizedTokens(text).filter((token) => !GENERIC.has(token)));
     const titleTokens = distinctive(jobTitle(job));
     const company = companyNameForJob(job).trim().toLowerCase();
-    const penalty = Math.min(1.5, preferenceLearningProfile().reduce((total, item) => {
+    // Only when "AI learning enabled" is switched on in Preferenze.
+    const learning = currentPreferences().aiLearning ? preferenceLearningProfile() : [];
+    const penalty = Math.min(1.5, learning.reduce((total, item) => {
       const sameCompany = company && String(item.company || "").trim().toLowerCase() === company;
       const shared = [...distinctive(item.title || "")].filter((token) => titleTokens.has(token)).length;
       return total + (sameCompany ? 0.5 : 0) + (shared >= 2 ? 0.5 : 0);
@@ -1196,7 +1198,7 @@ Cordiali saluti,
       return category === "CV" || title === "CV DI RIFERIMENTO";
     });
     const accountCv = cvResource ? String(valueOf(cvResource, "answerBank", "content", "") || "") : "";
-    if (!record) return { ...DEFAULT_PREFERENCES, ...local, isDefault: true, record: null };
+    if (!record) return { ...DEFAULT_PREFERENCES, ...local, onlyMultinationals: local.onlyMultinationals !== false, isDefault: true, record: null };
     return {
       roles: toList(valueOf(record, "preferences", "roles", [])),
       sectors: toList(valueOf(record, "preferences", "sectors", [])),
@@ -1212,6 +1214,7 @@ Cordiali saluti,
       careerChangeReason: local.careerChangeReason || DEFAULT_PREFERENCES.careerChangeReason,
       careerChangeReasonEn: local.careerChangeReasonEn || DEFAULT_PREFERENCES.careerChangeReasonEn,
       companyValues: local.companyValues || DEFAULT_PREFERENCES.companyValues,
+      onlyMultinationals: local.onlyMultinationals !== false,
       isDefault: false,
       record
     };
@@ -2023,7 +2026,7 @@ Cordiali saluti,
     const row = (label, value) => `<li><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></li>`;
     const reasons = [
       ["Già proposti in passato", stats.giaProposti], ["Ruolo diverso", stats.fuoriRuolo], ["Settore diverso", stats.fuoriSettore],
-      ["Paese / città diversi", stats.fuoriLocation], ["Modalità diversa", stats.fuoriModalita], ["Sotto il Fit minimo", stats.sottoFitMinimo]
+      ["Paese / città diversi", stats.fuoriLocation], ["Modalità diversa", stats.fuoriModalita], ["Non multinazionali", stats.nonMultinazionali], ["Sotto il Fit minimo", stats.sottoFitMinimo]
     ].filter(([, value]) => value);
     host.innerHTML = `
       <details class="search-diagnostics">
@@ -2061,7 +2064,8 @@ Cordiali saluti,
         jsearchOffset,
         preferences: preferences.isDefault ? null : {
           target_roles: preferences.roles, target_sectors: preferences.sectors,
-          locations: preferences.locations, work_modes: preferences.workModes, min_fit_score: preferences.minFit
+          locations: preferences.locations, work_modes: preferences.workModes, min_fit_score: preferences.minFit,
+          only_multinationals: preferences.onlyMultinationals
         }
       }),
       cache: "no-store"
@@ -2245,7 +2249,8 @@ Cordiali saluti,
       preferences.sectors.length ? `<b>Settori</b> ${escapeHtml(preferences.sectors.join(", "))}` : "",
       preferences.locations.length ? `<b>Location</b> ${escapeHtml(preferences.locations.join(", "))}` : "",
       preferences.workModes.length ? `<b>Modalità</b> ${escapeHtml(preferences.workModes.join(", "))}` : "",
-      preferences.minFit ? `<b>Fit minimo</b> ${asNumber(preferences.minFit, 0).toFixed(1)}` : ""
+      preferences.minFit ? `<b>Fit minimo</b> ${asNumber(preferences.minFit, 0).toFixed(1)}` : "",
+      preferences.onlyMultinationals ? "<b>Solo multinazionali</b>" : ""
     ].filter(Boolean);
     const hiddenNote = hidden
       ? (showingAll
@@ -2892,6 +2897,7 @@ Cordiali saluti,
     $("preferenceMinFit").value = String(preferences.minFit);
     $("preferenceMinFitOutput").textContent = asNumber(preferences.minFit, 7).toFixed(1);
     $("preferenceAiLearning").checked = preferences.aiLearning;
+    if ($("preferenceOnlyMultinationals")) $("preferenceOnlyMultinationals").checked = preferences.onlyMultinationals !== false;
     $("preferenceDeliveryTime").value = preferences.deliveryTime;
     $("preferenceDailyCount").value = String(preferences.dailyCount);
     const notice = $("preferencesSourceNotice");
@@ -3615,6 +3621,9 @@ Cordiali saluti,
           break;
         case "refresh":
           await loadAllData();
+          break;
+        case "reset-search-profile":
+          await resetSearchProfile(trigger);
           break;
         case "refresh-opportunities":
           await refreshOpportunitySuggestions(trigger);
@@ -4452,6 +4461,55 @@ Cordiali saluti,
     }
   }
 
+  // "Azzera e ricomincia": search preferences, proposal history, learning from discarded
+  // opportunities and the proposals still to evaluate. Saved, applied and in-progress
+  // opportunities, CV and personal texts are kept.
+  async function resetSearchProfile(button) {
+    if (!ensureWritable()) return;
+    const ok = window.confirm("Azzerare preferenze di ricerca, Fit Score appreso, storico degli scarti e proposte ancora da valutare?\n\nRestano: opportunità salvate o da applicare, candidature, CV e testi personali.");
+    if (!ok) return;
+    setBusy(button, true, "Azzeramento…");
+    const userId = state.user.id;
+    const problems = [];
+    try {
+      const prefOwner = ownerColumn("preferences") || "user_id";
+      const { error: prefError } = await state.client.from(tableName("preferences")).delete().eq(prefOwner, userId);
+      if (prefError) problems.push(`preferenze: ${prefError.message}`);
+      for (const table of ["user_opportunity_history", "user_job_matches"]) {
+        const { error } = await state.client.from(table).delete().eq("user_id", userId);
+        if (error && !/does not exist|schema cache/i.test(error.message || "")) problems.push(`${table}: ${error.message}`);
+      }
+      const proposals = state.data.jobs.filter((job) => opportunityStage(job) === "review" && !getApplicationForJob(job.id) && !valueOf(job, "jobs", "saved", false));
+      for (const job of proposals) {
+        try {
+          const feedback = feedbackForJob(job.id);
+          if (feedback) await deleteRecord("feedback", feedback.id).catch(() => null);
+          await deleteRecord("jobs", job.id);
+        } catch (error) { problems.push(`${jobTitle(job)}: ${error.message}`); }
+      }
+      ["jobfinder:preference-learning", "jobfinder:jsearch-offset", "jobfinder:opportunity-refresh", "jobfinder:search-diagnostics", "jobfinder:lifecycle-cleanup"]
+        .forEach((prefix) => { try { window.localStorage.removeItem(`${prefix}:${userId}`); } catch (_) { /* nothing stored */ } });
+      state.searchDiagnostics = null;
+      const personalization = { ...(state.user?.user_metadata?.jobfinder_personalization || localPersonalization()), onlyMultinationals: true };
+      try { saveLocalPersonalization(personalization); } catch (_) { /* account copy below */ }
+      const { data: userData } = await state.client.auth.updateUser({ data: { jobfinder_personalization: personalization } });
+      if (userData?.user) state.user = userData.user;
+      matchCache.clear();
+      await loadAllData({ quiet: true });
+      renderAll();
+      navigate("preferences");
+      showToast(problems.length
+        ? `Azzeramento completato in parte (${problems.length} elementi non rimossi). Imposta di nuovo ruoli e Paesi e salva.`
+        : `Fatto: ${proposals.length} proposte rimosse, storico e Fit Score azzerati. Imposta ruoli e Paesi, salva, poi premi “Nuove proposte”.`,
+        problems.length ? "warning" : "success", "Ricerca azzerata");
+      if (problems.length) console.warn("Reset problems", problems);
+    } catch (error) {
+      showToast(humanizeError(error, "l’azzeramento"), "error", "Azzeramento non riuscito");
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   async function savePreferences(event) {
     event.preventDefault();
     if (!ensureWritable()) return;
@@ -4461,7 +4519,8 @@ Cordiali saluti,
       profileCvText: $("preferenceCvText").value.trim(),
       careerChangeReason: $("preferenceCareerChangeReason").value.trim(),
       careerChangeReasonEn: $("preferenceCareerChangeReasonEn").value.trim(),
-      companyValues: $("preferenceCompanyValues").value.trim()
+      companyValues: $("preferenceCompanyValues").value.trim(),
+      onlyMultinationals: Boolean($("preferenceOnlyMultinationals")?.checked)
     };
     try {
       saveLocalPersonalization(personalization);

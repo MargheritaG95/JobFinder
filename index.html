@@ -569,6 +569,11 @@
                   <input id="preferenceAiLearning" type="checkbox" />
                   <i aria-hidden="true"></i>
                 </label>
+                <label class="switch-control">
+                  <span><strong>Solo multinazionali e grandi aziende</strong><small>Propone solo annunci di grandi gruppi internazionali (Accenture, Generali, Amazon, Unilever, Stellantis…). Disattivalo per includere anche startup e PMI.</small></span>
+                  <input id="preferenceOnlyMultinationals" type="checkbox" checked />
+                  <i aria-hidden="true"></i>
+                </label>
               </div>
               <section class="preference-delivery-card">
                 <div>
@@ -582,6 +587,9 @@
               </section>
               <div class="form-actions">
                 <span id="preferencesUpdatedAt" class="muted"></span>
+                <button class="button button--ghost" type="button" data-action="reset-search-profile">
+                  <svg class="icon"><use href="#icon-refresh"></use></svg>Azzera e ricomincia
+                </button>
                 <button id="savePreferencesButton" class="button button--primary" type="submit">
                   <svg class="icon"><use href="#icon-check"></use></svg>Salva preferenze
                 </button>
@@ -785,7 +793,7 @@
 
     <script src="config.js?v=20260907.45" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="shared/matching.js?v=20261013.2" defer></script>
-    <script src="app.js?v=20261013.2" defer></script>
+    <script src="shared/matching.js?v=20261013.3" defer></script>
+    <script src="app.js?v=20261013.3" defer></script>
   </body>
 </html>

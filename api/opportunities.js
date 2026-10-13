@@ -136,6 +136,10 @@ module.exports = async function handler(req, res) {
         min_fit_score: Math.max(0, Math.min(10, Number(sent.min_fit_score) || 0))
       };
     }
+    // "Solo multinazionali" lives in the user's account settings, so the app sends it with each request.
+    if (sent && typeof sent === "object" && sent.only_multinationals !== undefined) {
+      preferences = { ...preferences, only_multinationals: Boolean(sent.only_multinationals) };
+    }
     const config = supabaseConfig();
     // What every source returned and why listings were discarded, shown in the app
     // ("Dettagli ultima ricerca") so a thin result can be explained.
@@ -213,8 +217,8 @@ module.exports = async function handler(req, res) {
       jobs: [], count: 0, reason: "missing_preferences", diagnostics: diag,
       message: "Imposta almeno un ruolo, una location o una modalità di lavoro in Preferenze e salva: le proposte vengono scelte su quei criteri."
     });
-    const stats = { letti: (catalog || []).length, giaProposti: 0, fuoriRuolo: 0, fuoriSettore: 0, fuoriLocation: 0, fuoriModalita: 0, sottoFitMinimo: 0, compatibili: 0 };
-    const missingKey = { roles: "fuoriRuolo", sectors: "fuoriSettore", locations: "fuoriLocation", work_modes: "fuoriModalita" };
+    const stats = { letti: (catalog || []).length, giaProposti: 0, fuoriRuolo: 0, fuoriSettore: 0, fuoriLocation: 0, fuoriModalita: 0, nonMultinazionali: 0, sottoFitMinimo: 0, compatibili: 0 };
+    const missingKey = { roles: "fuoriRuolo", sectors: "fuoriSettore", locations: "fuoriLocation", work_modes: "fuoriModalita", company: "nonMultinazionali" };
     const samples = [];
     let ranked = (catalog || []).map((job) => ({ job, result: scoreJob(job, preferences) }))
       .filter(({ job, result }) => {
@@ -225,7 +229,7 @@ module.exports = async function handler(req, res) {
         if (!result.matchesPreferences) {
           result.missing.forEach((group) => { if (missingKey[group]) stats[missingKey[group]] += 1; });
           // Right role, wrong place or mode: the most useful examples to understand the filters.
-          if (result.matched.roles && samples.length < 6) samples.push({ titolo: job.title, luogo: job.location || "—", fonte: job.source, scartato: result.missing.map((group) => ({ roles: "ruolo", sectors: "settore", locations: "luogo", work_modes: "modalità" })[group] || group).join(", ") });
+          if (result.matched.roles && samples.length < 6) samples.push({ titolo: job.title, luogo: job.location || "—", fonte: job.source, scartato: result.missing.map((group) => ({ roles: "ruolo", sectors: "settore", locations: "luogo", work_modes: "modalità", company: "non multinazionale" })[group] || group).join(", ") });
           return false;
         }
         if (result.fit < minFit) { stats.sottoFitMinimo += 1; return false; }

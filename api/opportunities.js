@@ -79,7 +79,7 @@ function legacyJob(userId, job, result, companyId) {
     fit_score: result.fit, status: "NEW", priority: result.fit >= 8 ? "APPLY" : "REVIEW",
     source: job.source, url: job.source_url, is_saved: false,
     why_fit: why.length ? why : ["Annuncio recente compatibile con la ricerca attiva"],
-    gaps: null, angle: null, industry: job.industry, description: job.description,
+    gaps: "", angle: "", industry: job.industry, description: job.description,
     salary_text: job.salary_text, seniority: job.seniority,
     experience_required: job.experience_required, employment_type: job.employment_type,
     languages: job.languages || [], company_description: job.company_description,

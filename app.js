@@ -46,7 +46,7 @@
     aiLearning: false,
     deliveryTime: "09:00",
     dailyCount: 5,
-    motivations: "Automotive: L’automotive è da sempre una mia grande passione e oggi sto cercando concretamente di trasformarla in una direzione del mio percorso professionale.\nAI: Ho completato un master in intelligenza artificiale e desidero applicare questa preparazione a progetti concreti e di valore per il business.",
+    motivations: "",
     profileSkills: "",
     profileCvText: "",
     careerChangeReason: "Sto orientando il mio percorso verso ruoli in cui posso unire esperienza trasferibile, comprensione del cliente e capacità di trasformare obiettivi strategici in risultati concreti. Questa scelta nasce da un interesse maturato nel tempo e supportato da formazione mirata e progetti pertinenti.",
@@ -2949,6 +2949,7 @@ Cordiali saluti,
     $("preferenceWorkModes").value = preferences.workModes.join("\n");
     $("preferenceMotivations").value = preferences.motivations;
     $("preferenceProfileSkills").value = preferences.profileSkills;
+    ensurePreferencesUploadBlock();
     $("preferenceCvText").value = preferences.profileCvText;
     $("preferenceCareerChangeReason").value = preferences.careerChangeReason;
     $("preferenceCareerChangeReasonEn").value = preferences.careerChangeReasonEn;
@@ -3391,6 +3392,10 @@ Cordiali saluti,
     $("appDialog")?.addEventListener("close", () => document.body.classList.remove("dialog-open"));
     $("appDialog")?.addEventListener("click", (event) => {
       if (event.target === $("appDialog")) closeDialog();
+    });
+    document.addEventListener("change", (event) => {
+      const input = event.target.closest?.("input[data-upload]");
+      if (input) void handleDocumentUpload(input);
     });
     document.addEventListener("click", handleDelegatedClick);
     document.addEventListener("change", (event) => {
@@ -4661,6 +4666,107 @@ Cordiali saluti,
     window.setTimeout(() => $("dialogBody").querySelector("input, select, textarea, button")?.focus(), 30);
   }
 
+
+  // ---- Upload CV / cover letter (PDF, DOCX, TXT): il testo viene letto nel browser ----
+  const DOCUMENT_LIBS = {
+    mammoth: "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js",
+    pdfjs: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+    pdfWorker: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
+  };
+
+  function loadExternalScript(src) {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-lib="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === "1") resolve();
+        else {
+          existing.addEventListener("load", () => resolve());
+          existing.addEventListener("error", () => reject(new Error("Libreria non caricata.")));
+        }
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = src;
+      script.dataset.lib = src;
+      script.onload = () => { script.dataset.loaded = "1"; resolve(); };
+      script.onerror = () => reject(new Error("Impossibile caricare il lettore di documenti. Controlla la connessione o incolla il testo a mano."));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function extractTextFromFile(file) {
+    const name = String(file.name || "").toLowerCase();
+    if (file.size > 8 * 1024 * 1024) throw new Error("Il file supera 8 MB.");
+    if (/\.(txt|md)$/.test(name) || file.type === "text/plain") return (await file.text()).trim();
+    if (/\.docx$/.test(name)) {
+      await loadExternalScript(DOCUMENT_LIBS.mammoth);
+      const result = await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+      return String(result.value || "").trim();
+    }
+    if (/\.pdf$/.test(name) || file.type === "application/pdf") {
+      await loadExternalScript(DOCUMENT_LIBS.pdfjs);
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = DOCUMENT_LIBS.pdfWorker;
+      const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+      const pages = [];
+      for (let index = 1; index <= pdf.numPages; index += 1) {
+        const page = await pdf.getPage(index);
+        const content = await page.getTextContent();
+        pages.push(content.items.map((item) => item.str).join(" "));
+      }
+      return pages.join("\n\n").replace(/[ \t]+/g, " ").trim();
+    }
+    throw new Error("Formato non supportato. Usa PDF, DOCX o TXT.");
+  }
+
+  async function handleDocumentUpload(input) {
+    const file = input.files?.[0];
+    const kind = input.dataset.upload;
+    if (!file) return;
+    const status = input.closest("form, section, div")?.querySelector(`[data-upload-status="${kind}"]`) || document.querySelector(`[data-upload-status="${kind}"]`);
+    const setStatus = (text, isError = false) => { if (status) { status.textContent = text; status.classList.toggle("is-error", isError); } };
+    setStatus("Lettura del documento…");
+    try {
+      const text = await extractTextFromFile(file);
+      if (text.length < 40) throw new Error("Non riesco a leggere testo dal file (forse è una scansione). Incolla il testo a mano.");
+      const form = input.closest("form[data-dialog-form='onboarding']");
+      if (form) {
+        // Primo accesso: il testo va nel campo e viene salvato con "Salva e crea la mia ricerca".
+        const field = form.querySelector(kind === "cv" ? 'textarea[name="cv_text"]' : 'textarea[name="cover_letter_text"]');
+        if (field) field.value = text;
+        setStatus(`✓ ${file.name} letto (${text.length} caratteri). Verrà salvato con la configurazione.`);
+      } else if (kind === "cv") {
+        if (!ensureWritable()) return;
+        await saveReferenceCv(text);
+        if ($("preferenceCvText")) $("preferenceCvText").value = text;
+        matchCache.clear();
+        setStatus(`✓ ${file.name} salvato come CV di riferimento (${text.length} caratteri).`);
+      } else {
+        if (!ensureWritable()) return;
+        await saveReferenceCoverLetter(text);
+        setStatus(`✓ ${file.name} salvata come cover letter di riferimento.`);
+      }
+      showToast(kind === "cv" ? "CV letto correttamente." : "Cover letter letta correttamente.", "success", "Documento caricato");
+    } catch (error) {
+      setStatus(error.message || "Lettura non riuscita.", true);
+      showToast(error.message || "Lettura del documento non riuscita.", "warning", "Documento non letto");
+    } finally {
+      input.value = "";
+    }
+  }
+
+  function ensurePreferencesUploadBlock() {
+    if (document.getElementById("preferencesUploadBlock")) return;
+    const anchor = $("preferenceCvText")?.closest("label, .field") || $("preferenceCvText");
+    if (!anchor?.parentNode) return;
+    const block = document.createElement("div");
+    block.id = "preferencesUploadBlock";
+    block.className = "form-stack";
+    block.innerHTML = `
+      <label class="field"><span>Carica il tuo CV <small>(PDF, DOCX o TXT, salvato subito)</small></span><input type="file" data-upload="cv" accept=".pdf,.docx,.txt,application/pdf" /><small class="field-hint" data-upload-status="cv"></small></label>
+      <label class="field"><span>Carica la tua cover letter <small>(PDF, DOCX o TXT, salvata subito)</small></span><input type="file" data-upload="cover-letter" accept=".pdf,.docx,.txt,application/pdf" /><small class="field-hint" data-upload-status="cover-letter"></small></label>`;
+    anchor.parentNode.insertBefore(block, anchor);
+  }
+
   async function saveReferenceCv(content) {
     const text = String(content || "").trim();
     // Only the "CV di riferimento" is written from Preferenze: other CVs in Risorse stay untouched.
@@ -4741,9 +4847,11 @@ Cordiali saluti,
             <label class="field"><span>Modalità di lavoro *</span><textarea name="work_modes" rows="3" required>${escapeHtml(preferences.workModes.join("\n"))}</textarea></label>
           </div>
           <div class="onboarding-progress"><span>2</span><strong>Profilo e materiali</strong></div>
-          <label class="field"><span>Motivazioni personali</span><small>Es. “Automotive: è una passione personale…”</small><textarea name="motivations" rows="4">${escapeHtml(preferences.motivations)}</textarea></label>
+          <label class="field"><span>Motivazioni personali</span><small>Formato “Settore: motivazione”, una per riga. Scrivi solo motivazioni vere.</small><textarea name="motivations" rows="4">${escapeHtml(preferences.motivations)}</textarea></label>
           <label class="field"><span>Competenze da evidenziare</span><textarea name="profile_skills" rows="3">${escapeHtml(preferences.profileSkills)}</textarea></label>
-          <label class="field"><span>CV di riferimento</span><small>Incolla il testo del CV; resta associato in modo sicuro al tuo account.</small><textarea name="cv_text" rows="7">${escapeHtml(preferences.profileCvText)}</textarea></label>
+          <label class="field"><span>Carica il tuo CV <small>(PDF, DOCX o TXT)</small></span><input type="file" data-upload="cv" accept=".pdf,.docx,.txt,application/pdf" /><small class="field-hint" data-upload-status="cv"></small></label>
+          <label class="field"><span>CV di riferimento</span><small>Il testo del file caricato compare qui: puoi controllarlo o incollarlo a mano. Resta associato in modo sicuro al tuo account.</small><textarea name="cv_text" rows="7">${escapeHtml(preferences.profileCvText)}</textarea></label>
+          <label class="field"><span>Carica la tua cover letter <small>(PDF, DOCX o TXT)</small></span><input type="file" data-upload="cover-letter" accept=".pdf,.docx,.txt,application/pdf" /><small class="field-hint" data-upload-status="cover-letter"></small></label>
           <label class="field"><span>Cover letter di riferimento</span><small>Incolla un tuo esempio di cover letter, oppure lascia vuoto: verrà usato un modello generico che potrai personalizzare in qualsiasi momento dai Templates.</small><textarea name="cover_letter_text" rows="7"></textarea></label>
           <div class="onboarding-progress"><span>3</span><strong>Consegna delle proposte</strong></div>
           <div class="form-grid form-grid--two">

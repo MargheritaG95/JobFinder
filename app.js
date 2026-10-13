@@ -49,9 +49,9 @@
     motivations: "",
     profileSkills: "",
     profileCvText: "",
-    careerChangeReason: "Sto orientando il mio percorso verso ruoli in cui posso unire esperienza trasferibile, comprensione del cliente e capacità di trasformare obiettivi strategici in risultati concreti. Questa scelta nasce da un interesse maturato nel tempo e supportato da formazione mirata e progetti pertinenti.",
-    careerChangeReasonEn: "I am intentionally moving towards roles where I can combine transferable experience, customer understanding, and the ability to turn strategic goals into tangible outcomes. This decision is grounded in a long-standing interest, supported by targeted education and relevant projects.",
-    companyValues: "TeamViewer: collaborazione, spirito di squadra, attenzione al cliente e innovazione | Mi riconosco in questi valori perché nel mio modo di lavorare metto al centro il cliente, la collaborazione tra stakeholder e il miglioramento continuo."
+    careerChangeReason: "",
+    careerChangeReasonEn: "",
+    companyValues: ""
   };
   const FALLBACK_COVER_LETTERS = {
     en: `[Name]

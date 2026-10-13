@@ -183,9 +183,12 @@ module.exports = async function handler(req, res) {
     let excluded = new Set();
     let excludedKeys = new Set();
     if (config.hasServiceRole) {
-      const existingMatches = await supabase(`user_job_matches?user_id=eq.${user.id}&select=job_id`);
+      const [existingMatches, catalogAll] = await Promise.all([
+        supabase(`user_job_matches?user_id=eq.${user.id}&select=job_id`),
+        catalogRows()
+      ]);
       excluded = new Set((existingMatches || []).map((row) => row.job_id));
-      catalog = (await catalogRows()).filter(isRecent);
+      catalog = catalogAll.filter(isRecent);
       const [targeted, followed] = await Promise.all([targetedPromise, boardsPromise]);
       const extra = targeted.jobs.concat(followed.jobs);
       if (extra.length) {
@@ -292,14 +295,20 @@ module.exports = async function handler(req, res) {
     }
     // Proposals never add companies to Aziende target: they are only linked to an existing target.
     const targetIdFor = (name) => ownCompanies.find((row) => matching.sameCompany(row.name, name))?.id || null;
-    const created = [];
-    for (const item of ranked) {
-      const existing = await userSupabase(`jobs?user_id=eq.${user.id}&url=eq.${encodeURIComponent(item.job.source_url)}&select=id&limit=1`, token);
-      if (existing?.length) continue;
-      const companyId = targetIdFor(item.job.company_name);
-      const rows = await userSupabase("jobs", token, { method: "POST", body: JSON.stringify(legacyJob(user.id, item.job, item.result, companyId)), headers: { Prefer: "return=representation" } });
-      if (rows?.[0]) created.push(rows[0]);
-    }
+    // Existence checks and inserts run in parallel (they used to run one listing at a time).
+    const settled = await Promise.all(ranked.map(async (item) => {
+      try {
+        const existing = await userSupabase(`jobs?user_id=eq.${user.id}&url=eq.${encodeURIComponent(item.job.source_url)}&select=id&limit=1`, token);
+        if (existing?.length) return null;
+        const companyId = targetIdFor(item.job.company_name);
+        const rows = await userSupabase("jobs", token, { method: "POST", body: JSON.stringify(legacyJob(user.id, item.job, item.result, companyId)), headers: { Prefer: "return=representation" } });
+        return rows?.[0] || null;
+      } catch (error) {
+        diag.errors.push(`Salvataggio annuncio: ${String(error.message).slice(0, 160)}`);
+        return null;
+      }
+    }));
+    const created = settled.filter(Boolean);
     diag.stats.importati = created.length;
     return res.status(200).json({ jobs: created, count: created.length, catalogMatches: ranked.length, ...jsearchInfo, diagnostics: diag });
   } catch (error) {

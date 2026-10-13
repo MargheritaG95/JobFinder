@@ -3083,3 +3083,45 @@ textarea::placeholder {
 .company-cleanup__row:hover { background: var(--blue-50); }
 .company-cleanup__row small { color: var(--muted-2); font-size: .68rem; }
 .company-cleanup__tools { display: flex; gap: 14px; }
+
+/* Caricamento file (CV / cover letter): stesso linguaggio dei pulsanti della piattaforma */
+.field > input[type="file"] {
+  min-height: 52px;
+  padding: 8px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--blue-50);
+  color: var(--muted);
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.field > input[type="file"]:hover {
+  border-color: var(--blue-500);
+  background: var(--blue-100);
+}
+
+.field > input[type="file"]::file-selector-button {
+  min-height: 34px;
+  margin-right: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.18s, color 0.18s;
+}
+
+.field > input[type="file"]:hover::file-selector-button {
+  border-color: var(--blue-500);
+  color: var(--blue-700);
+}
+
+.field-hint.is-error {
+  color: var(--red);
+}

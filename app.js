@@ -45,7 +45,7 @@
     minFit: 7,
     aiLearning: false,
     deliveryTime: "09:00",
-    dailyCount: 6,
+    dailyCount: 25,
     motivations: "Automotive: L’automotive è da sempre una mia grande passione e oggi sto cercando concretamente di trasformarla in una direzione del mio percorso professionale.\nAI: Ho completato un master in intelligenza artificiale e desidero applicare questa preparazione a progetti concreti e di valore per il business.",
     profileSkills: "",
     profileCvText: "",
@@ -1214,7 +1214,7 @@ Cordiali saluti,
       minFit: asNumber(valueOf(record, "preferences", "minFit", DEFAULT_PREFERENCES.minFit), DEFAULT_PREFERENCES.minFit),
       aiLearning: Boolean(valueOf(record, "preferences", "aiLearning", false)),
       deliveryTime: String(valueOf(record, "preferences", "deliveryTime", DEFAULT_PREFERENCES.deliveryTime) || DEFAULT_PREFERENCES.deliveryTime).slice(0, 5),
-      dailyCount: Math.max(1, Math.min(20, asNumber(valueOf(record, "preferences", "dailyCount", DEFAULT_PREFERENCES.dailyCount), DEFAULT_PREFERENCES.dailyCount))),
+      dailyCount: Math.max(1, Math.min(50, asNumber(valueOf(record, "preferences", "dailyCount", DEFAULT_PREFERENCES.dailyCount), DEFAULT_PREFERENCES.dailyCount))),
       motivations: local.motivations || DEFAULT_PREFERENCES.motivations,
       profileSkills: local.profileSkills || DEFAULT_PREFERENCES.profileSkills,
       profileCvText: accountCv || local.profileCvText || DEFAULT_PREFERENCES.profileCvText,
@@ -4544,7 +4544,7 @@ Cordiali saluti,
     setMapped(payload, "preferences", "minFit", 0);
     setMapped(payload, "preferences", "aiLearning", $("preferenceAiLearning").checked);
     setMapped(payload, "preferences", "deliveryTime", $("preferenceDeliveryTime").value || "09:00");
-    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(20, asNumber($("preferenceDailyCount").value, 6))));
+    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(50, asNumber($("preferenceDailyCount").value, 25))));
     const existing = state.data.preferences[0] || null;
     setBusy($("savePreferencesButton"), true, "Salvataggio…");
     try {
@@ -4640,7 +4640,7 @@ Cordiali saluti,
     setMapped(payload, "preferences", "minFit", 0);
     setMapped(payload, "preferences", "aiLearning", true);
     setMapped(payload, "preferences", "deliveryTime", values.get("delivery_time") || "09:00");
-    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(20, asNumber(values.get("daily_count"), 6))));
+    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(50, asNumber(values.get("daily_count"), 25))));
     const personalization = {
       motivations: String(values.get("motivations") || "").trim(),
       profileSkills: String(values.get("profile_skills") || "").trim(),
@@ -4693,7 +4693,7 @@ Cordiali saluti,
           <div class="onboarding-progress"><span>3</span><strong>Consegna delle proposte</strong></div>
           <div class="form-grid form-grid--two">
             <label class="field"><span>Orario</span><input name="delivery_time" type="time" value="${escapeAttribute(preferences.deliveryTime)}" /></label>
-            <label class="field"><span>Numero di proposte</span><input name="daily_count" type="number" min="1" max="20" value="${escapeAttribute(preferences.dailyCount)}" /></label>
+            <label class="field"><span>Numero di proposte</span><input name="daily_count" type="number" min="1" max="50" value="${escapeAttribute(preferences.dailyCount)}" /></label>
           </div>
           <div class="notice notice--info"><strong>Come funziona</strong><span>JobFinder mostrerà solo annunci che rispettano tutti i gruppi di preferenze configurati. Se non ce ne sono altri, te lo dirà chiaramente.</span></div>
           <div class="form-actions"><button class="button button--primary button--wide" type="submit">${icon("check")}Salva e crea la mia ricerca</button></div>

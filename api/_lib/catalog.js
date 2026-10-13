@@ -442,7 +442,7 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], u
         results_per_page: "50", sort_by: "date", max_days_old: String(MAX_JOB_AGE_DAYS),
         "content-type": "application/json"
       });
-      if (what) params.set("what_phrase", what);
+      if (what) params.set("what", what);
       if (company) params.set("company", company);
       if (where) params.set("where", where);
       tasks.push(getJson(`https://api.adzuna.com/v1/api/jobs/${country}/search/1?${params}`, { signal: signal() })

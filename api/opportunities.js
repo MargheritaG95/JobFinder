@@ -124,7 +124,9 @@ module.exports = async function handler(req, res) {
   try {
     const user = await authenticatedUser(req);
     const token = String(req.headers.authorization).replace(/^Bearer\s+/i, "");
-    const requested = Math.max(1, Math.min(20, Number(req.body?.limit) || 6));
+    // At least 25 new opportunities per click (up to 50 if set higher in Preferenze):
+    // the old setting of 6 was the main cap on how many listings arrived.
+    const requested = Math.max(25, Math.min(50, Number(req.body?.limit) || 25));
     let preferences = (await userSupabase(`search_preferences?user_id=eq.${user.id}&select=*&limit=1`, token).catch(() => null))?.[0] || {};
     // Fallback: the app sends the preferences it shows; use them when the stored row has no criteria.
     const sent = req.body?.preferences;

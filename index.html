@@ -570,7 +570,7 @@
                   <p class="muted">Dall'orario scelto, alla prima apertura della dashboard JobFinder mostra una nuova selezione scelta e ordinata per Paese/città, ruoli, settori e modalità di lavoro, in quest'ordine di importanza.</p>
                 </div>
                 <label class="field preference-time-field"><span>Orario</span><input id="preferenceDeliveryTime" type="time" value="09:00" /></label>
-                <label class="field preference-count-field"><span>Numero di proposte</span><input id="preferenceDailyCount" type="number" min="1" max="50" value="25" /></label>
+                <label class="field preference-count-field"><span>Numero di proposte</span><input id="preferenceDailyCount" type="number" min="1" max="50" value="5" /></label>
                 <button class="button button--secondary" type="button" data-action="refresh-opportunities"><svg class="icon"><use href="#icon-refresh"></use></svg>Cambia proposte ora</button>
               </section>
               <div class="form-actions">
@@ -632,7 +632,7 @@
             <div id="analyticsKpis" class="mini-kpi-row"></div>
             <div class="analytics-grid">
               <section class="panel"><div class="panel-heading"><h2>Funnel candidature</h2></div><div id="funnelChart" class="funnel-chart"></div></section>
-              <section class="panel"><div class="panel-heading"><h2>Criteri soddisfatti</h2></div><div id="fitChart" class="bar-chart"></div></section>
+              <section class="panel"><div class="panel-heading"><h2>Distribuzione Fit Score</h2></div><div id="fitChart" class="bar-chart"></div></section>
             </div>
           </section>
 
@@ -650,7 +650,7 @@
                   <div class="copilot-header-actions">
                     <button class="button button--primary copilot-open-job-button" type="button" data-action="open-job"><svg class="icon"><use href="#icon-external"></use></svg>Apri annuncio</button>
                     <div class="copilot-score-stack">
-                      <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>CRITERI<br />SODDISFATTI</span></div>
+                      <div class="copilot-score"><strong id="copilotFitScore">—</strong><span>/10<br />FIT SCORE</span></div>
                       <div class="copilot-signal-toggles"><button id="copilotPriorityButton" class="copilot-priority-toggle" type="button" data-action="toggle-priority" aria-pressed="false"><span aria-hidden="true">☆</span>Priorità</button><button id="copilotReferralButton" class="copilot-referral-toggle" type="button" data-action="toggle-referral" aria-pressed="false"><svg class="icon"><use href="#icon-user"></use></svg>Referral</button></div>
                       <div class="language-segmented" role="group" aria-label="Lingua dei testi"><button type="button" data-action="set-copilot-language" data-language="it" aria-pressed="true">IT</button><button type="button" data-action="set-copilot-language" data-language="en" aria-pressed="false">EN</button></div>
                       <select id="copilotLanguage" class="visually-hidden" aria-label="Lingua dei testi"><option value="it">IT</option><option value="en">EN</option></select>
@@ -695,7 +695,7 @@
                 <div class="copilot-strategy-heading"><h3>Strategia della candidatura</h3><p>Posizionamento consigliato per questa opportunità.</p></div>
                 <div class="copilot-insight-grid">
                   <label class="field field--accent field--success"><span><i class="copilot-insight-icon">✓</i>1. WHY YOU FIT</span><textarea id="copilotWhyFit" rows="3" placeholder="I punti forti più rilevanti per questo ruolo…"></textarea></label>
-                  <label class="field field--accent field--warning"><span><i class="copilot-insight-icon">!</i>2. POSSIBILI GAP</span><textarea id="copilotGaps" rows="2" placeholder="Gap da gestire e come compensarli…"></textarea></label>
+                  <label class="field field--accent field--warning"><span><i class="copilot-insight-icon">!</i>2. POSSIBLE GAP</span><textarea id="copilotGaps" rows="2" placeholder="Gap da gestire e come compensarli…"></textarea></label>
                   <label class="field field--accent field--info"><span><i class="copilot-insight-icon">◇</i>3. YOUR ANGLE</span><textarea id="copilotAngle" rows="3" placeholder="Il posizionamento distintivo della candidatura…"></textarea></label>
                 </div>
                 <div class="copilot-content-grid">
@@ -781,7 +781,7 @@
 
     <script src="config.js?v=20260907.45" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="shared/matching.js?v=20261013.5" defer></script>
-    <script src="app.js?v=20261013.8" defer></script>
+    <script src="shared/matching.js?v=20261013.9" defer></script>
+    <script src="app.js?v=20261013.9" defer></script>
   </body>
 </html>

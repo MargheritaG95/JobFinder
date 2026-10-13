@@ -420,8 +420,14 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], u
       tasks.push(getJson(`${endpoint}?${params}`, { signal: signal(), headers })
         .then((data) => {
           // v1 returns { data: [...] }; accept the nested shapes newer versions may use as well.
-          const list = Array.isArray(data?.data) ? data.data : (data?.data?.jobs || data?.jobs || data?.results || []);
-          if (!list.length) console.log("[jsearch] empty response", { query: params.get("query"), keys: Object.keys(data || {}), status: data?.status });
+          const list = Array.isArray(data?.data) ? data.data
+            : (data?.data?.jobs || data?.data?.results || data?.data?.data || data?.jobs || data?.results || []);
+          if (!list.length) {
+            // Shown in "Dettagli ultima ricerca", to tell an empty search from a format or account problem.
+            const shape = data?.data && typeof data.data === "object" ? `data:{${Object.keys(data.data).slice(0, 6).join(",")}}` : `chiavi:${Object.keys(data || {}).slice(0, 6).join(",")}`;
+            const why = data?.message || data?.error?.message || data?.error || "";
+            throw new Error(`JSearch "${params.get("query")}": 0 annunci (status ${data?.status || "?"}, ${shape}${why ? `, ${String(why).slice(0, 80)}` : ""})`);
+          }
           return { source: `JSearch:${country}:${what}:${where}`, jobs: list.map((job) => normalizeJSearch(job, country)) };
         }));
     }

@@ -500,8 +500,22 @@
     const published = Date.parse(job.published_at || job.created_at || "") || 0;
     const levels = criteria.map((item) => item.level); // [location, role, sector, mode]
     const rank = levels[0] * 1e5 + levels[1] * 1e4 + levels[2] * 1e3 + levels[3] * 1e2 + (target ? 20 : 0) + (multinational ? 10 : 0) + Math.min(9, published / 1e12);
-    // Kept only for the stored legacy column: share of configured criteria met, 0–10.
-    const fit = configured ? Math.round((met / configured) * 100) / 10 : 10;
+    // Fit Score 0–10 from the same criteria, weighted by importance:
+    // Paese/città 4, ruolo 3, settore 2, modalità 1. "Da verificare" counts half.
+    const WEIGHTS = { locations: 4, roles: 3, sectors: 2, work_modes: 1 };
+    const MAX_LEVEL = { locations: 3, roles: 2, sectors: 2, work_modes: 1 };
+    let earned = 0;
+    let possible = 0;
+    criteria.forEach((item) => {
+      if (item.status === "unset") return;
+      possible += WEIGHTS[item.key];
+      if (item.status === "match") earned += WEIGHTS[item.key] * (item.level / MAX_LEVEL[item.key]);
+      else if (item.status === "unknown") earned += WEIGHTS[item.key] * 0.5;
+    });
+    let fit = possible ? (earned / possible) * 10 : 5;
+    if (target) fit += 0.5;
+    else if (multinational) fit += 0.3;
+    fit = Math.max(0, Math.min(10, Math.round(fit * 10) / 10));
     return { fit, matchesPreferences, criteria, met, configured, rank, matched, missing, workMode: mode, notes, multinational, target };
   }
 

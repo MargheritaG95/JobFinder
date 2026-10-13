@@ -79,7 +79,7 @@ function legacyJob(userId, job, result, companyId) {
     fit_score: result.fit, status: "NEW", priority: result.fit >= 8 ? "APPLY" : "REVIEW",
     source: job.source, url: job.source_url, is_saved: false,
     why_fit: why.length ? why : ["Annuncio recente compatibile con la ricerca attiva"],
-    gaps: [], angle: [], industry: job.industry, description: job.description,
+    gaps: null, angle: null, industry: job.industry, description: job.description,
     salary_text: job.salary_text, seniority: job.seniority,
     experience_required: job.experience_required, employment_type: job.employment_type,
     languages: job.languages || [], company_description: job.company_description,
@@ -124,9 +124,7 @@ module.exports = async function handler(req, res) {
   try {
     const user = await authenticatedUser(req);
     const token = String(req.headers.authorization).replace(/^Bearer\s+/i, "");
-    // At least 25 new opportunities per click (up to 50 if set higher in Preferenze):
-    // the old setting of 6 was the main cap on how many listings arrived.
-    const requested = Math.max(25, Math.min(50, Number(req.body?.limit) || 25));
+    const requested = Math.max(1, Math.min(50, Number(req.body?.limit) || 5));
     let preferences = (await userSupabase(`search_preferences?user_id=eq.${user.id}&select=*&limit=1`, token).catch(() => null))?.[0] || {};
     // Fallback: the app sends the preferences it shows; use them when the stored row has no criteria.
     const sent = req.body?.preferences;
@@ -163,7 +161,7 @@ module.exports = async function handler(req, res) {
     const allQueries = queriesFromPreferences([preferences], { maxQueries: 80 });
     const rotation = rotateQueries(allQueries, req.body?.jsearchOffset, 8);
     const jsearchInfo = (process.env.OPENWEBNINJA_API_KEY || process.env.JSEARCH_API_KEY)
-      ? { jsearchNextOffset: rotation.nextOffset, jsearchSearched: rotation.picked.map((query) => `${query.what} · ${query.where || query.country.toUpperCase()}`), jsearchTotal: allQueries.length }
+      ? { jsearchNextOffset: rotation.nextOffset, jsearchSearched: rotation.picked.map((query) => [query.what, query.company, query.where || query.country.toUpperCase()].filter(Boolean).join(" · ")), jsearchTotal: allQueries.length }
       : {};
     const targetedPromise = matching.hasCriteria(preferences)
       ? fetchTargeted(allQueries.slice(0, 20), {
@@ -222,6 +220,8 @@ module.exports = async function handler(req, res) {
       message: "Imposta almeno un ruolo, una location o una modalità di lavoro in Preferenze e salva: le proposte vengono scelte su quei criteri."
     });
     catalog = (catalog || []).filter((job) => !isRemoteOnlySource(job.source));
+    if (diag.catalogBySource) diag.catalogBySource = catalog.reduce((acc, job) => { acc[job.source || "?"] = (acc[job.source || "?"] || 0) + 1; return acc; }, {});
+    if (!matching.list(preferences.target_roles).length) diag.errors.unshift("Nessun ruolo target salvato in Preferenze: le ricerche su LinkedIn/Indeed non hanno un ruolo da cercare.");
     const stats = { letti: (catalog || []).length, giaProposti: 0, fuoriRuolo: 0, fuoriSettore: 0, fuoriLocation: 0, fuoriModalita: 0, nonMultinazionali: 0, compatibili: 0 };
     const missingKey = { roles: "fuoriRuolo", sectors: "fuoriSettore", locations: "fuoriLocation", work_modes: "fuoriModalita", company: "nonMultinazionali" };
     stats.daAziendeTarget = 0;

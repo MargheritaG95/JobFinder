@@ -45,7 +45,7 @@
     minFit: 7,
     aiLearning: false,
     deliveryTime: "09:00",
-    dailyCount: 25,
+    dailyCount: 5,
     motivations: "Automotive: L’automotive è da sempre una mia grande passione e oggi sto cercando concretamente di trasformarla in una direzione del mio percorso professionale.\nAI: Ho completato un master in intelligenza artificiale e desidero applicare questa preparazione a progetti concreti e di valore per il business.",
     profileSkills: "",
     profileCvText: "",
@@ -453,6 +453,15 @@ Cordiali saluti,
 
   function ownerColumn(entity) {
     return tableConfig(entity).ownerColumn || "user_id";
+  }
+
+  // A written text, or "" for empty values and machine lists. The opportunities API stores
+  // why_fit / gaps / angle as JSON lists (often empty): those must not hide the suggestions.
+  function writtenText(value) {
+    if (Array.isArray(value)) return "";
+    const text = String(value ?? "").trim();
+    if (!text || /^\[.*\]$/s.test(text) || /^\{.*\}$/s.test(text)) return "";
+    return text;
   }
 
   function valueOf(record, entity, key, fallback = "") {
@@ -1070,9 +1079,11 @@ Cordiali saluti,
 
   // Sort key (not shown): Paese/città, then ruolo, settore, modalità — see shared/matching.js.
   // Without saved criteria, the order the opportunities were stored in is kept.
+  // Fit Score 0–10 from your criteria (Paese/città 4, ruolo 3, settore 2, modalità 1).
+  // A tiny tie-breaker keeps the order of importance between equal scores.
   function jobFit(job) {
     const live = preferenceMatch(job);
-    if (live) return live.rank;
+    if (live) return live.fit + live.rank * 1e-10;
     return asNumber(valueOf(job, "jobs", "fitScore", 0), 0);
   }
 
@@ -1087,7 +1098,7 @@ Cordiali saluti,
 
   function criteriaScoreMarkup(job) {
     const summary = criteriaSummary(job);
-    return `<div class="fit-score" title="${escapeAttribute(summary.title)}"><strong>${escapeHtml(summary.label)}</strong><small>Criteri</small></div>`;
+    return `<div class="fit-score" title="${escapeAttribute(summary.title)}"><strong>${jobFit(job).toFixed(1)}/10</strong><small>Fit score</small></div>`;
   }
 
   function jobStatus(job) {
@@ -1581,8 +1592,10 @@ Cordiali saluti,
     return `<span class="badge ${className}">${escapeHtml(titleCase(normalized))}</span>`;
   }
 
-  function highFitBadge() {
-    return "";
+  function highFitBadge(fit) {
+    if (fit >= 8) return `<span class="badge badge--fit">ALTO FIT</span>`;
+    if (fit >= 6.5) return `<span class="badge badge--blue">BUON FIT</span>`;
+    return `<span class="badge">FIT ${fit.toFixed(1)}</span>`;
   }
 
   function feedbackButtons(jobId, compact = false, exclusiveSelection = false) {
@@ -2364,12 +2377,12 @@ Cordiali saluti,
       showToast("Non ci sono opportunità da includere nel report.", "warning", "Report non creato");
       return;
     }
-    const header = ["Ranking", "Azienda", "Cosa fa l'azienda", "Industria", "Posizione", "Stato", "Criteri", "Priorità", "Località", "RAL / stipendio", "Livello", "Esperienza", "Contratto", "Lingue", "Data candidatura", "Fonte", "Link opportunità", "Sintesi ruolo", "Responsabilità", "Why you fit", "Eventuali gap", "Your angle", "CV usato", "Preparazione", "Messaggio recruiter", "Note application"];
+    const header = ["Ranking", "Azienda", "Cosa fa l'azienda", "Industria", "Posizione", "Stato", "Fit score", "Priorità", "Località", "RAL / stipendio", "Livello", "Esperienza", "Contratto", "Lingue", "Data candidatura", "Fonte", "Link opportunità", "Sintesi ruolo", "Responsabilità", "Why you fit", "Possible gap", "Your angle", "CV usato", "Preparazione", "Messaggio recruiter", "Note application"];
     const rankedJobs = PIPELINE_STATES.flatMap((status) => sortPipelineJobs(jobs.filter((job) => jobStatus(job) === status), status));
     const rank = new Map(rankedJobs.map((job, index) => [String(job.id), index + 1]));
     const rows = rankedJobs.map((job) => {
       const application = getApplicationForJob(job.id);
-      return [rank.get(String(job.id)) || "", companyNameForJob(job), companyOverview(job), companyIndustry(job), jobTitle(job), rejectedState(job) ? "RIFIUTATA" : jobStatus(job), criteriaSummary(job).label, jobPriority(job), valueOf(job, "jobs", "location", ""), salaryFromJob(job) || "Non indicata", jobSeniority(job), jobExperience(job), jobContract(job), jobLanguages(job), valueOf(application, "applications", "appliedAt", "") ? formatDate(valueOf(application, "applications", "appliedAt", "")) : "", valueOf(job, "jobs", "source", ""), valueOf(job, "jobs", "url", ""), roleSynopsis(job), responsibilityItems(job).join(" | "), valueOf(application, "applications", "whyFit", valueOf(job, "jobs", "whyFit", "")), valueOf(application, "applications", "gaps", valueOf(job, "jobs", "gaps", "")), valueOf(application, "applications", "angle", valueOf(job, "jobs", "angle", "")), valueOf(application, "applications", "cvUsed", ""), valueOf(application, "applications", "preparationStatus", ""), valueOf(application, "applications", "recruiterNote", ""), valueOf(application, "applications", "notes", "")];
+      return [rank.get(String(job.id)) || "", companyNameForJob(job), companyOverview(job), companyIndustry(job), jobTitle(job), rejectedState(job) ? "RIFIUTATA" : jobStatus(job), jobFit(job).toFixed(1), jobPriority(job), valueOf(job, "jobs", "location", ""), salaryFromJob(job) || "Non indicata", jobSeniority(job), jobExperience(job), jobContract(job), jobLanguages(job), valueOf(application, "applications", "appliedAt", "") ? formatDate(valueOf(application, "applications", "appliedAt", "")) : "", valueOf(job, "jobs", "source", ""), valueOf(job, "jobs", "url", ""), roleSynopsis(job), responsibilityItems(job).join(" | "), valueOf(application, "applications", "whyFit", valueOf(job, "jobs", "whyFit", "")), valueOf(application, "applications", "gaps", valueOf(job, "jobs", "gaps", "")), valueOf(application, "applications", "angle", valueOf(job, "jobs", "angle", "")), valueOf(application, "applications", "cvUsed", ""), valueOf(application, "applications", "preparationStatus", ""), valueOf(application, "applications", "recruiterNote", ""), valueOf(application, "applications", "notes", "")];
     });
     const xmlEscape = (value) => escapeHtml(String(value ?? ""));
     const worksheetRows = [header, ...rows].map((row) => `<Row>${row.map((cell) => `<Cell><Data ss:Type="String">${xmlEscape(cell)}</Data></Cell>`).join("")}</Row>`).join("");
@@ -2418,7 +2431,7 @@ Cordiali saluti,
     return `
       <article class="kanban-card kanban-card--clickable" draggable="true" data-action="open-copilot" data-id="${escapeAttribute(job.id)}" data-pipeline-job-id="${escapeAttribute(job.id)}" data-pipeline-status="${status}" role="link" tabindex="0" aria-label="Apri ${escapeAttribute(jobTitle(job))}. Trascina per cambiare il ranking nella colonna.">
         <div class="kanban-card__drag-handle" title="Trascina per ordinare">⋮⋮ <span>Trascina per ordinare</span></div>
-        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="kanban-card__signals">${isPriorityJob(job) ? `<span class="pipeline-priority-star" title="Opportunità prioritaria" aria-label="Opportunità prioritaria">★</span>` : ""}${isReferralJob(job) ? `<span class="pipeline-referral-icon" title="Referral" aria-label="Referral">${icon("user")}</span>` : ""}<span class="badge badge--fit" title="${escapeAttribute(criteriaSummary(job).title)}">${escapeHtml(criteriaSummary(job).label)}</span></span></div>
+        <div class="kanban-card__top"><span class="company-logo">${companyLogoContent(job)}</span><span class="kanban-card__signals">${isPriorityJob(job) ? `<span class="pipeline-priority-star" title="Opportunità prioritaria" aria-label="Opportunità prioritaria">★</span>` : ""}${isReferralJob(job) ? `<span class="pipeline-referral-icon" title="Referral" aria-label="Referral">${icon("user")}</span>` : ""}<span class="badge badge--fit" title="${escapeAttribute(criteriaSummary(job).title)}">${jobFit(job).toFixed(1)}</span></span></div>
         <h3>${escapeHtml(jobTitle(job))}</h3>
         <p>${escapeHtml(companyNameForJob(job))} · ${escapeHtml(valueOf(job, "jobs", "location", "—"))}</p>
         <div class="kanban-card__footer">
@@ -2647,7 +2660,7 @@ Cordiali saluti,
       ? jobs.map((job) => `
         <article class="feedback-card">
           <span class="company-logo">${escapeHtml(initials(companyNameForJob(job)))}</span>
-          <div><h3>${escapeHtml(jobTitle(job))}</h3><p>${escapeHtml(companyNameForJob(job))} · Criteri ${escapeHtml(criteriaSummary(job).label)}</p></div>
+          <div><h3>${escapeHtml(jobTitle(job))}</h3><p>${escapeHtml(companyNameForJob(job))} · Fit ${jobFit(job).toFixed(1)}/10</p></div>
           ${feedbackButtons(job.id)}
         </article>
       `).join("")
@@ -2949,9 +2962,9 @@ Cordiali saluti,
     const interviews = jobs.filter((job) => jobStatus(job) === "INTERVIEW").length + applications.filter((app) => normalizeStatus(valueOf(app, "applications", "status", ""), "") === "INTERVIEW" && !getJobById(valueOf(app, "applications", "jobId", ""))).length;
     const offers = jobs.filter((job) => jobStatus(job) === "OFFER").length + applications.filter((app) => normalizeStatus(valueOf(app, "applications", "status", ""), "") === "OFFER" && !getJobById(valueOf(app, "applications", "jobId", ""))).length;
     const conversion = appliedJobs.size ? Math.round((offers / appliedJobs.size) * 100) : 0;
-    const allMet = jobs.filter((job) => { const match = preferenceMatch(job); return match && match.configured && match.met === match.configured; }).length;
+    const avgFit = jobs.length ? jobs.reduce((sum, job) => sum + jobFit(job), 0) / jobs.length : 0;
     $("analyticsKpis").innerHTML = `
-      <article class="mini-kpi"><span>Tutti i criteri</span><strong>${allMet}</strong><small>/${jobs.length}</small></article>
+      <article class="mini-kpi"><span>Fit medio</span><strong>${avgFit.toFixed(1)}</strong><small>/10</small></article>
       <article class="mini-kpi"><span>Application rate</span><strong>${jobs.length ? Math.round((appliedJobs.size / jobs.length) * 100) : 0}%</strong><small>${appliedJobs.size}/${jobs.length}</small></article>
       <article class="mini-kpi"><span>Offer conversion</span><strong>${conversion}%</strong><small>su application</small></article>
     `;
@@ -2966,12 +2979,11 @@ Cordiali saluti,
       <div class="funnel-row"><span>${label}</span><span class="chart-track"><i style="width:${Math.round((count / funnelMax) * 100)}%"></i></span><strong>${count}</strong></div>
     `).join("");
 
-    const missingOf = (job) => { const match = preferenceMatch(job); return match && match.configured ? match.configured - match.met : null; };
     const fitBuckets = [
-      ["Tutti i criteri", jobs.filter((job) => missingOf(job) === 0).length],
-      ["Manca 1", jobs.filter((job) => missingOf(job) === 1).length],
-      ["Mancano 2+", jobs.filter((job) => missingOf(job) >= 2).length],
-      ["Senza criteri", jobs.filter((job) => missingOf(job) === null).length]
+      ["9–10", jobs.filter((job) => jobFit(job) >= 9).length],
+      ["8–8.9", jobs.filter((job) => jobFit(job) >= 8 && jobFit(job) < 9).length],
+      ["7–7.9", jobs.filter((job) => jobFit(job) >= 7 && jobFit(job) < 8).length],
+      ["Sotto 7", jobs.filter((job) => jobFit(job) < 7).length]
     ];
     const bucketMax = Math.max(1, ...fitBuckets.map(([, count]) => count));
     $("fitChart").innerHTML = fitBuckets.map(([label, count]) => `
@@ -3007,13 +3019,13 @@ Cordiali saluti,
     const gapWords = cvGapKeywords(preferences, job);
     const why = language === "en"
       ? (evidence ? `Your CV includes directly relevant experience: ${evidence}` : `The ${role} role is aligned with the target profile${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Highlight measurable outcomes, the ability to connect strategy with execution, and customer impact.`)
-      : valueOf(job, "jobs", "whyFit", "") || (evidence ? `Il tuo CV riporta un’esperienza direttamente pertinente: ${evidence}` : `Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`);
+      : writtenText(valueOf(job, "jobs", "whyFit", "")) || (evidence ? `Il tuo CV riporta un’esperienza direttamente pertinente: ${evidence}` : `Il ruolo ${role} è coerente con il posizionamento target${roleMatches.length ? ` (${roleMatches.join(", ")})` : ""}. Evidenzia risultati misurabili, capacità di lavorare tra strategia ed execution e impatto sul cliente.`);
     const gaps = language === "en"
       ? (gapWords.length ? `Your CV does not clearly mention: ${naturalListEnglish(gapWords)}. Check whether you have this experience and add it if so; otherwise prepare a concrete answer on how you would close the gap.` : "Check which technical or industry requirements are not yet covered by your profile. Address any gaps through relevant transferable experience and a concrete learning plan.")
-      : valueOf(job, "jobs", "gaps", "") || (gapWords.length ? `Il tuo CV non menziona chiaramente: ${naturalList(gapWords)}. Verifica se possiedi questa esperienza e aggiungila se sì; altrimenti prepara una risposta concreta su come colmare il gap.` : "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.");
+      : writtenText(valueOf(job, "jobs", "gaps", "")) || (gapWords.length ? `Il tuo CV non menziona chiaramente: ${naturalList(gapWords)}. Verifica se possiedi questa esperienza e aggiungila se sì; altrimenti prepara una risposta concreta su come colmare il gap.` : "Verifica i requisiti tecnici e di settore non ancora coperti dal profilo. Prepara una risposta concreta su come colmare rapidamente gli eventuali gap con esperienze trasferibili e apprendimento mirato.");
     const angle = language === "en"
       ? (skills.length ? `Position yourself around ${naturalListEnglish(skills)}, connecting each point to a measurable outcome and to why it matters for ${company}.` : `Position yourself as the link between business goals, customer needs, and operational transformation. Support each statement with an outcome and explain why this approach is relevant to ${company}.`)
-      : valueOf(job, "jobs", "angle", "") || (skills.length ? `Posizionati intorno a ${naturalList(skills)}, collegando ogni punto a un risultato misurabile e al motivo per cui è rilevante per ${company}.` : `Posizionati come ponte tra obiettivi di business, bisogni del cliente e trasformazione operativa. Collega ogni affermazione a un risultato e mostra perché questo approccio è rilevante per ${company}.`);
+      : writtenText(valueOf(job, "jobs", "angle", "")) || (skills.length ? `Posizionati intorno a ${naturalList(skills)}, collegando ogni punto a un risultato misurabile e al motivo per cui è rilevante per ${company}.` : `Posizionati come ponte tra obiettivi di business, bisogni del cliente e trasformazione operativa. Collega ogni affermazione a un risultato e mostra perché questo approccio è rilevante per ${company}.`);
     const motivation = motivationForJob(preferences, job);
     const competenceSentence = evidence
       ? language === "en" ? `My background includes experience that is particularly relevant to this role: ${evidence}` : `Nel mio percorso ho maturato esperienze particolarmente pertinenti: ${evidence}`
@@ -3144,7 +3156,7 @@ Cordiali saluti,
     $("copilotCompany").textContent = company;
     const emailButton = $("copilotEmailButton");
     if (emailButton) emailButton.dataset.query = `"${company}" OR "${jobTitle(job)}"`;
-    $("copilotFitScore").textContent = criteriaSummary(job).label;
+    $("copilotFitScore").textContent = jobFit(job).toFixed(1);
     const priorityButton = $("copilotPriorityButton");
     if (priorityButton) {
       const active = isPriorityJob(job);
@@ -3173,9 +3185,9 @@ Cordiali saluti,
     $("copilotLanguages").textContent = jobLanguages(job) === "Non indicata" ? "N/A" : jobLanguages(job);
     $("copilotRoleBrief").textContent = roleSynopsis(job);
     $("copilotResponsibilities").innerHTML = responsibilityItems(job).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-    $("copilotWhyFit").value = valueOf(application, "applications", "whyFit", localDraft.whyFit || suggestions.why);
-    $("copilotGaps").value = valueOf(application, "applications", "gaps", localDraft.gaps || suggestions.gaps);
-    $("copilotAngle").value = valueOf(application, "applications", "angle", localDraft.angle || suggestions.angle);
+    $("copilotWhyFit").value = writtenText(valueOf(application, "applications", "whyFit", "")) || writtenText(localDraft.whyFit) || suggestions.why;
+    $("copilotGaps").value = writtenText(valueOf(application, "applications", "gaps", "")) || writtenText(localDraft.gaps) || suggestions.gaps;
+    $("copilotAngle").value = writtenText(valueOf(application, "applications", "angle", "")) || writtenText(localDraft.angle) || suggestions.angle;
     $("copilotCv").value = valueOf(application, "applications", "cvUsed", localDraft.cvUsed || valueOf(job, "jobs", "recommendedCv", ""));
     $("copilotPreparationStatus").value = valueOf(application, "applications", "preparationStatus", localDraft.preparationStatus || "draft");
     const savedRecruiterNote = valueOf(application, "applications", "recruiterNote", localDraft.recruiterNote || "");
@@ -3233,7 +3245,7 @@ Cordiali saluti,
       azienda: companyNameForJob(job),
       ruolo: jobTitle(job),
       location: valueOf(job, "jobs", "location", "[Location]"),
-      "fit score": criteriaSummary(job).label,
+      "fit score": `${jobFit(job).toFixed(1)}/10`,
       competenze: preferences.roles.slice(0, 4).join(", ") || "[Competenze]"
     };
     const content = String(valueOf(template, "answerBank", "content", ""));
@@ -4063,11 +4075,11 @@ Cordiali saluti,
       `AZIENDA: ${companyNameForJob(job)}`,
       `ANNUNCIO: ${valueOf(job, "jobs", "url", "") || "Non disponibile"}`,
       "",
-      `WHY YOU FIT\n${valueOf(application, "applications", "whyFit", suggestions.why)}`,
+      `WHY YOU FIT\n${writtenText(valueOf(application, "applications", "whyFit", "")) || suggestions.why}`,
       "",
-      `GAP DA GESTIRE\n${valueOf(application, "applications", "gaps", suggestions.gaps)}`,
+      `POSSIBLE GAP\n${writtenText(valueOf(application, "applications", "gaps", "")) || suggestions.gaps}`,
       "",
-      `ANGLE\n${valueOf(application, "applications", "angle", suggestions.angle)}`,
+      `YOUR ANGLE\n${writtenText(valueOf(application, "applications", "angle", "")) || suggestions.angle}`,
       "",
       `MESSAGGIO RECRUITER\n${resolvedRecruiterNote(valueOf(application, "applications", "recruiterNote", ""), suggestions.note)}`,
       "",
@@ -4544,7 +4556,7 @@ Cordiali saluti,
     setMapped(payload, "preferences", "minFit", 0);
     setMapped(payload, "preferences", "aiLearning", $("preferenceAiLearning").checked);
     setMapped(payload, "preferences", "deliveryTime", $("preferenceDeliveryTime").value || "09:00");
-    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(50, asNumber($("preferenceDailyCount").value, 25))));
+    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(50, asNumber($("preferenceDailyCount").value, 5))));
     const existing = state.data.preferences[0] || null;
     setBusy($("savePreferencesButton"), true, "Salvataggio…");
     try {
@@ -4640,7 +4652,7 @@ Cordiali saluti,
     setMapped(payload, "preferences", "minFit", 0);
     setMapped(payload, "preferences", "aiLearning", true);
     setMapped(payload, "preferences", "deliveryTime", values.get("delivery_time") || "09:00");
-    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(50, asNumber(values.get("daily_count"), 25))));
+    setMapped(payload, "preferences", "dailyCount", Math.max(1, Math.min(50, asNumber(values.get("daily_count"), 5))));
     const personalization = {
       motivations: String(values.get("motivations") || "").trim(),
       profileSkills: String(values.get("profile_skills") || "").trim(),

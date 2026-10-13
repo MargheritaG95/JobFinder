@@ -1004,7 +1004,7 @@ Cordiali saluti,
   function preferenceMatch(job) {
     const preferences = matchingPreferences();
     if (!preferences || !job) return null;
-    const key = JSON.stringify([preferences.roles, preferences.sectors, preferences.locations, preferences.workModes, preferences.minFit, preferences.onlyMultinationals]);
+    const key = JSON.stringify([preferences.roles, preferences.sectors, preferences.locations, preferences.workModes, preferences.minFit, preferences.onlyMultinationals, preferences.targetCompanies]);
     if (key !== matchCacheKey) { matchCache.clear(); matchCacheKey = key; }
     const cacheId = `${job.id}:${valueOf(job, "jobs", "updatedAt", "")}`;
     if (!matchCache.has(cacheId)) {
@@ -1215,6 +1215,7 @@ Cordiali saluti,
       careerChangeReasonEn: local.careerChangeReasonEn || DEFAULT_PREFERENCES.careerChangeReasonEn,
       companyValues: local.companyValues || DEFAULT_PREFERENCES.companyValues,
       onlyMultinationals: local.onlyMultinationals !== false,
+      targetCompanies: state.data.companies.map((company) => String(valueOf(company, "companies", "name", "")).trim()).filter(Boolean),
       isDefault: false,
       record
     };
@@ -3711,6 +3712,9 @@ Cordiali saluti,
         case "import-opportunity":
           openOpportunityImport();
           break;
+        case "review-companies":
+          openCompanyCleanup();
+          break;
         case "add-company":
           openCompanyForm();
           break;
@@ -4852,6 +4856,9 @@ Cordiali saluti,
         case "company":
           await submitCompanyForm(form);
           break;
+        case "company-cleanup":
+          await submitCompanyCleanup(form);
+          break;
         case "opportunity-import":
           await submitOpportunityImport(form);
           break;
@@ -4926,6 +4933,63 @@ Cordiali saluti,
     } catch (_error) {
       openResourceDetails(template);
     }
+  }
+
+  // Aziende target clean-up: companies added automatically by older versions are pre-selected
+  // (no opportunity you kept, not Tier A); you decide what to remove.
+  function openCompanyCleanup() {
+    const keptJobs = state.data.jobs.filter((job) => opportunityStage(job) !== "review" || valueOf(job, "jobs", "saved", false) || getApplicationForJob(job.id));
+    const linked = new Set(keptJobs.map((job) => String(valueOf(job, "jobs", "companyId", ""))).filter(Boolean));
+    const keptNames = new Set(keptJobs.map((job) => companyNameForJob(job).trim().toLowerCase()));
+    const companies = [...state.data.companies].sort((a, b) => String(valueOf(a, "companies", "name", "")).localeCompare(String(valueOf(b, "companies", "name", "")), "it"));
+    if (!companies.length) { showToast("Non ci sono aziende target da rivedere.", "info", "Aziende target"); return; }
+    const rows = companies.map((company) => {
+      const name = String(valueOf(company, "companies", "name", "Azienda"));
+      const tier = normalizeStatus(valueOf(company, "companies", "tier", "C"), "C");
+      const used = linked.has(String(company.id)) || keptNames.has(name.trim().toLowerCase());
+      const preselect = !used && tier !== "A";
+      return `<label class="company-cleanup__row"><input type="checkbox" name="remove" value="${escapeAttribute(company.id)}" ${preselect ? "checked" : ""} /><span>${escapeHtml(name)}</span><small>Tier ${escapeHtml(tier)}${used ? " · legata a opportunità salvate" : ""}</small></label>`;
+    }).join("");
+    openDialog({
+      eyebrow: "AZIENDE TARGET",
+      title: "Quali aziende vuoi rimuovere?",
+      body: `<p class="dialog-copy">Le aziende spuntate verranno rimosse dalle Aziende target. Ho preselezionato quelle aggiunte in automatico (non legate a opportunità che hai salvato e non Tier A). Le opportunità e le candidature restano.</p>
+        <form data-dialog-form="company-cleanup">
+          <div class="company-cleanup__tools"><button class="text-button" type="button" data-cleanup-select="all">Seleziona tutte</button><button class="text-button" type="button" data-cleanup-select="none">Deseleziona tutte</button></div>
+          <div class="company-cleanup">${rows}</div>
+          <div class="form-actions"><button class="button button--secondary" type="button" data-action="close-dialog">Annulla</button><button class="button button--danger" type="submit">${icon("trash")}Rimuovi selezionate</button></div>
+        </form>`
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest?.("[data-cleanup-select]");
+    if (!toggle) return;
+    toggle.closest("form")?.querySelectorAll('input[name="remove"]').forEach((input) => { input.checked = toggle.dataset.cleanupSelect === "all"; });
+  });
+
+  async function submitCompanyCleanup(form) {
+    const ids = [...form.querySelectorAll('input[name="remove"]:checked')].map((input) => input.value);
+    let removed = 0;
+    for (const id of ids) {
+      try {
+        // Detach first, so jobs and applications keep working without the company record.
+        for (const job of state.data.jobs.filter((item) => String(valueOf(item, "jobs", "companyId", "")) === String(id))) {
+          await updateRecord("jobs", job.id, { [fieldName("jobs", "companyId")]: null }).catch(() => null);
+        }
+        for (const application of state.data.applications.filter((item) => String(valueOf(item, "applications", "companyId", "")) === String(id))) {
+          await updateRecord("applications", application.id, { [fieldName("applications", "companyId")]: null }).catch(() => null);
+        }
+        await deleteRecord("companies", id);
+        removed += 1;
+      } catch (error) {
+        console.warn("Company could not be removed", id, error);
+      }
+    }
+    closeDialog();
+    matchCache.clear();
+    renderAll();
+    showToast(removed === ids.length ? `${removed} aziende rimosse dalle Aziende target.` : `${removed} di ${ids.length} aziende rimosse; le altre sono ancora collegate a dati che non posso staccare.`, removed === ids.length ? "success" : "warning", "Aziende target aggiornate");
   }
 
   function openDeleteTemplateConfirmation(templateId) {
@@ -5021,16 +5085,10 @@ Cordiali saluti,
     }
     const analysis = analyzeOpportunity({ title, company, location, description });
     let companyRecord = state.data.companies.find((item) => valueOf(item, "companies", "name", "").trim().toLowerCase() === company.toLowerCase()) || null;
+    // Importing a listing does not add its employer to Aziende target: that list holds only the
+    // companies you choose. An existing target is linked and enriched.
     try {
-      if (!companyRecord) {
-        const companyPayload = {};
-        setMapped(companyPayload, "companies", "name", company);
-        setMapped(companyPayload, "companies", "sector", industry || null);
-        setMapped(companyPayload, "companies", "tier", "B");
-        setMapped(companyPayload, "companies", "website", companyWebsite || null);
-        setMapped(companyPayload, "companies", "notes", companyDescription || null);
-        companyRecord = await insertRecord("companies", companyPayload);
-      } else if (industry || companyDescription || companyWebsite) {
+      if (companyRecord && (industry || companyDescription || companyWebsite)) {
         const companyPatch = {};
         if (industry) setMapped(companyPatch, "companies", "sector", industry);
         if (companyDescription) setMapped(companyPatch, "companies", "notes", companyDescription);

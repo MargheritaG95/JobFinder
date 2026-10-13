@@ -412,8 +412,11 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], u
       const country = String(query.country || "").toLowerCase();
       const what = compact(query.what);
       const where = compact(query.where);
-      if (!what || !/^[a-z]{2}$/.test(country)) continue;
-      const params = new URLSearchParams({ query: `${what} in ${where || countryLabelEn(country) || country}`, page: "1", num_pages: "1", country, date_posted: "month" });
+      if ((!what && !query.company) || !/^[a-z]{2}$/.test(country)) continue;
+      const company = compact(query.company);
+      const place = where || countryLabelEn(country) || country;
+      const text = company ? `${what ? `${what} ` : ""}${company} jobs in ${place}` : `${what} in ${place}`;
+      const params = new URLSearchParams({ query: text, page: "1", num_pages: "1", country, date_posted: "month" });
       tasks.push(getJson(`${endpoint}?${params}`, { signal: signal(), headers })
         .then((data) => {
           // v1 returns { data: [...] }; accept the nested shapes newer versions may use as well.
@@ -427,16 +430,20 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], u
     const country = String(query.country || "").toLowerCase();
     const what = compact(query.what);
     const where = compact(query.where);
-    if (!what || !/^[a-z]{2}$/.test(country)) continue;
-    const key = `${country}|${what.toLowerCase()}|${where.toLowerCase()}`;
+    const company = compact(query.company);
+    if ((!what && !company) || !/^[a-z]{2}$/.test(country)) continue;
+    const key = `${country}|${what.toLowerCase()}|${where.toLowerCase()}|${company.toLowerCase()}`;
+    const keywords = [what, company].filter(Boolean).join(" ");
     if (seen.has(key)) continue;
     seen.add(key);
     if (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY && ADZUNA_COUNTRIES.has(country)) {
       const params = new URLSearchParams({
         app_id: process.env.ADZUNA_APP_ID, app_key: process.env.ADZUNA_APP_KEY,
         results_per_page: "50", sort_by: "date", max_days_old: String(MAX_JOB_AGE_DAYS),
-        what_phrase: what, "content-type": "application/json"
+        "content-type": "application/json"
       });
+      if (what) params.set("what_phrase", what);
+      if (company) params.set("company", company);
       if (where) params.set("where", where);
       tasks.push(getJson(`https://api.adzuna.com/v1/api/jobs/${country}/search/1?${params}`, { signal: signal() })
         .then((data) => ({ source: `Adzuna:${country}:${what}`, jobs: (data.results || []).map((job) => normalizeAdzuna(job, country)) })));
@@ -446,12 +453,12 @@ async function fetchTargeted(queries, { timeoutMs = 8000, jsearchQueries = [], u
       const domain = country === "us" ? "jooble.org" : `${country}.jooble.org`;
       tasks.push(getJson(`https://${domain}/api/${encodeURIComponent(jooble)}`, {
         method: "POST", headers: { "Content-Type": "application/json" }, signal: signal(),
-        body: JSON.stringify({ keywords: what, location: where || countryLabel(country) || "", page: "1", ResultOnPage: "50" })
+        body: JSON.stringify({ keywords, location: where || countryLabel(country) || "", page: "1", ResultOnPage: "50" })
       }).then((data) => ({ source: `Jooble:${country}:${what}`, jobs: (data.jobs || []).map((job) => normalizeJooble(job, country)) })));
     }
     if (process.env.CAREERJET_AFFID && CAREERJET_LOCALES[country]) {
       const params = new URLSearchParams({
-        locale_code: CAREERJET_LOCALES[country], keywords: what, location: where || countryLabelEn(country) || "",
+        locale_code: CAREERJET_LOCALES[country], keywords, location: where || countryLabelEn(country) || "",
         affid: process.env.CAREERJET_AFFID, user_ip: userIp, user_agent: userAgent,
         url: process.env.CAREERJET_REFERER || "https://margheritag95.github.io/JobFinder/", sort: "date", pagesize: "50"
       });
@@ -501,7 +508,22 @@ function queriesFromPreferences(rows, { maxRoles = 5, maxQueries = 20, maxPerUse
       for (let index = 0; lanes.some((lane) => index < lane.length); index += 1) lanes.forEach((lane) => { if (lane[index]) result.push(lane[index]); });
       return result;
     };
-    return order(national).concat(order(local)).slice(0, maxPerUser);
+    // Target companies (Aziende target): each one searched with the user's roles in their first country.
+    const companies = matching.list(row.target_companies).slice(0, 15);
+    const companyQueries = [];
+    for (const company of companies) {
+      const country = countryList[0] || "it";
+      if (roles.length) roles.slice(0, 2).forEach((what) => companyQueries.push({ what, country, where: "", company }));
+      else companyQueries.push({ what: "", country, where: "", company });
+    }
+    // Interleave: one company search, then one role/place search, so both advance on every click.
+    const general = order(national).concat(order(local));
+    const mixed = [];
+    for (let index = 0; index < Math.max(companyQueries.length, general.length); index += 1) {
+      if (companyQueries[index]) mixed.push(companyQueries[index]);
+      if (general[index]) mixed.push(general[index]);
+    }
+    return mixed.slice(0, maxPerUser);
   });
   // Several users (nightly refresh): take one query from each in turn.
   const queries = [];

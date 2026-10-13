@@ -445,11 +445,16 @@
               <div>
                 <p class="eyebrow">TARGET ACCOUNT LIST</p>
                 <h1>Aziende Target</h1>
-                <p>Monitora le aziende su cui vuoi concentrare la ricerca.</p>
+                <p>Le aziende che preferisci: “Nuove proposte” fa ricerche dedicate per ognuna e le mette in cima.</p>
               </div>
-              <button id="addCompanyButton" class="button button--primary" type="button" data-action="add-company">
-                <svg class="icon"><use href="#icon-plus"></use></svg>Aggiungi azienda
-              </button>
+              <div class="hero-actions">
+                <button class="button button--secondary" type="button" data-action="review-companies">
+                  <svg class="icon"><use href="#icon-trash"></use></svg>Rivedi elenco
+                </button>
+                <button id="addCompanyButton" class="button button--primary" type="button" data-action="add-company">
+                  <svg class="icon"><use href="#icon-plus"></use></svg>Aggiungi azienda
+                </button>
+              </div>
             </div>
             <div id="companiesList" class="company-grid"></div>
           </section>
@@ -793,7 +798,7 @@
 
     <script src="config.js?v=20260907.45" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-    <script src="shared/matching.js?v=20261013.3" defer></script>
-    <script src="app.js?v=20261013.3" defer></script>
+    <script src="shared/matching.js?v=20261013.4" defer></script>
+    <script src="app.js?v=20261013.4" defer></script>
   </body>
 </html>

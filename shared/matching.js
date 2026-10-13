@@ -386,8 +386,20 @@
     return false;
   }
 
+  /** Same employer, ignoring legal suffixes ("Accenture" = "Accenture Italia S.p.A."). */
+  function sameCompany(a, b) {
+    const clean = (value) => normalized(value).replace(LEGAL_SUFFIXES, " ").replace(/\s+/g, " ").trim();
+    const x = clean(a);
+    const y = clean(b);
+    if (!x || !y) return false;
+    if (x === y) return true;
+    const [shorter, longer] = x.length <= y.length ? [x, y] : [y, x];
+    return shorter.length >= 4 && longer.startsWith(`${shorter} `);
+  }
+
   function readPreferences(preferences = {}) {
     return {
+      targetCompanies: list(preferences.targetCompanies ?? preferences.target_companies),
       onlyMultinationals: Boolean(preferences.onlyMultinationals ?? preferences.only_multinationals),
       roles: list(preferences.roles ?? preferences.target_roles),
       sectors: list(preferences.sectors ?? preferences.target_sectors),
@@ -470,18 +482,21 @@
     if (job.salary_text || job.salary_min || job.salary_max) score += 0.25;
 
     // Large international employers rank first; with "solo multinazionali" the others are out.
+    // Your target companies (Aziende target) come first and always pass the company filter.
+    const target = preferences.targetCompanies.find((name) => sameCompany(name, job.company_name)) || null;
     const multinational = isMultinational(job.company_name);
-    if (multinational) { score += 0.75; matched.company = [String(job.company_name || "").trim()]; }
+    if (target) { score += 1.5; matched.target = [target]; }
+    else if (multinational) { score += 0.75; matched.company = [String(job.company_name || "").trim()]; }
     else if (preferences.onlyMultinationals) missing.push("company");
 
     const roleOrSectorOk = preferences.roles.length
       ? Boolean(matched.roles)
       : (preferences.sectors.length ? Boolean(matched.sectors) : true);
-    const matchesPreferences = roleOrSectorOk && locationOk && modeOk && (multinational || !preferences.onlyMultinationals);
+    const matchesPreferences = roleOrSectorOk && locationOk && modeOk && (Boolean(target) || multinational || !preferences.onlyMultinationals);
     // An opportunity outside your criteria can never look like a strong fit.
     if (!matchesPreferences) score = Math.min(score, 5.5 - missing.length * 0.5);
     const fit = Math.max(0, Math.min(10, Math.round(score * 10) / 10));
-    return { fit, matchesPreferences, matched, missing, workMode: mode, notes, multinational };
+    return { fit, matchesPreferences, matched, missing, workMode: mode, notes, multinational, target };
   }
 
   /** Country ISO codes for the preferred locations (countries and known cities). */
@@ -519,10 +534,10 @@
     return Boolean(place && place.names.includes(y));
   }
 
-  const GROUP_LABELS = { roles: "Ruolo", sectors: "Settore", locations: "Location", work_modes: "Modalità", company: "Multinazionale" };
+  const GROUP_LABELS = { roles: "Ruolo", sectors: "Settore", locations: "Location", work_modes: "Modalità", company: "Multinazionale", target: "Azienda target" };
 
   return {
     normalized, list, scoreJob, readPreferences, hasCriteria, jobWorkMode, preferredModes,
-    preferredCountryCodes, preferredCities, roleMatch, isMultinational, placeCountry, samePlace, GROUP_LABELS, MODE_LABELS
+    preferredCountryCodes, preferredCities, roleMatch, isMultinational, sameCompany, placeCountry, samePlace, GROUP_LABELS, MODE_LABELS
   };
 });

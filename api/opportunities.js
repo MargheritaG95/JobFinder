@@ -140,6 +140,10 @@ module.exports = async function handler(req, res) {
     if (sent && typeof sent === "object" && sent.only_multinationals !== undefined) {
       preferences = { ...preferences, only_multinationals: Boolean(sent.only_multinationals) };
     }
+    // Aziende target: the companies the user chose to focus on. They get dedicated searches,
+    // a higher Fit and always pass the "solo multinazionali" filter.
+    const ownCompanies = (await userSupabase(`companies?user_id=eq.${user.id}&select=id,name,website&limit=500`, token).catch(() => [])) || [];
+    preferences = { ...preferences, target_companies: ownCompanies.map((row) => String(row.name || "").trim()).filter(Boolean) };
     const config = supabaseConfig();
     // What every source returned and why listings were discarded, shown in the app
     // ("Dettagli ultima ricerca") so a thin result can be explained.
@@ -171,7 +175,7 @@ module.exports = async function handler(req, res) {
     // whose link is a public Greenhouse / Lever / Ashby board gets all its openings scanned.
     const boardsPromise = Promise.all([
       userSupabase(`jobs?user_id=eq.${user.id}&select=url&limit=500`, token).catch(() => []),
-      userSupabase(`companies?user_id=eq.${user.id}&select=website&limit=500`, token).catch(() => [])
+      Promise.resolve(ownCompanies)
     ]).then(([jobRows, companyRows]) => fetchBoards(
       [...(jobRows || []).map((row) => boardFromUrl(row.url)), ...(companyRows || []).map((row) => boardFromUrl(row.website))],
       { timeoutMs: 7000, max: 15 }
@@ -219,6 +223,7 @@ module.exports = async function handler(req, res) {
     });
     const stats = { letti: (catalog || []).length, giaProposti: 0, fuoriRuolo: 0, fuoriSettore: 0, fuoriLocation: 0, fuoriModalita: 0, nonMultinazionali: 0, sottoFitMinimo: 0, compatibili: 0 };
     const missingKey = { roles: "fuoriRuolo", sectors: "fuoriSettore", locations: "fuoriLocation", work_modes: "fuoriModalita", company: "nonMultinazionali" };
+    stats.daAziendeTarget = 0;
     const samples = [];
     let ranked = (catalog || []).map((job) => ({ job, result: scoreJob(job, preferences) }))
       .filter(({ job, result }) => {
@@ -234,6 +239,7 @@ module.exports = async function handler(req, res) {
         }
         if (result.fit < minFit) { stats.sottoFitMinimo += 1; return false; }
         stats.compatibili += 1;
+        if (result.target) stats.daAziendeTarget += 1;
         return true;
       })
       .sort((a, b) => b.result.fit - a.result.fit || new Date(b.job.published_at || 0) - new Date(a.job.published_at || 0));
@@ -283,13 +289,13 @@ module.exports = async function handler(req, res) {
         headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
       });
     }
-    const existingCompanies = await userSupabase(`companies?user_id=eq.${user.id}&select=id,name`, token);
-    const companiesByName = new Map((existingCompanies || []).map((row) => [String(row.name || "").trim().toLowerCase(), row.id]));
+    // Proposals never add companies to Aziende target: they are only linked to an existing target.
+    const targetIdFor = (name) => ownCompanies.find((row) => matching.sameCompany(row.name, name))?.id || null;
     const created = [];
     for (const item of ranked) {
       const existing = await userSupabase(`jobs?user_id=eq.${user.id}&url=eq.${encodeURIComponent(item.job.source_url)}&select=id&limit=1`, token);
       if (existing?.length) continue;
-      const companyId = await ensureCompanyId(user.id, token, companiesByName, item.job);
+      const companyId = targetIdFor(item.job.company_name);
       const rows = await userSupabase("jobs", token, { method: "POST", body: JSON.stringify(legacyJob(user.id, item.job, item.result, companyId)), headers: { Prefer: "return=representation" } });
       if (rows?.[0]) created.push(rows[0]);
     }

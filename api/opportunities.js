@@ -187,11 +187,15 @@ module.exports = async function handler(req, res) {
     let excluded = new Set();
     let excludedKeys = new Set();
     if (config.hasServiceRole) {
-      const [existingMatches, catalogAll] = await Promise.all([
-        supabase(`user_job_matches?user_id=eq.${user.id}&select=job_id`),
-        catalogRows()
+      const [existingMatches, catalogAll, ownJobs] = await Promise.all([
+        supabase(`user_job_matches?user_id=eq.${user.id}&select=job_id,dismissed`),
+        catalogRows(),
+        userSupabase(`jobs?user_id=eq.${user.id}&select=catalog_job_id&limit=2000`, token).catch(() => [])
       ]);
-      excluded = new Set((existingMatches || []).map((row) => row.job_id));
+      // A match only counts as "already proposed" if the user dismissed it or it really became a job.
+      // Matches saved by earlier failed runs (no job created) are proposed again.
+      const realJobIds = new Set((ownJobs || []).map((row) => row.catalog_job_id).filter(Boolean));
+      excluded = new Set((existingMatches || []).filter((row) => row.dismissed || realJobIds.has(row.job_id)).map((row) => row.job_id));
       catalog = catalogAll.filter(isRecent);
       const [targeted, followed] = await Promise.all([targetedPromise, boardsPromise]);
       const extra = targeted.jobs.concat(followed.jobs);
@@ -289,25 +293,6 @@ module.exports = async function handler(req, res) {
       reason: "no_matching_opportunities",
       message: "Al momento non ci sono altre opportunità che rispettano Paese/città, ruoli, settori e modalità scelti. Puoi allargare i criteri in Preferenze oppure riprovare al prossimo aggiornamento."
     });
-    const now = new Date().toISOString();
-    if (config.hasServiceRole) {
-      await supabase("user_job_matches?on_conflict=user_id,job_id", {
-        method: "POST", body: JSON.stringify(ranked.map(({ job, result }) => ({ user_id: user.id, job_id: job.id, fit_score: result.fit, matched_preferences: result.matched, why_fit: Object.values(result.matched).flat(), gaps: [], angle: [], status: "NEW", first_proposed_at: now, last_proposed_at: now, updated_at: now }))),
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
-      });
-    } else {
-      await userSupabase("user_opportunity_history?on_conflict=user_id,opportunity_key", token, {
-        method: "POST",
-        body: JSON.stringify(ranked.map(({ job }) => ({
-          user_id: user.id,
-          opportunity_key: opportunityKey(job),
-          source_url: stableUrl(job.source_url),
-          first_proposed_at: now,
-          last_proposed_at: now
-        }))),
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
-      });
-    }
     // Proposals never add companies to Aziende target: they are only linked to an existing target.
     const targetIdFor = (name) => ownCompanies.find((row) => matching.sameCompany(row.name, name))?.id || null;
     // Existence checks and inserts run in parallel (they used to run one listing at a time).
@@ -317,13 +302,36 @@ module.exports = async function handler(req, res) {
         if (existing?.length) return null;
         const companyId = targetIdFor(item.job.company_name);
         const rows = await userSupabase("jobs", token, { method: "POST", body: JSON.stringify(legacyJob(user.id, item.job, item.result, companyId)), headers: { Prefer: "return=representation" } });
-        return rows?.[0] || null;
+        return rows?.[0] ? { item, row: rows[0] } : null;
       } catch (error) {
         diag.errors.push(`Salvataggio annuncio: ${String(error.message).slice(0, 160)}`);
         return null;
       }
     }));
-    const created = settled.filter(Boolean);
+    const createdPairs = settled.filter(Boolean);
+    const created = createdPairs.map((pair) => pair.row);
+    // History / match rows are written only for annunci that were really saved, so a failed save
+    // never "burns" a proposal.
+    const now = new Date().toISOString();
+    const savedRanked = createdPairs.map((pair) => pair.item);
+    if (savedRanked.length) {
+      try {
+        if (config.hasServiceRole) {
+          await supabase("user_job_matches?on_conflict=user_id,job_id", {
+            method: "POST", body: JSON.stringify(savedRanked.map(({ job, result }) => ({ user_id: user.id, job_id: job.id, fit_score: result.fit, matched_preferences: result.matched, why_fit: Object.values(result.matched).flat(), gaps: [], angle: [], status: "NEW", first_proposed_at: now, last_proposed_at: now, updated_at: now }))),
+            headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
+          });
+        } else {
+          await userSupabase("user_opportunity_history?on_conflict=user_id,opportunity_key", token, {
+            method: "POST",
+            body: JSON.stringify(savedRanked.map(({ job }) => ({ user_id: user.id, opportunity_key: opportunityKey(job), source_url: stableUrl(job.source_url), first_proposed_at: now, last_proposed_at: now }))),
+            headers: { Prefer: "resolution=merge-duplicates,return=minimal" }
+          });
+        }
+      } catch (error) {
+        diag.errors.push(`Cronologia proposte: ${String(error.message).slice(0, 160)}`);
+      }
+    }
     diag.stats.importati = created.length;
     return res.status(200).json({ jobs: created, count: created.length, catalogMatches: ranked.length, ...jsearchInfo, diagnostics: diag });
   } catch (error) {
